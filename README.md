@@ -1,0 +1,2 @@
+# Integrated-Fleet-Logistics-Maintenance-Management-System
+a unified, full-stack digital platform designed to modernize and centralize vehicle operations across the organization [1, 6]. Currently, fleet logistics rely on manual paper vouchers via Transportation Service Request Forms (TSRF) [1, 3] and informal group chat communications (e.g., the *"Hulma - Vehicle PMS &amp; Repair (Fleet)"* channel)
