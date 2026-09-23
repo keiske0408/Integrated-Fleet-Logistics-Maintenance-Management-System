@@ -1,0 +1,144 @@
+# Executive Proposal: Hulma Integrated Fleet Logistics & Maintenance Management System
+
+**Document Type:** High-Level Client System Proposal  
+**Target System:** Hulma Full-Stack Vehicle Fleet Logistics & Maintenance Management Platform  
+**Grounded Sources:** *Hulma Vehicle Fleet Logistics and Maintenance Management Sources (TSRF Specification & Fleet Chat Guidelines)*  
+
+---
+
+## 1. Executive Summary
+
+The **Hulma Integrated Fleet Logistics & Maintenance Management System** is a unified, full-stack digital platform designed to modernize and centralize vehicle operations across the organization [1, 6]. Currently, fleet logistics rely on manual paper vouchers via Transportation Service Request Forms (TSRF) [1, 3] and informal group chat communications (e.g., the *"Hulma - Vehicle PMS & Repair (Fleet)"* channel) [6]. 
+
+By consolidating dispatch requests, mileage tracking, maintenance validation, and procurement approvals into a single automated system, this platform eliminates vehicle downtime, enforces maintenance accountability, and creates strict financial controls for repair expenditures [6].
+
+---
+
+## 2. Problem Statement & Operational Objectives
+
+### Current Challenges
+* **Fragmented Communication:** Fleet updates, repair requests, and status tracking are scattered across group messaging chats [6].
+* **Unmonitored Mileage & PMS:** Lack of centralized kilometer (KM) tracking leads to missed Preventative Maintenance Services (PMS), resulting in avoidable mechanical failures and costly repairs [6].
+* **Uncontrolled Maintenance Spending:** Repair work is often initiated without prior validation of past maintenance records or formal procurement approval [6].
+* **Manual Dispatch Overhead:** Processing Transportation Service Request Forms (TSRF) manually slows down project logistics and asset transfers [1, 3].
+
+### Strategic System Objectives
+1. **Centralize Fleet Visibility:** Maintain a real-time digital inventory of all team vehicles, current KM readings, and maintenance statuses [6].
+2. **Automate Mileage-Based Maintenance:** Proactively trigger PMS alerts based on standard vehicle manufacturer intervals (e.g., every 5,000 km) [6].
+3. **Enforce Approved PR Gating:** Establish approved Purchase Requisitions (PR) as the mandatory gate before any PMS or repair work order can proceed [6].
+4. **Digitize Logistics & Dispatch:** Streamline the TSRF workflow from initial request to multi-department approval and driver manifest generation [2, 5].
+
+---
+
+## 3. Core Module & System Capabilities
+
+```
++-----------------------------------------------------------------------------------+
+|               HULMA INTEGRATED FLEET PLATFORM SYSTEM ARCHITECTURE                 |
++-----------------------------------------------------------------------------------+
+|                                                                                   |
+|  [ Module A: TSRF & Logistics ] --------+                                         |
+|  - Digital Intake (Cut-off 4:00 PM)    |                                         |
+|  - Multi-Stop Routing & Google Maps    |---> Updates Vehicle Mileage (KM) ----+  |
+|  - Driver & Passenger Manifests        |                                      |  |
+|  - Multi-Level Approval Hierarchy      |                                      |  |
+|                                                                               |  |
+|  [ Module B: Fleet Maintenance & Repair ] <-----------------------------------+  |
+|  - Vehicle & KM Live Monitoring                                                  |
+|  - Auto PMS Trigger (Every 5,000 KM)                                             |
+|  - PMS Validation & Mandatory Incident Reporting                                 |
+|                                                                                  |
+|  [ Module C: PR Gating & Procurement Engine ] <-------------------------------+  |
+|  - Approved PR Gatekeeper (Mandatory Unlock)                                     |
+|  - Procurement Order Sync & Fulfillment Status                                   |
+|                                                                                  |
++-----------------------------------------------------------------------------------+
+```
+
+### Module A: Transportation Service Request (TSRF) & Logistics
+* **Digital Request Portal:** Replaces manual forms with a structured digital intake specifying project names (e.g., *Asset Retrieval and KE Biometric Project*), request dates, expected call times, and cut-off enforcement (4:00 PM daily cut-off) [1, 3, 5].
+* **Multi-Stop Route & Location Management:** Tracks origins, destinations, Google Map addresses, call-in/out times, and waiting times across corporate facilities (e.g., MMG Warehouse to Kingston Excell) [1, 3, 5].
+* **Asset & Vehicle Allocation:** Supports flexible vehicle type selection—including Commuter Vans, 4W/6W/10W trucks, container units, and 3rd-party logistics providers (Lalamove, Transportify) [4, 5].
+* **Manifest & Cargo Control:** Enforces mandatory recording of passenger names (e.g., IT support staff, field teams) and loaded products, materials, or equipment [2, 5].
+* **Multi-Tier Authorization:** Automated routing for formal endorsements across IT Support, CITO, Finance Manager, and Logistics Head [2, 5].
+
+### Module B: Vehicle Fleet & Kilometer Monitoring
+* **Central Vehicle Registry:** Comprehensive dashboard listing every team vehicle, plate number, assigned driver, and current KM reading [5, 6].
+* **Automated PMS Calculator:** Calculates usage against manufacturer schedules (e.g., 5,000 km intervals) and automatically flags vehicles approaching or due for PMS [6].
+* **Maintenance & Repair Audit Rule:** Before endorsing a vehicle for repair, the system verifies whether required PMS was maintained. If PMS was skipped, the system forces submission of a mandatory **Incident Report** explaining the circumstances prior to proceeding [6].
+
+### Module C: Approved PR Gatekeeper & Procurement Integration
+* **Strict PR Approval Gate:** An **Approved Purchase Request (PR)** serves as the hard system gate. Repair or PMS work orders remain locked in "Pending PR Approval" status until Procurement inputs the approved PR reference [6].
+* **Procurement Hand-off:** Automatically notifies Procurement upon PR approval, allowing immediate coordination and execution without delay or chat confusion [6].
+* **Real-time Status Tracking:** Centralized view displaying Vehicle Details, Current KM, PMS Due Date/KM, Repair Status, PR Status, and Completion Updates [6].
+
+---
+
+## 4. End-to-End Operational Workflow
+
+```
+[ Step 1: Trip Dispatch (TSRF) ]
+   └── User files digital TSRF -> Approvers sign off -> Driver executes trip -> Returning KM logged [1, 2, 5]
+
+[ Step 2: Automated Mileage Check ]
+   └── System updates vehicle KM -> Checks against 5,000 KM PMS threshold [6]
+
+[ Step 3: Maintenance Request Trigger ]
+   ├── If PMS Due -> Create PMS Order [6]
+   └── If Repair Requested -> Check PMS History:
+          ├── PMS Up-to-Date -> Create Repair Order [6]
+          └── PMS Overdue -> Block Order -> Require Mandatory Incident Report [6]
+
+[ Step 4: PR Gating & Procurement ]
+   └── Work Order generated -> Pending PR Approval -> Approved PR Gate Unlocked -> Procurement Executes Work [6]
+```
+
+1. **Trip Execution & Odometry Update:** A driver completes a TSRF assignment (e.g., shuttle or pick-up transaction). Upon return, the ending odometer reading is recorded, automatically updating the vehicle's total accumulated mileage [1, 5, 6].
+2. **Interval Evaluation:** The system evaluates current KM against the next scheduled PMS milestone [6].
+3. **Maintenance Validation:**
+   - If PMS is due, a PMS request is automatically drafted [6].
+   - If a repair request is submitted, the system checks historical PMS compliance. If PMS was neglected, an Incident Report must be uploaded [6].
+4. **PR Gatekeeper Enforcement:** The request is queued for financial review. Once the Purchase Requisition is approved, the system unlocks the work order and sends an alert to Procurement [6].
+5. **Work Execution & Status Tracking:** Procurement coordinates servicing. Status transitions dynamically: `PR Approved` -> `In Maintenance` -> `Work Completed` -> `Vehicle Operational` [6].
+
+---
+
+## 5. System Roles & User Permissions
+
+| Role | Core Responsibilities & System Permissions |
+| :--- | :--- |
+| **Requestor / Project Staff** | Submits TSRF requests, inputs origin/destination, cargo items, and passenger manifests [2, 5]. |
+| **IT & Department Heads** | Endorses department TSRF submissions and approves project logistics [2, 5]. |
+| **Logistics & Fleet Manager** | Allocates vehicles/drivers, tracks mileage (KM), oversees PMS schedules, and validates repair requests [5, 6]. |
+| **Finance Manager** | Reviews financial vouchers, checks TSRF budget allocations, and authorizes Purchase Requests (PR) [2, 3, 6]. |
+| **Procurement Team** | Receives approved PR notifications, coordinates with external service centers/suppliers, and updates repair fulfillment status [6]. |
+
+---
+
+## 6. Business Impact & Return on Investment (ROI)
+
+* **Reduced Vehicle Downtime:** Preventive tracking prevents major mechanical breakdowns and keeps the fleet operational [6].
+* **Strict Cost & Financial Control:** Eliminates unauthorized maintenance expenses through mandatory PR gating [6].
+* **Operational Accountability:** Enforces policy compliance via mandatory Incident Reports for neglected vehicle maintenance [6].
+* **Auditability & Traceability:** Replaces lost chat messages with a permanent digital audit trail of trips, approvals, mileage, and repair histories [1, 6].
+
+---
+
+## 7. Strategic Implementation Roadmap
+
+1. **Phase 1: Foundation & Data Ingestion (Weeks 1–2)**
+   - Database schema setup for Vehicles, Drivers, TSRFs, Maintenance Logs, and PR Work Orders.
+   - Initial master data import for team vehicle inventory and baseline KM readings [6].
+2. **Phase 2: TSRF & Approval Workflow (Weeks 3–4)**
+   - Digital intake form with cut-off logic (4:00 PM) [3, 5].
+   - Multi-role authorization pipeline (IT, CITO, Finance, Logistics) [2, 5].
+3. **Phase 3: PMS Tracking & PR Gatekeeper Engine (Weeks 5–6)**
+   - Automated 5,000 KM calculation engine and PMS alerts [6].
+   - Incident Report requirement logic for overdue units [6].
+   - Hard PR approval gating for maintenance execution [6].
+4. **Phase 4: Procurement Portal & Deployment (Weeks 7–8)**
+   - Procurement order tracking and status update dashboard [6].
+   - End-to-end user acceptance testing (UAT) and full team rollout.
+
+---
+*Generated by Gemini Notebook grounded in client fleet specifications and operational guidelines.*

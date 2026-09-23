@@ -1,0 +1,588 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "version": "1.0.0",
+    "title": "Hulma Fleet Logistics & Maintenance Management API",
+    "description": "Unified Fleet, PMS, PR gating, and TSRF Logistics REST API"
+  },
+  "servers": [
+    {
+      "url": "/api"
+    }
+  ],
+  "components": {
+    "schemas": {
+      "Vehicle": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "plateNumber": {
+            "type": "string"
+          },
+          "currentKm": {
+            "type": "integer",
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "lastPmsKm": {
+            "type": "integer",
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "pmsIntervalKm": {
+            "type": "integer",
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "plateNumber", "currentKm", "lastPmsKm", "pmsIntervalKm", "createdAt"]
+      },
+      "InsertVehicle": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "plateNumber": {
+            "type": "string"
+          },
+          "currentKm": {
+            "type": "integer",
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "lastPmsKm": {
+            "type": "integer",
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "pmsIntervalKm": {
+            "type": "integer",
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": ["plateNumber"]
+      },
+      "PurchaseRequisition": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "prNumber": {
+            "type": "string"
+          },
+          "department": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "integer",
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "status": {
+            "type": "string",
+            "enum": ["draft", "pending", "approved", "rejected"]
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "prNumber", "department", "amount", "status", "purpose", "createdAt"]
+      },
+      "InsertPurchaseRequisition": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "prNumber": {
+            "type": "string"
+          },
+          "department": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "integer",
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "status": {
+            "type": "string",
+            "enum": ["draft", "pending", "approved", "rejected"]
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": ["prNumber", "department", "purpose"]
+      },
+      "RepairWorkOrder": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "vehicleId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "approved", "in_progress", "completed", "rejected"]
+          },
+          "linkedPrId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "hasPmsCompliance": {
+            "type": "boolean"
+          },
+          "incidentReportFiled": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "vehicleId",
+          "description",
+          "status",
+          "linkedPrId",
+          "hasPmsCompliance",
+          "incidentReportFiled",
+          "createdAt"
+        ]
+      },
+      "InsertRepairWorkOrder": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "vehicleId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "approved", "in_progress", "completed", "rejected"]
+          },
+          "linkedPrId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "hasPmsCompliance": {
+            "type": "boolean"
+          },
+          "incidentReportFiled": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": ["vehicleId", "description"]
+      },
+      "TSRFRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "requestNumber": {
+            "type": "string"
+          },
+          "department": {
+            "type": "string"
+          },
+          "projectName": {
+            "type": "string"
+          },
+          "origin": {
+            "type": "string"
+          },
+          "destination": {
+            "type": "string"
+          },
+          "departureDate": {
+            "type": "string"
+          },
+          "callTime": {
+            "type": "string"
+          },
+          "isFlaggedAfterCutoff": {
+            "type": "boolean"
+          },
+          "approvalStatus": {
+            "type": "string",
+            "enum": ["pending", "approved", "rejected"]
+          },
+          "linkedPrId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "requestNumber",
+          "department",
+          "projectName",
+          "origin",
+          "destination",
+          "departureDate",
+          "callTime",
+          "isFlaggedAfterCutoff",
+          "approvalStatus",
+          "linkedPrId",
+          "createdAt"
+        ]
+      },
+      "InsertTSRFRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "requestNumber": {
+            "type": "string"
+          },
+          "department": {
+            "type": "string"
+          },
+          "projectName": {
+            "type": "string"
+          },
+          "origin": {
+            "type": "string"
+          },
+          "destination": {
+            "type": "string"
+          },
+          "departureDate": {
+            "type": "string"
+          },
+          "callTime": {
+            "type": "string"
+          },
+          "isFlaggedAfterCutoff": {
+            "type": "boolean"
+          },
+          "approvalStatus": {
+            "type": "string",
+            "enum": ["pending", "approved", "rejected"]
+          },
+          "linkedPrId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "requestNumber",
+          "department",
+          "projectName",
+          "origin",
+          "destination",
+          "departureDate",
+          "callTime"
+        ]
+      }
+    },
+    "parameters": {}
+  },
+  "paths": {
+    "/api/vehicles": {
+      "get": {
+        "summary": "List all vehicles in fleet",
+        "responses": {
+          "200": {
+            "description": "Vehicles list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "plateNumber": {
+                        "type": "string"
+                      },
+                      "currentKm": {
+                        "type": "integer",
+                        "minimum": -2147483648,
+                        "maximum": 2147483647
+                      },
+                      "lastPmsKm": {
+                        "type": "integer",
+                        "minimum": -2147483648,
+                        "maximum": 2147483647
+                      },
+                      "pmsIntervalKm": {
+                        "type": "integer",
+                        "minimum": -2147483648,
+                        "maximum": 2147483647
+                      },
+                      "createdAt": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "plateNumber",
+                      "currentKm",
+                      "lastPmsKm",
+                      "pmsIntervalKm",
+                      "createdAt"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tsrf": {
+      "post": {
+        "summary": "Submit a new TSRF request",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "requestNumber": {
+                    "type": "string"
+                  },
+                  "department": {
+                    "type": "string"
+                  },
+                  "projectName": {
+                    "type": "string"
+                  },
+                  "origin": {
+                    "type": "string"
+                  },
+                  "destination": {
+                    "type": "string"
+                  },
+                  "departureDate": {
+                    "type": "string"
+                  },
+                  "callTime": {
+                    "type": "string"
+                  },
+                  "isFlaggedAfterCutoff": {
+                    "type": "boolean"
+                  },
+                  "approvalStatus": {
+                    "type": "string",
+                    "enum": ["pending", "approved", "rejected"]
+                  },
+                  "linkedPrId": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uuid"
+                  },
+                  "createdAt": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "requestNumber",
+                  "department",
+                  "projectName",
+                  "origin",
+                  "destination",
+                  "departureDate",
+                  "callTime"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "TSRF created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "requestNumber": {
+                      "type": "string"
+                    },
+                    "department": {
+                      "type": "string"
+                    },
+                    "projectName": {
+                      "type": "string"
+                    },
+                    "origin": {
+                      "type": "string"
+                    },
+                    "destination": {
+                      "type": "string"
+                    },
+                    "departureDate": {
+                      "type": "string"
+                    },
+                    "callTime": {
+                      "type": "string"
+                    },
+                    "isFlaggedAfterCutoff": {
+                      "type": "boolean"
+                    },
+                    "approvalStatus": {
+                      "type": "string",
+                      "enum": ["pending", "approved", "rejected"]
+                    },
+                    "linkedPrId": {
+                      "type": "string",
+                      "nullable": true,
+                      "format": "uuid"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "requestNumber",
+                    "department",
+                    "projectName",
+                    "origin",
+                    "destination",
+                    "departureDate",
+                    "callTime",
+                    "isFlaggedAfterCutoff",
+                    "approvalStatus",
+                    "linkedPrId",
+                    "createdAt"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/pr/{id}/approve": {
+      "patch": {
+        "summary": "Approve a Purchase Requisition (gated spend)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PR approved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "prNumber": {
+                      "type": "string"
+                    },
+                    "department": {
+                      "type": "string"
+                    },
+                    "amount": {
+                      "type": "integer",
+                      "minimum": -2147483648,
+                      "maximum": 2147483647
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": ["draft", "pending", "approved", "rejected"]
+                    },
+                    "purpose": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "prNumber",
+                    "department",
+                    "amount",
+                    "status",
+                    "purpose",
+                    "createdAt"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://unpkg.com/knip@5/overview/config-schema.json",
+  "entry": [
+    "src/index.ts",
+    "components/ui/button.tsx",
+    "components/forms/TSRFFormExample.tsx",
+    "components/auth/CanAccess.tsx"
+  ],
+  "project": ["src/**/*.ts", "components/**/*.tsx"],
+  "ignoreDependencies": ["pino-pretty", "ts-prune", "@testing-library/react", "msw"]
+}
