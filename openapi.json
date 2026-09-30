@@ -109,9 +109,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "plateNumber"
-        ]
+        "required": ["plateNumber"]
       },
       "PurchaseRequisition": {
         "type": "object",
@@ -133,12 +131,7 @@
           },
           "status": {
             "type": "string",
-            "enum": [
-              "draft",
-              "pending",
-              "approved",
-              "rejected"
-            ]
+            "enum": ["draft", "pending", "approved", "rejected"]
           },
           "purpose": {
             "type": "string"
@@ -192,12 +185,7 @@
           },
           "status": {
             "type": "string",
-            "enum": [
-              "draft",
-              "pending",
-              "approved",
-              "rejected"
-            ]
+            "enum": ["draft", "pending", "approved", "rejected"]
           },
           "purpose": {
             "type": "string"
@@ -218,11 +206,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "prNumber",
-          "department",
-          "purpose"
-        ]
+        "required": ["prNumber", "department", "purpose"]
       },
       "RepairWorkOrder": {
         "type": "object",
@@ -240,13 +224,7 @@
           },
           "status": {
             "type": "string",
-            "enum": [
-              "pending",
-              "approved",
-              "in_progress",
-              "completed",
-              "rejected"
-            ]
+            "enum": ["pending", "approved", "in_progress", "completed", "rejected"]
           },
           "linkedPrId": {
             "type": "string",
@@ -294,13 +272,7 @@
           },
           "status": {
             "type": "string",
-            "enum": [
-              "pending",
-              "approved",
-              "in_progress",
-              "completed",
-              "rejected"
-            ]
+            "enum": ["pending", "approved", "in_progress", "completed", "rejected"]
           },
           "linkedPrId": {
             "type": "string",
@@ -320,10 +292,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "vehicleId",
-          "description"
-        ]
+        "required": ["vehicleId", "description"]
       },
       "TSRFRequest": {
         "type": "object",
@@ -395,11 +364,7 @@
           },
           "approvalStatus": {
             "type": "string",
-            "enum": [
-              "pending",
-              "approved",
-              "rejected"
-            ]
+            "enum": ["pending", "approved", "rejected"]
           },
           "linkedPrId": {
             "type": "string",
@@ -508,11 +473,7 @@
           },
           "approvalStatus": {
             "type": "string",
-            "enum": [
-              "pending",
-              "approved",
-              "rejected"
-            ]
+            "enum": ["pending", "approved", "rejected"]
           },
           "linkedPrId": {
             "type": "string",
@@ -688,11 +649,7 @@
                   },
                   "approvalStatus": {
                     "type": "string",
-                    "enum": [
-                      "pending",
-                      "approved",
-                      "rejected"
-                    ]
+                    "enum": ["pending", "approved", "rejected"]
                   },
                   "linkedPrId": {
                     "type": "string",
@@ -794,11 +751,7 @@
                     },
                     "approvalStatus": {
                       "type": "string",
-                      "enum": [
-                        "pending",
-                        "approved",
-                        "rejected"
-                      ]
+                      "enum": ["pending", "approved", "rejected"]
                     },
                     "linkedPrId": {
                       "type": "string",
@@ -882,12 +835,7 @@
                     },
                     "status": {
                       "type": "string",
-                      "enum": [
-                        "draft",
-                        "pending",
-                        "approved",
-                        "rejected"
-                      ]
+                      "enum": ["draft", "pending", "approved", "rejected"]
                     },
                     "purpose": {
                       "type": "string"
