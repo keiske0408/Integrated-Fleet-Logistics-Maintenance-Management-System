@@ -5,6 +5,7 @@ import {
   purchaseRequisitions,
   pmsRecords,
   repairWorkOrders,
+  incidentReports,
   tsrfRequests,
 } from './schema';
 
@@ -24,6 +25,10 @@ export const selectPmsRecordSchema = createSelectSchema(pmsRecords);
 export const insertRepairWorkOrderSchema = createInsertSchema(repairWorkOrders);
 export const selectRepairWorkOrderSchema = createSelectSchema(repairWorkOrders);
 
+// Incident Reports
+export const insertIncidentReportSchema = createInsertSchema(incidentReports);
+export const selectIncidentReportSchema = createSelectSchema(incidentReports);
+
 // TSRF Requests
 export const insertTsrfRequestSchema = createInsertSchema(tsrfRequests);
 export const selectTsrfRequestSchema = createSelectSchema(tsrfRequests);
@@ -34,5 +39,7 @@ export type InsertPurchaseRequisition = z.infer<typeof insertPurchaseRequisition
 export type SelectPurchaseRequisition = z.infer<typeof selectPurchaseRequisitionSchema>;
 export type InsertRepairWorkOrder = z.infer<typeof insertRepairWorkOrderSchema>;
 export type SelectRepairWorkOrder = z.infer<typeof selectRepairWorkOrderSchema>;
+export type InsertIncidentReport = z.infer<typeof insertIncidentReportSchema>;
+export type SelectIncidentReport = z.infer<typeof selectIncidentReportSchema>;
 export type InsertTsrfRequest = z.infer<typeof insertTsrfRequestSchema>;
 export type SelectTsrfRequest = z.infer<typeof selectTsrfRequestSchema>;

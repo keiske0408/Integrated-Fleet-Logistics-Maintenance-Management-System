@@ -4,70 +4,316 @@
  */
 
 export interface paths {
-  '/api/vehicles': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /** List all vehicles in fleet */
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Vehicles list */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': {
-              /** Format: uuid */
-              id: string;
-              plateNumber: string;
-              currentKm: number;
-              lastPmsKm: number;
-              pmsIntervalKm: number;
-              createdAt: string;
-            }[];
-          };
+    "/api/vehicles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-      };
+        /** List all vehicles in fleet */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Vehicles list */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            plateNumber: string;
+                            model: string;
+                            vehicleType: string;
+                            assignedDriver: string | null;
+                            currentKm: number;
+                            lastPmsKm: number;
+                            pmsIntervalKm: number;
+                            status: string;
+                            createdAt: string;
+                        }[];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/tsrf': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/tsrf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit a new TSRF request */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id?: string;
+                        requestNumber: string;
+                        department: string;
+                        projectName: string;
+                        origin: string;
+                        destination: string;
+                        stopsJson?: string;
+                        passengersJson?: string;
+                        cargoJson?: string;
+                        vehicleType?: string;
+                        /** Format: uuid */
+                        assignedVehicleId?: string | null;
+                        assignedDriver?: string | null;
+                        departureDate: string;
+                        callTime: string;
+                        startingKm?: number | null;
+                        endingKm?: number | null;
+                        isFlaggedAfterCutoff?: boolean;
+                        cutoffReason?: string | null;
+                        /** @enum {string} */
+                        approvalStatus?: "pending" | "approved" | "rejected";
+                        /** Format: uuid */
+                        linkedPrId?: string | null;
+                        tripStatus?: string;
+                        createdAt?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description TSRF created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            requestNumber: string;
+                            department: string;
+                            projectName: string;
+                            origin: string;
+                            destination: string;
+                            stopsJson: string;
+                            passengersJson: string;
+                            cargoJson: string;
+                            vehicleType: string;
+                            /** Format: uuid */
+                            assignedVehicleId: string | null;
+                            assignedDriver: string | null;
+                            departureDate: string;
+                            callTime: string;
+                            startingKm: number | null;
+                            endingKm: number | null;
+                            isFlaggedAfterCutoff: boolean;
+                            cutoffReason: string | null;
+                            /** @enum {string} */
+                            approvalStatus: "pending" | "approved" | "rejected";
+                            /** Format: uuid */
+                            linkedPrId: string | null;
+                            tripStatus: string;
+                            createdAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /** Submit a new TSRF request */
-    post: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: {
-        content: {
-          'application/json': {
+    "/api/pr/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Approve a Purchase Requisition (gated spend) */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description PR approved */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            prNumber: string;
+                            department: string;
+                            amount: number;
+                            /** @enum {string} */
+                            status: "draft" | "pending" | "approved" | "rejected";
+                            purpose: string;
+                            approvedBy: string | null;
+                            approvedAt: string | null;
+                            procurementNotes: string | null;
+                            createdAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+}
+export type webhooks = Record<string, never>;
+export interface components {
+    schemas: {
+        Vehicle: {
+            /** Format: uuid */
+            id: string;
+            plateNumber: string;
+            model: string;
+            vehicleType: string;
+            assignedDriver: string | null;
+            currentKm: number;
+            lastPmsKm: number;
+            pmsIntervalKm: number;
+            status: string;
+            createdAt: string;
+        };
+        InsertVehicle: {
+            /** Format: uuid */
+            id?: string;
+            plateNumber: string;
+            model?: string;
+            vehicleType?: string;
+            assignedDriver?: string | null;
+            currentKm?: number;
+            lastPmsKm?: number;
+            pmsIntervalKm?: number;
+            status?: string;
+            createdAt?: string;
+        };
+        PurchaseRequisition: {
+            /** Format: uuid */
+            id: string;
+            prNumber: string;
+            department: string;
+            amount: number;
+            /** @enum {string} */
+            status: "draft" | "pending" | "approved" | "rejected";
+            purpose: string;
+            approvedBy: string | null;
+            approvedAt: string | null;
+            procurementNotes: string | null;
+            createdAt: string;
+        };
+        InsertPurchaseRequisition: {
+            /** Format: uuid */
+            id?: string;
+            prNumber: string;
+            department: string;
+            amount?: number;
+            /** @enum {string} */
+            status?: "draft" | "pending" | "approved" | "rejected";
+            purpose: string;
+            approvedBy?: string | null;
+            approvedAt?: string | null;
+            procurementNotes?: string | null;
+            createdAt?: string;
+        };
+        RepairWorkOrder: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            vehicleId: string;
+            description: string;
+            /** @enum {string} */
+            status: "pending" | "approved" | "in_progress" | "completed" | "rejected";
+            /** Format: uuid */
+            linkedPrId: string | null;
+            hasPmsCompliance: boolean;
+            incidentReportFiled: boolean;
+            procurementFulfillmentStatus: string;
+            createdAt: string;
+        };
+        InsertRepairWorkOrder: {
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            vehicleId: string;
+            description: string;
+            /** @enum {string} */
+            status?: "pending" | "approved" | "in_progress" | "completed" | "rejected";
+            /** Format: uuid */
+            linkedPrId?: string | null;
+            hasPmsCompliance?: boolean;
+            incidentReportFiled?: boolean;
+            procurementFulfillmentStatus?: string;
+            createdAt?: string;
+        };
+        TSRFRequest: {
+            /** Format: uuid */
+            id: string;
+            requestNumber: string;
+            department: string;
+            projectName: string;
+            origin: string;
+            destination: string;
+            stopsJson: string;
+            passengersJson: string;
+            cargoJson: string;
+            vehicleType: string;
+            /** Format: uuid */
+            assignedVehicleId: string | null;
+            assignedDriver: string | null;
+            departureDate: string;
+            callTime: string;
+            startingKm: number | null;
+            endingKm: number | null;
+            isFlaggedAfterCutoff: boolean;
+            cutoffReason: string | null;
+            /** @enum {string} */
+            approvalStatus: "pending" | "approved" | "rejected";
+            /** Format: uuid */
+            linkedPrId: string | null;
+            tripStatus: string;
+            createdAt: string;
+        };
+        InsertTSRFRequest: {
             /** Format: uuid */
             id?: string;
             requestNumber: string;
@@ -75,211 +321,32 @@ export interface paths {
             projectName: string;
             origin: string;
             destination: string;
+            stopsJson?: string;
+            passengersJson?: string;
+            cargoJson?: string;
+            vehicleType?: string;
+            /** Format: uuid */
+            assignedVehicleId?: string | null;
+            assignedDriver?: string | null;
             departureDate: string;
             callTime: string;
+            startingKm?: number | null;
+            endingKm?: number | null;
             isFlaggedAfterCutoff?: boolean;
+            cutoffReason?: string | null;
             /** @enum {string} */
-            approvalStatus?: 'pending' | 'approved' | 'rejected';
+            approvalStatus?: "pending" | "approved" | "rejected";
             /** Format: uuid */
             linkedPrId?: string | null;
+            tripStatus?: string;
             createdAt?: string;
-          };
         };
-      };
-      responses: {
-        /** @description TSRF created */
-        201: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': {
-              /** Format: uuid */
-              id: string;
-              requestNumber: string;
-              department: string;
-              projectName: string;
-              origin: string;
-              destination: string;
-              departureDate: string;
-              callTime: string;
-              isFlaggedAfterCutoff: boolean;
-              /** @enum {string} */
-              approvalStatus: 'pending' | 'approved' | 'rejected';
-              /** Format: uuid */
-              linkedPrId: string | null;
-              createdAt: string;
-            };
-          };
-        };
-      };
     };
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/pr/{id}/approve': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    /** Approve a Purchase Requisition (gated spend) */
-    patch: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description PR approved */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            'application/json': {
-              /** Format: uuid */
-              id: string;
-              prNumber: string;
-              department: string;
-              amount: number;
-              /** @enum {string} */
-              status: 'draft' | 'pending' | 'approved' | 'rejected';
-              purpose: string;
-              createdAt: string;
-            };
-          };
-        };
-      };
-    };
-    trace?: never;
-  };
-}
-export type webhooks = Record<string, never>;
-export interface components {
-  schemas: {
-    Vehicle: {
-      /** Format: uuid */
-      id: string;
-      plateNumber: string;
-      currentKm: number;
-      lastPmsKm: number;
-      pmsIntervalKm: number;
-      createdAt: string;
-    };
-    InsertVehicle: {
-      /** Format: uuid */
-      id?: string;
-      plateNumber: string;
-      currentKm?: number;
-      lastPmsKm?: number;
-      pmsIntervalKm?: number;
-      createdAt?: string;
-    };
-    PurchaseRequisition: {
-      /** Format: uuid */
-      id: string;
-      prNumber: string;
-      department: string;
-      amount: number;
-      /** @enum {string} */
-      status: 'draft' | 'pending' | 'approved' | 'rejected';
-      purpose: string;
-      createdAt: string;
-    };
-    InsertPurchaseRequisition: {
-      /** Format: uuid */
-      id?: string;
-      prNumber: string;
-      department: string;
-      amount?: number;
-      /** @enum {string} */
-      status?: 'draft' | 'pending' | 'approved' | 'rejected';
-      purpose: string;
-      createdAt?: string;
-    };
-    RepairWorkOrder: {
-      /** Format: uuid */
-      id: string;
-      /** Format: uuid */
-      vehicleId: string;
-      description: string;
-      /** @enum {string} */
-      status: 'pending' | 'approved' | 'in_progress' | 'completed' | 'rejected';
-      /** Format: uuid */
-      linkedPrId: string | null;
-      hasPmsCompliance: boolean;
-      incidentReportFiled: boolean;
-      createdAt: string;
-    };
-    InsertRepairWorkOrder: {
-      /** Format: uuid */
-      id?: string;
-      /** Format: uuid */
-      vehicleId: string;
-      description: string;
-      /** @enum {string} */
-      status?: 'pending' | 'approved' | 'in_progress' | 'completed' | 'rejected';
-      /** Format: uuid */
-      linkedPrId?: string | null;
-      hasPmsCompliance?: boolean;
-      incidentReportFiled?: boolean;
-      createdAt?: string;
-    };
-    TSRFRequest: {
-      /** Format: uuid */
-      id: string;
-      requestNumber: string;
-      department: string;
-      projectName: string;
-      origin: string;
-      destination: string;
-      departureDate: string;
-      callTime: string;
-      isFlaggedAfterCutoff: boolean;
-      /** @enum {string} */
-      approvalStatus: 'pending' | 'approved' | 'rejected';
-      /** Format: uuid */
-      linkedPrId: string | null;
-      createdAt: string;
-    };
-    InsertTSRFRequest: {
-      /** Format: uuid */
-      id?: string;
-      requestNumber: string;
-      department: string;
-      projectName: string;
-      origin: string;
-      destination: string;
-      departureDate: string;
-      callTime: string;
-      isFlaggedAfterCutoff?: boolean;
-      /** @enum {string} */
-      approvalStatus?: 'pending' | 'approved' | 'rejected';
-      /** Format: uuid */
-      linkedPrId?: string | null;
-      createdAt?: string;
-    };
-  };
-  responses: never;
-  parameters: never;
-  requestBodies: never;
-  headers: never;
-  pathItems: never;
+    responses: never;
+    parameters: never;
+    requestBodies: never;
+    headers: never;
+    pathItems: never;
 }
 export type $defs = Record<string, never>;
 export type operations = Record<string, never>;

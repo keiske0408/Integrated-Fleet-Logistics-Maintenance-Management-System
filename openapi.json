@@ -22,6 +22,16 @@
           "plateNumber": {
             "type": "string"
           },
+          "model": {
+            "type": "string"
+          },
+          "vehicleType": {
+            "type": "string"
+          },
+          "assignedDriver": {
+            "type": "string",
+            "nullable": true
+          },
           "currentKm": {
             "type": "integer",
             "minimum": -2147483648,
@@ -37,11 +47,25 @@
             "minimum": -2147483648,
             "maximum": 2147483647
           },
+          "status": {
+            "type": "string"
+          },
           "createdAt": {
             "type": "string"
           }
         },
-        "required": ["id", "plateNumber", "currentKm", "lastPmsKm", "pmsIntervalKm", "createdAt"]
+        "required": [
+          "id",
+          "plateNumber",
+          "model",
+          "vehicleType",
+          "assignedDriver",
+          "currentKm",
+          "lastPmsKm",
+          "pmsIntervalKm",
+          "status",
+          "createdAt"
+        ]
       },
       "InsertVehicle": {
         "type": "object",
@@ -53,6 +77,16 @@
           "plateNumber": {
             "type": "string"
           },
+          "model": {
+            "type": "string"
+          },
+          "vehicleType": {
+            "type": "string"
+          },
+          "assignedDriver": {
+            "type": "string",
+            "nullable": true
+          },
           "currentKm": {
             "type": "integer",
             "minimum": -2147483648,
@@ -68,11 +102,16 @@
             "minimum": -2147483648,
             "maximum": 2147483647
           },
+          "status": {
+            "type": "string"
+          },
           "createdAt": {
             "type": "string"
           }
         },
-        "required": ["plateNumber"]
+        "required": [
+          "plateNumber"
+        ]
       },
       "PurchaseRequisition": {
         "type": "object",
@@ -94,16 +133,44 @@
           },
           "status": {
             "type": "string",
-            "enum": ["draft", "pending", "approved", "rejected"]
+            "enum": [
+              "draft",
+              "pending",
+              "approved",
+              "rejected"
+            ]
           },
           "purpose": {
             "type": "string"
+          },
+          "approvedBy": {
+            "type": "string",
+            "nullable": true
+          },
+          "approvedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "procurementNotes": {
+            "type": "string",
+            "nullable": true
           },
           "createdAt": {
             "type": "string"
           }
         },
-        "required": ["id", "prNumber", "department", "amount", "status", "purpose", "createdAt"]
+        "required": [
+          "id",
+          "prNumber",
+          "department",
+          "amount",
+          "status",
+          "purpose",
+          "approvedBy",
+          "approvedAt",
+          "procurementNotes",
+          "createdAt"
+        ]
       },
       "InsertPurchaseRequisition": {
         "type": "object",
@@ -125,16 +192,37 @@
           },
           "status": {
             "type": "string",
-            "enum": ["draft", "pending", "approved", "rejected"]
+            "enum": [
+              "draft",
+              "pending",
+              "approved",
+              "rejected"
+            ]
           },
           "purpose": {
             "type": "string"
+          },
+          "approvedBy": {
+            "type": "string",
+            "nullable": true
+          },
+          "approvedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "procurementNotes": {
+            "type": "string",
+            "nullable": true
           },
           "createdAt": {
             "type": "string"
           }
         },
-        "required": ["prNumber", "department", "purpose"]
+        "required": [
+          "prNumber",
+          "department",
+          "purpose"
+        ]
       },
       "RepairWorkOrder": {
         "type": "object",
@@ -152,7 +240,13 @@
           },
           "status": {
             "type": "string",
-            "enum": ["pending", "approved", "in_progress", "completed", "rejected"]
+            "enum": [
+              "pending",
+              "approved",
+              "in_progress",
+              "completed",
+              "rejected"
+            ]
           },
           "linkedPrId": {
             "type": "string",
@@ -164,6 +258,9 @@
           },
           "incidentReportFiled": {
             "type": "boolean"
+          },
+          "procurementFulfillmentStatus": {
+            "type": "string"
           },
           "createdAt": {
             "type": "string"
@@ -177,6 +274,7 @@
           "linkedPrId",
           "hasPmsCompliance",
           "incidentReportFiled",
+          "procurementFulfillmentStatus",
           "createdAt"
         ]
       },
@@ -196,7 +294,13 @@
           },
           "status": {
             "type": "string",
-            "enum": ["pending", "approved", "in_progress", "completed", "rejected"]
+            "enum": [
+              "pending",
+              "approved",
+              "in_progress",
+              "completed",
+              "rejected"
+            ]
           },
           "linkedPrId": {
             "type": "string",
@@ -209,11 +313,17 @@
           "incidentReportFiled": {
             "type": "boolean"
           },
+          "procurementFulfillmentStatus": {
+            "type": "string"
+          },
           "createdAt": {
             "type": "string"
           }
         },
-        "required": ["vehicleId", "description"]
+        "required": [
+          "vehicleId",
+          "description"
+        ]
       },
       "TSRFRequest": {
         "type": "object",
@@ -237,23 +347,67 @@
           "destination": {
             "type": "string"
           },
+          "stopsJson": {
+            "type": "string"
+          },
+          "passengersJson": {
+            "type": "string"
+          },
+          "cargoJson": {
+            "type": "string"
+          },
+          "vehicleType": {
+            "type": "string"
+          },
+          "assignedVehicleId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "assignedDriver": {
+            "type": "string",
+            "nullable": true
+          },
           "departureDate": {
             "type": "string"
           },
           "callTime": {
             "type": "string"
           },
+          "startingKm": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "endingKm": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
           "isFlaggedAfterCutoff": {
             "type": "boolean"
           },
+          "cutoffReason": {
+            "type": "string",
+            "nullable": true
+          },
           "approvalStatus": {
             "type": "string",
-            "enum": ["pending", "approved", "rejected"]
+            "enum": [
+              "pending",
+              "approved",
+              "rejected"
+            ]
           },
           "linkedPrId": {
             "type": "string",
             "nullable": true,
             "format": "uuid"
+          },
+          "tripStatus": {
+            "type": "string"
           },
           "createdAt": {
             "type": "string"
@@ -266,11 +420,21 @@
           "projectName",
           "origin",
           "destination",
+          "stopsJson",
+          "passengersJson",
+          "cargoJson",
+          "vehicleType",
+          "assignedVehicleId",
+          "assignedDriver",
           "departureDate",
           "callTime",
+          "startingKm",
+          "endingKm",
           "isFlaggedAfterCutoff",
+          "cutoffReason",
           "approvalStatus",
           "linkedPrId",
+          "tripStatus",
           "createdAt"
         ]
       },
@@ -296,23 +460,67 @@
           "destination": {
             "type": "string"
           },
+          "stopsJson": {
+            "type": "string"
+          },
+          "passengersJson": {
+            "type": "string"
+          },
+          "cargoJson": {
+            "type": "string"
+          },
+          "vehicleType": {
+            "type": "string"
+          },
+          "assignedVehicleId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "assignedDriver": {
+            "type": "string",
+            "nullable": true
+          },
           "departureDate": {
             "type": "string"
           },
           "callTime": {
             "type": "string"
           },
+          "startingKm": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "endingKm": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
           "isFlaggedAfterCutoff": {
             "type": "boolean"
           },
+          "cutoffReason": {
+            "type": "string",
+            "nullable": true
+          },
           "approvalStatus": {
             "type": "string",
-            "enum": ["pending", "approved", "rejected"]
+            "enum": [
+              "pending",
+              "approved",
+              "rejected"
+            ]
           },
           "linkedPrId": {
             "type": "string",
             "nullable": true,
             "format": "uuid"
+          },
+          "tripStatus": {
+            "type": "string"
           },
           "createdAt": {
             "type": "string"
@@ -352,6 +560,16 @@
                       "plateNumber": {
                         "type": "string"
                       },
+                      "model": {
+                        "type": "string"
+                      },
+                      "vehicleType": {
+                        "type": "string"
+                      },
+                      "assignedDriver": {
+                        "type": "string",
+                        "nullable": true
+                      },
                       "currentKm": {
                         "type": "integer",
                         "minimum": -2147483648,
@@ -367,6 +585,9 @@
                         "minimum": -2147483648,
                         "maximum": 2147483647
                       },
+                      "status": {
+                        "type": "string"
+                      },
                       "createdAt": {
                         "type": "string"
                       }
@@ -374,9 +595,13 @@
                     "required": [
                       "id",
                       "plateNumber",
+                      "model",
+                      "vehicleType",
+                      "assignedDriver",
                       "currentKm",
                       "lastPmsKm",
                       "pmsIntervalKm",
+                      "status",
                       "createdAt"
                     ]
                   }
@@ -415,23 +640,67 @@
                   "destination": {
                     "type": "string"
                   },
+                  "stopsJson": {
+                    "type": "string"
+                  },
+                  "passengersJson": {
+                    "type": "string"
+                  },
+                  "cargoJson": {
+                    "type": "string"
+                  },
+                  "vehicleType": {
+                    "type": "string"
+                  },
+                  "assignedVehicleId": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uuid"
+                  },
+                  "assignedDriver": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "departureDate": {
                     "type": "string"
                   },
                   "callTime": {
                     "type": "string"
                   },
+                  "startingKm": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": -2147483648,
+                    "maximum": 2147483647
+                  },
+                  "endingKm": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": -2147483648,
+                    "maximum": 2147483647
+                  },
                   "isFlaggedAfterCutoff": {
                     "type": "boolean"
                   },
+                  "cutoffReason": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "approvalStatus": {
                     "type": "string",
-                    "enum": ["pending", "approved", "rejected"]
+                    "enum": [
+                      "pending",
+                      "approved",
+                      "rejected"
+                    ]
                   },
                   "linkedPrId": {
                     "type": "string",
                     "nullable": true,
                     "format": "uuid"
+                  },
+                  "tripStatus": {
+                    "type": "string"
                   },
                   "createdAt": {
                     "type": "string"
@@ -477,23 +746,67 @@
                     "destination": {
                       "type": "string"
                     },
+                    "stopsJson": {
+                      "type": "string"
+                    },
+                    "passengersJson": {
+                      "type": "string"
+                    },
+                    "cargoJson": {
+                      "type": "string"
+                    },
+                    "vehicleType": {
+                      "type": "string"
+                    },
+                    "assignedVehicleId": {
+                      "type": "string",
+                      "nullable": true,
+                      "format": "uuid"
+                    },
+                    "assignedDriver": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "departureDate": {
                       "type": "string"
                     },
                     "callTime": {
                       "type": "string"
                     },
+                    "startingKm": {
+                      "type": "integer",
+                      "nullable": true,
+                      "minimum": -2147483648,
+                      "maximum": 2147483647
+                    },
+                    "endingKm": {
+                      "type": "integer",
+                      "nullable": true,
+                      "minimum": -2147483648,
+                      "maximum": 2147483647
+                    },
                     "isFlaggedAfterCutoff": {
                       "type": "boolean"
                     },
+                    "cutoffReason": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "approvalStatus": {
                       "type": "string",
-                      "enum": ["pending", "approved", "rejected"]
+                      "enum": [
+                        "pending",
+                        "approved",
+                        "rejected"
+                      ]
                     },
                     "linkedPrId": {
                       "type": "string",
                       "nullable": true,
                       "format": "uuid"
+                    },
+                    "tripStatus": {
+                      "type": "string"
                     },
                     "createdAt": {
                       "type": "string"
@@ -506,11 +819,21 @@
                     "projectName",
                     "origin",
                     "destination",
+                    "stopsJson",
+                    "passengersJson",
+                    "cargoJson",
+                    "vehicleType",
+                    "assignedVehicleId",
+                    "assignedDriver",
                     "departureDate",
                     "callTime",
+                    "startingKm",
+                    "endingKm",
                     "isFlaggedAfterCutoff",
+                    "cutoffReason",
                     "approvalStatus",
                     "linkedPrId",
+                    "tripStatus",
                     "createdAt"
                   ]
                 }
@@ -559,10 +882,27 @@
                     },
                     "status": {
                       "type": "string",
-                      "enum": ["draft", "pending", "approved", "rejected"]
+                      "enum": [
+                        "draft",
+                        "pending",
+                        "approved",
+                        "rejected"
+                      ]
                     },
                     "purpose": {
                       "type": "string"
+                    },
+                    "approvedBy": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "approvedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "procurementNotes": {
+                      "type": "string",
+                      "nullable": true
                     },
                     "createdAt": {
                       "type": "string"
@@ -575,6 +915,9 @@
                     "amount",
                     "status",
                     "purpose",
+                    "approvedBy",
+                    "approvedAt",
+                    "procurementNotes",
                     "createdAt"
                   ]
                 }
