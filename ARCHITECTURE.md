@@ -78,7 +78,9 @@ src/
 ## 🔑 Key Conventions & Best Practices
 
 ### 1. Import Path Aliases (`@/*`)
+
 Always use the clean `@/` path alias instead of deep relative paths (`../../`):
+
 ```tsx
 // Clean, maintainable imports:
 import { Button } from '@/components/ui/button';
@@ -89,22 +91,30 @@ import { VehicleRegistryTable } from '@/features/fleet';
 ```
 
 ### 2. Feature Slicing
+
 When adding a new capability (e.g. `reports` or `gps-tracking`):
+
 1. Create `src/features/<feature-name>/`.
 2. Keep the feature's components, context, and types together.
 3. Export public components via an `index.ts` barrel file.
 4. Mount the navigation item in `src/components/layout/SidebarLayout.tsx` with its required permission.
 
 ### 3. Dynamic RBAC Integration
+
 - All permissions are typed via `Permission` (e.g., `'fleet:view'`, `'fleet:create'`, `'maintenance:manage'`, `'theme:edit'`).
 - Check access in components with `hasPermission(perm)` from `useAuth()`:
+
 ```tsx
 const { hasPermission } = useAuth();
-{hasPermission('fleet:create') && <Button onClick={handleCreate}>Add Vehicle</Button>}
+{
+  hasPermission('fleet:create') && <Button onClick={handleCreate}>Add Vehicle</Button>;
+}
 ```
 
 ### 4. Live Activity Logging
+
 When any domain action occurs (vehicle registration, mileage update, role edit, PR approval):
+
 ```tsx
 const { addLog } = useActivityLog();
 addLog({
@@ -117,6 +127,7 @@ addLog({
 ```
 
 ### 5. Theme Customization & Mode Switching
+
 - Switching between Light Mode and Dark Mode is managed reactively via `ThemeContext`.
 - Switching mode in the Theme Editor (`handleModeChange`) switches the active mode in `ThemeContext` and updates `document.documentElement.classList`, giving instant real-time preview across the app.
 - Custom HSL variables and selected fonts are persisted in `localStorage` and automatically injected on application startup.
