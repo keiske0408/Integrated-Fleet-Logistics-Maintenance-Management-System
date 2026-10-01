@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { fieldRegistry } from './registry';
 import { getFieldState } from './rules';
+import { validateFormValues } from './validation';
 import type { FormDefinition, FormField, FormValues } from './types';
 
 interface FormRendererProps {
@@ -128,6 +129,7 @@ export function FormRenderer({
   const [values, setValues] = useState<FormValues>(() =>
     getInitialValues(definition, initialValues),
   );
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const updateValue = (key: string, value: FormValues[string]) =>
     setValues((current) => ({ ...current, [key]: value }));
   const resolvedDefinition: FormDefinition = {
@@ -149,10 +151,23 @@ export function FormRenderer({
     <form
       onSubmit={(event) => {
         event.preventDefault();
+        const errors = validateFormValues(definition, values);
+        setValidationErrors(errors);
+        if (errors.length > 0) return;
         onSubmit(values);
       }}
       className="mx-auto max-w-4xl space-y-6"
     >
+      {validationErrors.length > 0 && (
+        <div
+          role="alert"
+          className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+        >
+          {validationErrors.map((error) => (
+            <p key={error}>{error}</p>
+          ))}
+        </div>
+      )}
       {resolvedDefinition.sections.map((section) => (
         <Card key={section.id}>
           <CardHeader>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { serializeTsrfValues, TSRF_V1 } from '@/features/form-builder';
 import { evaluateCondition, getFieldState } from '@/features/form-builder';
+import { validateFormDefinition, validateFormValues } from '@/features/form-builder';
 
 describe('TSRF form definition', () => {
   it('contains published intake fields bound to the expected LOVs', () => {
@@ -63,5 +64,36 @@ describe('TSRF form definition', () => {
       passengers: [{ name: 'Passenger', department: 'IT', role: 'Tech' }],
       cargo: [{ description: 'Tools', quantity: 2, isFragile: false }],
     });
+  });
+
+  it('accepts seeded nested keys and rejects duplicate root keys and missing LOVs', () => {
+    const codes = new Set(['DEPARTMENTS', 'VEHICLE_TYPES']);
+    expect(validateFormDefinition(TSRF_V1, codes)).toEqual([]);
+
+    const invalid = structuredClone(TSRF_V1);
+    invalid.sections[1].fields[0].key = 'department';
+    invalid.sections[1].fields[1].dataSource = { kind: 'lov', listCode: 'MISSING' };
+    expect(validateFormDefinition(invalid, codes)).toEqual(
+      expect.arrayContaining([
+        'Field key "department" is duplicated.',
+        'Field "Requesting Department" references unknown LOV list "MISSING".',
+      ]),
+    );
+  });
+
+  it('blocks submissions without the required passenger row', () => {
+    const errors = validateFormValues(TSRF_V1, {
+      projectName: 'Project',
+      department: 'IT',
+      departureDate: '2026-10-02',
+      callTime: '08:00',
+      vehicleType: 'VAN',
+      origin: 'Origin',
+      destination: 'Destination',
+      stops: [{}],
+      passengers: [],
+      cargo: [],
+    });
+    expect(errors).toContain('Passengers requires at least 1 row.');
   });
 });

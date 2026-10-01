@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
-import { Copy, Download, GripVertical, Eye, Save, Trash2 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Copy, Download, GripVertical, Eye, Save, Send, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { FormRenderer } from './FormRenderer';
 import { TSRF_V1 } from './seed';
+import { useLov } from '@/features/lov';
+import { validateFormDefinition } from './validation';
 import type { FieldType, FormDefinition, FormField } from './types';
 
 const PALETTE: Array<{ type: FieldType; label: string }> = [
@@ -27,8 +29,110 @@ export function FormBuilderPage() {
   const [selectedId, setSelectedId] = useState(definition.sections[1]?.fields[0]?.id ?? '');
   const [preview, setPreview] = useState(false);
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [definitionId, setDefinitionId] = useState<string | null>(null);
+  const [draftVersionId, setDraftVersionId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const { lists } = useLov();
   const fields = definition.sections.flatMap((section) => section.fields);
   const selectedField = fields.find((field) => field.id === selectedId);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/forms/${encodeURIComponent(definition.key)}`)
+      .then(async (response) => {
+        if (response.status === 404) return null;
+        if (!response.ok) throw new Error('Unable to load saved form versions.');
+        return response.json();
+      })
+      .then((saved) => {
+        if (cancelled || !saved) return;
+        setDefinitionId(saved.id);
+        const versions = [...saved.versions].sort((a, b) => b.version - a.version);
+        const activeDraft = versions.find((version) => version.status === 'draft');
+        const selected = activeDraft ?? versions.find((version) => version.status === 'published');
+        if (selected?.schema) {
+          setDefinition({ ...selected.schema, version: selected.version, status: selected.status });
+          setDraftVersionId(selected.status === 'draft' ? selected.id : null);
+          setSelectedId(selected.schema.sections[1]?.fields[0]?.id ?? '');
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled)
+          setMessage(error instanceof Error ? error.message : 'Unable to load form definition.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const saveDraft = async () => {
+    setSaving(true);
+    setMessage(null);
+    try {
+      const draft = { ...definition, status: 'draft' as const };
+      let response: Response;
+      if (!definitionId) {
+        response = await fetch('/api/forms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: draft.key, name: draft.name, schema: draft }),
+        });
+      } else if (draftVersionId) {
+        response = await fetch(`/api/forms/versions/${encodeURIComponent(draftVersionId)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ schema: draft }),
+        });
+      } else {
+        response = await fetch(`/api/forms/${encodeURIComponent(definitionId)}/versions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ schema: draft }),
+        });
+      }
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? 'Unable to save draft.');
+      setDefinitionId(result.id ?? definitionId);
+      const version = result.version ?? result;
+      setDraftVersionId(version.id);
+      setDefinition({ ...draft, version: version.version, status: 'draft' });
+      setMessage(`Draft v${version.version} saved.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Unable to save draft.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const publish = async () => {
+    const errors = validateFormDefinition(definition, new Set(lists.map((list) => list.code)));
+    if (errors.length) {
+      setMessage(errors.join(' '));
+      return;
+    }
+    if (!draftVersionId) {
+      setMessage('Save a draft before publishing.');
+      return;
+    }
+    setSaving(true);
+    setMessage(null);
+    try {
+      const response = await fetch(
+        `/api/forms/versions/${encodeURIComponent(draftVersionId)}/publish`,
+        { method: 'POST' },
+      );
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? 'Unable to publish form.');
+      setDefinition({ ...definition, version: result.version, status: 'published' });
+      setDraftVersionId(null);
+      setMessage(`Form v${result.version} published.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Unable to publish form.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const updateField = (updates: Partial<FormField>) =>
     setDefinition((current) => ({
@@ -106,7 +210,7 @@ export function FormBuilderPage() {
         <div>
           <h1 className="text-2xl font-bold">Form Builder</h1>
           <p className="text-sm text-muted-foreground">
-            Design {definition.name} v{definition.version}.
+            Design {definition.name} v{definition.version} · {definition.status}
           </p>
         </div>
         <div className="flex gap-2">
@@ -118,12 +222,25 @@ export function FormBuilderPage() {
             <Download className="mr-2 h-4 w-4" />
             Export JSON
           </Button>
-          <Button>
+          <Button onClick={() => void saveDraft()} disabled={saving}>
             <Save className="mr-2 h-4 w-4" />
-            Save Draft
+            {saving ? 'Saving...' : 'Save Draft'}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => void publish()}
+            disabled={saving || definition.status === 'published'}
+          >
+            <Send className="mr-2 h-4 w-4" />
+            Publish
           </Button>
         </div>
       </div>
+      {message && (
+        <p role="status" className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
+          {message}
+        </p>
+      )}
       <div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)_280px]">
         <Card>
           <CardHeader>
