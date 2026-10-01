@@ -24,3 +24,7 @@
 - **Rule**: Any new public or write-heavy endpoint needs an Arcjet rule before it ships, not after.
 - **Spend Protection**: All financial and procurement approval endpoints (`/api/pr/*`, `/api/procurement/*`) must enforce rate limiting via `rateLimitPrApproval`.
 - **Intake Defense**: External and public intake forms (such as TSRF requests) must enforce bot detection via `protectTsrfIntake`.
+
+## 5. Feature Context
+
+- Form-builder and LOV architecture notes: `src/features/form-builder/AI_CONTEXT.md`.
