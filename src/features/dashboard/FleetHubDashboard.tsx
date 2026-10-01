@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { TSRFFormData } from '@/features/logistics/TSRFForm';
-import { FormRenderer, serializeTsrfValues, TSRF_V1 } from '@/features/form-builder';
+import { PublishedTsrfForm } from '@/features/form-builder';
 import { VehicleRegistryTable, VehicleItem } from '@/features/fleet/VehicleRegistryTable';
 import {
   PRGatingDashboard,
@@ -365,12 +365,7 @@ export function FleetHubDashboard() {
           />
         )}
 
-        {activeTab === 'tsrf' && (
-          <FormRenderer
-            definition={TSRF_V1}
-            onSubmit={(values) => handleTsrfSubmit(serializeTsrfValues(values))}
-          />
-        )}
+        {activeTab === 'tsrf' && <PublishedTsrfForm onSubmit={handleTsrfSubmit} />}
       </main>
 
       {/* Incident Report Modal */}

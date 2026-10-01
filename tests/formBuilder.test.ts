@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { serializeTsrfValues, TSRF_V1 } from '@/features/form-builder';
 import { evaluateCondition, getFieldState } from '@/features/form-builder';
 import { validateFormDefinition, validateFormValues } from '@/features/form-builder';
+import { choosePublishedDefinition } from '@/features/form-builder';
 
 describe('TSRF form definition', () => {
   it('contains published intake fields bound to the expected LOVs', () => {
@@ -95,5 +96,21 @@ describe('TSRF form definition', () => {
       cargo: [],
     });
     expect(errors).toContain('Passengers requires at least 1 row.');
+  });
+
+  it('uses the newest published definition rather than an unpublished draft', () => {
+    const published = { ...TSRF_V1, version: 2 };
+    const selected = choosePublishedDefinition([
+      {
+        id: 'draft',
+        version: 3,
+        status: 'draft',
+        schema: { ...TSRF_V1, version: 3, status: 'draft' },
+      },
+      { id: 'published-v1', version: 1, status: 'published', schema: TSRF_V1 },
+      { id: 'published-v2', version: 2, status: 'published', schema: published },
+    ]);
+    expect(selected.version).toBe(2);
+    expect(selected.status).toBe('published');
   });
 });

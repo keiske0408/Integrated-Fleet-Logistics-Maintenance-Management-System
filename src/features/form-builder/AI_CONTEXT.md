@@ -16,6 +16,8 @@ The current registry includes scalar inputs, LOV lookups, notices, and repeaters
 
 The builder loads the latest draft or published version from `/api/forms/:key`. Saving an unpersisted definition creates v1; saving edits creates or updates a draft version. Publishing requires an existing draft and passes client validation for duplicate scoped keys, invalid LOV references, required metadata, and the 256 KB schema limit. Runtime submission validation enforces required fields and repeater min/max constraints before invoking the submit callback.
 
+Live TSRF pages use `PublishedTsrfForm`, which selects the newest published version returned by `/api/forms/tsrf`; drafts are never shown to requestors. If the API is unavailable or no published version exists, the page falls back to the bundled TSRF v1 definition.
+
 ## Rules and Workflow
 
 Rules must be declarative data evaluated by a shared client/server evaluator. Do not use `eval` or `new Function`. Workflow stages control field visibility and editability, and server-side validation must enforce those permissions for submissions.

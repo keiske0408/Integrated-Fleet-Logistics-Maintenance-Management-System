@@ -13,12 +13,7 @@ import {
   type RepairWorkOrderItem,
 } from '@/features/procurement';
 import type { TSRFFormData } from '@/features/logistics';
-import {
-  FormBuilderPage,
-  FormRenderer,
-  serializeTsrfValues,
-  TSRF_V1,
-} from '@/features/form-builder';
+import { FormBuilderPage, PublishedTsrfForm } from '@/features/form-builder';
 
 // ─── Role Sync Bridge ─────────────────────────────────────────────────────────
 
@@ -424,10 +419,7 @@ function InnerApp() {
               Submit Transportation Service Request Forms for dispatch.
             </p>
           </div>
-          <FormRenderer
-            definition={TSRF_V1}
-            onSubmit={(values) => handleTsrfSubmit(serializeTsrfValues(values))}
-          />
+          <PublishedTsrfForm onSubmit={handleTsrfSubmit} />
         </div>
       )}
 
