@@ -1,7 +1,12 @@
 import React, { useState } from 'react';
-import { TSRFForm, TSRFFormData } from '@/features/logistics/TSRFForm';
+import type { TSRFFormData } from '@/features/logistics/TSRFForm';
+import { FormRenderer, serializeTsrfValues, TSRF_V1 } from '@/features/form-builder';
 import { VehicleRegistryTable, VehicleItem } from '@/features/fleet/VehicleRegistryTable';
-import { PRGatingDashboard, PurchaseRequisitionItem, RepairWorkOrderItem } from '@/features/procurement/PRGatingDashboard';
+import {
+  PRGatingDashboard,
+  PurchaseRequisitionItem,
+  RepairWorkOrderItem,
+} from '@/features/procurement/PRGatingDashboard';
 import { IncidentReportModal } from '@/features/fleet/IncidentReportModal';
 import { Badge } from '@/components/ui/badge';
 import { Truck, Shield, Calendar, Wrench, Bell, UserCheck } from 'lucide-react';
@@ -111,7 +116,11 @@ export function FleetHubDashboard() {
             ...v,
             currentKm: newKm,
             status: isDue ? 'pms_due' : v.status,
-            computedPmsStatus: isDue ? 'pms_due' : newKm >= nextDue - 500 ? 'pms_approaching' : 'active',
+            computedPmsStatus: isDue
+              ? 'pms_due'
+              : newKm >= nextDue - 500
+                ? 'pms_approaching'
+                : 'active',
           };
         }
         return v;
@@ -125,7 +134,9 @@ export function FleetHubDashboard() {
   };
 
   const handleRequestRepair = (vehicle: VehicleItem) => {
-    const isOverdue = vehicle.status === 'pms_due' || vehicle.currentKm >= vehicle.lastPmsKm + vehicle.pmsIntervalKm;
+    const isOverdue =
+      vehicle.status === 'pms_due' ||
+      vehicle.currentKm >= vehicle.lastPmsKm + vehicle.pmsIntervalKm;
     if (isOverdue) {
       setSelectedIncidentVehicle(vehicle);
       setIncidentModalOpen(true);
@@ -163,7 +174,9 @@ export function FleetHubDashboard() {
     };
     setWorkOrders([newWo, ...workOrders]);
     setIncidentModalOpen(false);
-    showToast(`Incident Report filed by ${data.reportedBy}. Repair Work Order unlocked for PR review.`);
+    showToast(
+      `Incident Report filed by ${data.reportedBy}. Repair Work Order unlocked for PR review.`,
+    );
   };
 
   const handleApprovePr = (prId: string) => {
@@ -250,7 +263,8 @@ export function FleetHubDashboard() {
                 Hulma Integrated Fleet Logistics & Maintenance Management
               </h1>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Enterprise Fleet Visibility • Automated 5,000 KM PMS • Approved PR Gatekeeper • TSRF Dispatch
+                Enterprise Fleet Visibility • Automated 5,000 KM PMS • Approved PR Gatekeeper • TSRF
+                Dispatch
               </p>
             </div>
           </div>
@@ -265,11 +279,7 @@ export function FleetHubDashboard() {
             onChange={(e) =>
               setCurrentRole(
                 e.target.value as
-                  | 'department_requester'
-                  | 'fleet_team'
-                  | 'finance'
-                  | 'procurement'
-                  | 'admin',
+                  'department_requester' | 'fleet_team' | 'finance' | 'procurement' | 'admin',
               )
             }
             className="bg-transparent font-semibold text-primary focus:outline-none cursor-pointer"
@@ -355,7 +365,12 @@ export function FleetHubDashboard() {
           />
         )}
 
-        {activeTab === 'tsrf' && <TSRFForm onSubmit={handleTsrfSubmit} />}
+        {activeTab === 'tsrf' && (
+          <FormRenderer
+            definition={TSRF_V1}
+            onSubmit={(values) => handleTsrfSubmit(serializeTsrfValues(values))}
+          />
+        )}
       </main>
 
       {/* Incident Report Modal */}

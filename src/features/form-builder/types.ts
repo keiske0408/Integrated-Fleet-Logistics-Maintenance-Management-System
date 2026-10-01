@@ -1,5 +1,14 @@
 export type FieldType =
-  'text' | 'textarea' | 'number' | 'date' | 'time' | 'select' | 'lookup' | 'notice' | 'repeater';
+  | 'text'
+  | 'textarea'
+  | 'number'
+  | 'date'
+  | 'time'
+  | 'select'
+  | 'lookup'
+  | 'checkbox'
+  | 'notice'
+  | 'repeater';
 
 export interface FormField {
   id: string;
@@ -9,7 +18,7 @@ export interface FormField {
   section: string;
   required?: boolean;
   placeholder?: string;
-  defaultValue?: string | number;
+  defaultValue?: FormValue;
   options?: Array<{ value: string; label: string }>;
   dataSource?: { kind: 'lov'; listCode: string };
   content?: string;

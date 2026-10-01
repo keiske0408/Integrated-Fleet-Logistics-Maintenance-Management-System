@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useLov } from '@/features/lov';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { fieldRegistry } from './registry';
@@ -123,11 +124,26 @@ export function FormRenderer({
   onSubmit,
   submitLabel = 'Submit Request',
 }: FormRendererProps) {
+  const { getActiveItems } = useLov();
   const [values, setValues] = useState<FormValues>(() =>
     getInitialValues(definition, initialValues),
   );
   const updateValue = (key: string, value: FormValues[string]) =>
     setValues((current) => ({ ...current, [key]: value }));
+  const resolvedDefinition: FormDefinition = {
+    ...definition,
+    sections: definition.sections.map((section) => ({
+      ...section,
+      fields: section.fields.map((field) => {
+        if (!field.dataSource || field.type !== 'lookup') return field;
+        const options = getActiveItems(field.dataSource.listCode).map((item) => ({
+          value: item.code,
+          label: item.label,
+        }));
+        return { ...field, options: options.length > 0 ? options : field.options };
+      }),
+    })),
+  };
 
   return (
     <form
@@ -137,7 +153,7 @@ export function FormRenderer({
       }}
       className="mx-auto max-w-4xl space-y-6"
     >
-      {definition.sections.map((section) => (
+      {resolvedDefinition.sections.map((section) => (
         <Card key={section.id}>
           <CardHeader>
             <CardTitle>{section.title}</CardTitle>

@@ -1,4 +1,5 @@
-import type { FormDefinition } from './types';
+import type { TSRFFormData } from '@/features/logistics/TSRFForm';
+import type { FormDefinition, FormValues } from './types';
 
 export const TSRF_V1: FormDefinition = {
   key: 'tsrf',
@@ -100,7 +101,192 @@ export const TSRF_V1: FormDefinition = {
           section: 'route',
           required: true,
         },
+        {
+          id: 'stops',
+          key: 'stops',
+          type: 'repeater',
+          label: 'Waypoints & Stops',
+          section: 'route',
+          minRows: 1,
+          maxRows: 10,
+          defaultValue: [
+            {
+              stopOrder: 1,
+              locationName: 'MMG Warehouse',
+              address: 'Building 4, MMG Logistics Complex',
+              waitingTimeMinutes: 15,
+              notes: 'Initial cargo loading',
+            },
+            {
+              stopOrder: 2,
+              locationName: 'Kingston Excell Facility',
+              address: 'Lot 12 Kingston Industrial Park',
+              waitingTimeMinutes: 45,
+              notes: 'Unloading biometric terminals',
+            },
+          ],
+          rowFields: [
+            {
+              id: 'stop-location',
+              key: 'locationName',
+              type: 'text',
+              label: 'Stop Name',
+              section: 'stop',
+              required: true,
+            },
+            {
+              id: 'stop-address',
+              key: 'address',
+              type: 'text',
+              label: 'Address',
+              section: 'stop',
+              required: true,
+            },
+            {
+              id: 'stop-wait',
+              key: 'waitingTimeMinutes',
+              type: 'number',
+              label: 'Waiting Time (minutes)',
+              section: 'stop',
+            },
+            { id: 'stop-notes', key: 'notes', type: 'textarea', label: 'Notes', section: 'stop' },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'passengers',
+      title: '3. Passenger Manifest',
+      description: 'Record each passenger travelling on the request.',
+      fields: [
+        {
+          id: 'passengers',
+          key: 'passengers',
+          type: 'repeater',
+          label: 'Passengers',
+          section: 'passengers',
+          required: true,
+          minRows: 1,
+          maxRows: 10,
+          defaultValue: [
+            { name: 'Juan Dela Cruz', department: 'IT Support', role: 'Lead Technician' },
+            { name: 'Maria Santos', department: 'Asset Management', role: 'Auditor' },
+          ],
+          rowFields: [
+            {
+              id: 'passenger-name',
+              key: 'name',
+              type: 'text',
+              label: 'Name',
+              section: 'passenger',
+              required: true,
+            },
+            {
+              id: 'passenger-department',
+              key: 'department',
+              type: 'text',
+              label: 'Department',
+              section: 'passenger',
+              required: true,
+            },
+            {
+              id: 'passenger-role',
+              key: 'role',
+              type: 'text',
+              label: 'Role',
+              section: 'passenger',
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'cargo',
+      title: '4. Cargo & Equipment Control',
+      fields: [
+        {
+          id: 'cargo',
+          key: 'cargo',
+          type: 'repeater',
+          label: 'Cargo Items',
+          section: 'cargo',
+          maxRows: 10,
+          defaultValue: [
+            {
+              description: 'KE Biometric Scanners (Pack of 10)',
+              quantity: 2,
+              weightKg: 15,
+              isFragile: true,
+            },
+          ],
+          rowFields: [
+            {
+              id: 'cargo-description',
+              key: 'description',
+              type: 'text',
+              label: 'Description',
+              section: 'cargo-item',
+              required: true,
+            },
+            {
+              id: 'cargo-quantity',
+              key: 'quantity',
+              type: 'number',
+              label: 'Quantity',
+              section: 'cargo-item',
+              required: true,
+            },
+            {
+              id: 'cargo-weight',
+              key: 'weightKg',
+              type: 'number',
+              label: 'Weight (kg)',
+              section: 'cargo-item',
+            },
+            {
+              id: 'cargo-fragile',
+              key: 'isFragile',
+              type: 'checkbox',
+              label: 'Fragile',
+              section: 'cargo-item',
+            },
+          ],
+        },
       ],
     },
   ],
 };
+
+function rowsFor(values: FormValues, key: string): FormValues[] {
+  return Array.isArray(values[key]) ? (values[key] as FormValues[]) : [];
+}
+
+export function serializeTsrfValues(values: FormValues): TSRFFormData {
+  return {
+    projectName: String(values.projectName ?? ''),
+    department: String(values.department ?? ''),
+    origin: String(values.origin ?? ''),
+    destination: String(values.destination ?? ''),
+    departureDate: String(values.departureDate ?? ''),
+    callTime: String(values.callTime ?? ''),
+    vehicleType: String(values.vehicleType ?? ''),
+    stops: rowsFor(values, 'stops').map((row, index) => ({
+      stopOrder: Number(row.stopOrder ?? index + 1),
+      locationName: String(row.locationName ?? ''),
+      address: String(row.address ?? ''),
+      waitingTimeMinutes: Number(row.waitingTimeMinutes ?? 0),
+      ...(row.notes ? { notes: String(row.notes) } : {}),
+    })),
+    passengers: rowsFor(values, 'passengers').map((row) => ({
+      name: String(row.name ?? ''),
+      department: String(row.department ?? ''),
+      ...(row.role ? { role: String(row.role) } : {}),
+    })),
+    cargo: rowsFor(values, 'cargo').map((row) => ({
+      description: String(row.description ?? ''),
+      quantity: Number(row.quantity ?? 0),
+      ...(row.weightKg !== undefined ? { weightKg: Number(row.weightKg) } : {}),
+      isFragile: Boolean(row.isFragile),
+    })),
+  };
+}

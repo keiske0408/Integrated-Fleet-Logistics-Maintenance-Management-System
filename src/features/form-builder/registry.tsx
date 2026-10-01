@@ -69,6 +69,17 @@ export const fieldRegistry: Record<FieldType, FieldRenderer> = {
       ))}
     </Select>
   ),
+  checkbox: ({ field, value, onChange }) => (
+    <label className="flex items-center gap-2 text-sm">
+      <input
+        id={field.key}
+        type="checkbox"
+        checked={value === true}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      {field.label}
+    </label>
+  ),
   notice: ({ field }) => (
     <div className="rounded-md border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground">
       {field.content}

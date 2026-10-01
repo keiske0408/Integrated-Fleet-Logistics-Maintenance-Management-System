@@ -3,12 +3,27 @@ import { useAuth, type Permission } from '@/features/auth/AuthContext';
 import { useRoles } from '@/features/roles/RolesContext';
 import { useTheme } from '@/features/theme/ThemeContext';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import {
-  Truck, LayoutDashboard, Wrench, Calendar, Shield, Settings,
-  Users, ChevronLeft, ChevronRight, LogOut, Menu, X, Bell,
-  Package, Database, Sun, Moon, ShieldCheck, History, Paintbrush,
+  Truck,
+  LayoutDashboard,
+  Wrench,
+  Calendar,
+  Shield,
+  Copy,
+  Users,
+  ChevronLeft,
+  ChevronRight,
+  LogOut,
+  Menu,
+  Bell,
+  Package,
+  Database,
+  Sun,
+  Moon,
+  ShieldCheck,
+  History,
+  Paintbrush,
 } from 'lucide-react';
 
 export type AppPage =
@@ -21,6 +36,7 @@ export type AppPage =
   | 'roles'
   | 'history'
   | 'theme_editor'
+  | 'form_builder'
   | 'reports';
 
 interface NavItem {
@@ -41,9 +57,15 @@ const NAV_ITEMS: NavItem[] = [
 const SETTINGS_ITEMS: NavItem[] = [
   { id: 'users', label: 'User Management', icon: Users, permission: 'view:users' },
   { id: 'roles', label: 'Roles Management', icon: ShieldCheck, permission: 'view:roles' },
-  { id: 'maintenance_ref', label: 'Reference Data', icon: Database, permission: 'view:maintenance_ref' },
+  {
+    id: 'maintenance_ref',
+    label: 'Reference Data',
+    icon: Database,
+    permission: 'view:maintenance_ref',
+  },
   { id: 'history', label: 'Activity History', icon: History, permission: 'view:dashboard' },
   { id: 'theme_editor', label: 'Theme Editor', icon: Paintbrush, permission: 'view:dashboard' },
+  { id: 'form_builder', label: 'Form Builder', icon: Copy, permission: 'manage:reference_data' },
 ];
 
 interface SidebarLayoutProps {
@@ -54,7 +76,10 @@ interface SidebarLayoutProps {
 }
 
 export function SidebarLayout({
-  activePage, onNavigate, children, notifications = 0,
+  activePage,
+  onNavigate,
+  children,
+  notifications = 0,
 }: SidebarLayoutProps) {
   const { currentUser, logout, hasPermission } = useAuth();
   const { roles } = useRoles();
@@ -65,12 +90,7 @@ export function SidebarLayout({
   const visibleNav = NAV_ITEMS.filter((item) => hasPermission(item.permission));
   const visibleSettings = SETTINGS_ITEMS.filter((item) => hasPermission(item.permission));
 
-  const NavButton = ({
-    item, onClick,
-  }: {
-    item: NavItem;
-    onClick: () => void;
-  }) => {
+  const NavButton = ({ item, onClick }: { item: NavItem; onClick: () => void }) => {
     const Icon = item.icon;
     const isActive = activePage === item.id;
     return (
@@ -100,11 +120,7 @@ export function SidebarLayout({
   const SidebarContent = () => (
     <div className="flex flex-col h-full select-none">
       {/* Logo */}
-      <div
-        className={`flex items-center gap-3 px-4 py-5 ${
-          collapsed ? 'justify-center' : ''
-        }`}
-      >
+      <div className={`flex items-center gap-3 px-4 py-5 ${collapsed ? 'justify-center' : ''}`}>
         <div className="p-2 rounded-xl bg-primary shadow-lg shadow-primary/30 shrink-0">
           <Truck className="h-5 w-5 text-primary-foreground" />
         </div>
@@ -131,7 +147,10 @@ export function SidebarLayout({
           <NavButton
             key={item.id}
             item={item}
-            onClick={() => { onNavigate(item.id); setMobileOpen(false); }}
+            onClick={() => {
+              onNavigate(item.id);
+              setMobileOpen(false);
+            }}
           />
         ))}
 
@@ -150,7 +169,10 @@ export function SidebarLayout({
               <NavButton
                 key={item.id}
                 item={item}
-                onClick={() => { onNavigate(item.id); setMobileOpen(false); }}
+                onClick={() => {
+                  onNavigate(item.id);
+                  setMobileOpen(false);
+                }}
               />
             ))}
           </>
@@ -174,9 +196,7 @@ export function SidebarLayout({
           ) : (
             <Moon className="h-4 w-4 shrink-0" />
           )}
-          {!collapsed && (
-            <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
-          )}
+          {!collapsed && <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>}
         </button>
 
         {/* User footer */}
@@ -231,7 +251,11 @@ export function SidebarLayout({
           className="absolute -right-3 top-[72px] z-10 p-0.5 bg-card border border-border rounded-full text-muted-foreground hover:text-foreground hover:bg-accent transition-all shadow-sm"
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+          {collapsed ? (
+            <ChevronRight className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronLeft className="h-3.5 w-3.5" />
+          )}
         </button>
       </aside>
 
@@ -265,7 +289,8 @@ export function SidebarLayout({
             <span className="text-muted-foreground">Fleet Hub</span>
             <ChevronRight className="h-3 w-3 text-muted-foreground" />
             <span className="font-semibold text-foreground">
-              {[...NAV_ITEMS, ...SETTINGS_ITEMS].find((i) => i.id === activePage)?.label || 'Dashboard'}
+              {[...NAV_ITEMS, ...SETTINGS_ITEMS].find((i) => i.id === activePage)?.label ||
+                'Dashboard'}
             </span>
           </div>
 
@@ -291,14 +316,17 @@ export function SidebarLayout({
             </button>
 
             {/* Role badge */}
-            {currentUser && (() => {
-              const roleDef = roles.find((r) => r.key === currentUser.role);
-              return roleDef ? (
-                <span className={`hidden sm:inline-flex text-[11px] font-semibold px-2.5 py-1 rounded-full border ${roleDef.color}`}>
-                  {roleDef.label}
-                </span>
-              ) : null;
-            })()}
+            {currentUser &&
+              (() => {
+                const roleDef = roles.find((r) => r.key === currentUser.role);
+                return roleDef ? (
+                  <span
+                    className={`hidden sm:inline-flex text-[11px] font-semibold px-2.5 py-1 rounded-full border ${roleDef.color}`}
+                  >
+                    {roleDef.label}
+                  </span>
+                ) : null;
+              })()}
 
             {/* Avatar */}
             <Avatar className="h-7 w-7">
@@ -308,9 +336,7 @@ export function SidebarLayout({
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-background">
-          {children}
-        </main>
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-background">{children}</main>
       </div>
     </div>
   );
