@@ -2,45 +2,56 @@ import React, { createContext, useContext, useState } from 'react';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-export type Permission =
-  | 'view:dashboard'
-  | 'view:fleet'
-  | 'view:tsrf'
-  | 'view:procurement'
-  | 'view:maintenance_ref'
-  | 'view:users'
-  | 'view:roles'
-  | 'view:reports'
-  | 'create:tsrf'
-  | 'approve:tsrf'
-  | 'create:vehicle'
-  | 'update:vehicle_km'
-  | 'schedule:pms'
-  | 'create:work_order'
-  | 'approve:work_order'
-  | 'create:pr'
-  | 'approve:pr'
-  | 'manage:users'
-  | 'manage:roles'
-  | 'manage:reference_data';
+export type Permission = string;
 
-export const ALL_PERMISSIONS: Permission[] = [
-  'view:dashboard', 'view:fleet', 'view:tsrf', 'view:procurement',
-  'view:maintenance_ref', 'view:users', 'view:roles', 'view:reports',
-  'create:tsrf', 'approve:tsrf', 'create:vehicle', 'update:vehicle_km',
-  'schedule:pms', 'create:work_order', 'approve:work_order',
-  'create:pr', 'approve:pr', 'manage:users', 'manage:roles', 'manage:reference_data',
+export interface RoleDefinition {
+  id: string;
+  key: string;
+  label: string;
+  description: string;
+  color: string;
+  permissions: Permission[];
+  isSystem: boolean;
+  createdAt: string;
+}
+
+// ─── Default Permissions Seed ───────────────────────────────────────────────────
+
+const DEFAULT_ALL_PERMISSIONS: Permission[] = [
+  'view:dashboard',
+  'view:fleet',
+  'view:tsrf',
+  'view:procurement',
+  'view:maintenance_ref',
+  'view:users',
+  'view:roles',
+  'view:reports',
+  'create:tsrf',
+  'approve:tsrf',
+  'create:vehicle',
+  'update:vehicle_km',
+  'schedule:pms',
+  'create:work_order',
+  'approve:work_order',
+  'create:pr',
+  'approve:pr',
+  'manage:users',
+  'manage:roles',
+  'manage:reference_data',
 ];
 
-// Kept for AuthContext import compatibility
-export const ROLE_PERMISSIONS_MAP: Record<string, Permission[]> = {};
-
-export const PERMISSION_GROUPS: { label: string; permissions: Permission[] }[] = [
+const DEFAULT_PERMISSION_GROUPS = [
   {
     label: 'Page Access',
     permissions: [
-      'view:dashboard', 'view:fleet', 'view:tsrf', 'view:procurement',
-      'view:maintenance_ref', 'view:users', 'view:roles', 'view:reports',
+      'view:dashboard',
+      'view:fleet',
+      'view:tsrf',
+      'view:procurement',
+      'view:maintenance_ref',
+      'view:users',
+      'view:roles',
+      'view:reports',
     ],
   },
   {
@@ -65,7 +76,7 @@ export const PERMISSION_GROUPS: { label: string; permissions: Permission[] }[] =
   },
 ];
 
-export const PERMISSION_LABELS: Record<Permission, string> = {
+const DEFAULT_PERMISSION_LABELS: Record<string, string> = {
   'view:dashboard': 'View Dashboard',
   'view:fleet': 'View Fleet Module',
   'view:tsrf': 'View TSRF Module',
@@ -88,19 +99,6 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'manage:reference_data': 'Manage Reference Data',
 };
 
-// ─── Role Definition ────────────────────────────────────────────────────────────
-
-export interface RoleDefinition {
-  id: string;
-  key: string;           // unique string key used in User.role
-  label: string;
-  description: string;
-  color: string;         // Tailwind classes for badge
-  permissions: Permission[];
-  isSystem: boolean;     // system roles cannot be deleted
-  createdAt: string;
-}
-
 // ─── Default Roles ─────────────────────────────────────────────────────────────
 
 export const DEFAULT_ROLES: RoleDefinition[] = [
@@ -110,7 +108,7 @@ export const DEFAULT_ROLES: RoleDefinition[] = [
     label: 'System Administrator',
     description: 'Full access to all modules and administration settings.',
     color: 'bg-violet-500/20 text-violet-400 border-violet-500/30',
-    permissions: [...ALL_PERMISSIONS],
+    permissions: [...DEFAULT_ALL_PERMISSIONS],
     isSystem: true,
     createdAt: '2026-01-01',
   },
@@ -121,9 +119,18 @@ export const DEFAULT_ROLES: RoleDefinition[] = [
     description: 'Manages vehicles, PMS scheduling, work orders, and procurement.',
     color: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
     permissions: [
-      'view:dashboard', 'view:fleet', 'view:tsrf', 'view:procurement', 'view:reports',
-      'approve:tsrf', 'create:vehicle', 'update:vehicle_km', 'schedule:pms',
-      'create:work_order', 'approve:work_order', 'create:pr',
+      'view:dashboard',
+      'view:fleet',
+      'view:tsrf',
+      'view:procurement',
+      'view:reports',
+      'approve:tsrf',
+      'create:vehicle',
+      'update:vehicle_km',
+      'schedule:pms',
+      'create:work_order',
+      'approve:work_order',
+      'create:pr',
     ],
     isSystem: true,
     createdAt: '2026-01-01',
@@ -135,8 +142,14 @@ export const DEFAULT_ROLES: RoleDefinition[] = [
     description: 'Handles TSRF approvals, dispatch scheduling and km logging.',
     color: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
     permissions: [
-      'view:dashboard', 'view:fleet', 'view:tsrf', 'view:reports',
-      'create:tsrf', 'approve:tsrf', 'update:vehicle_km', 'schedule:pms',
+      'view:dashboard',
+      'view:fleet',
+      'view:tsrf',
+      'view:reports',
+      'create:tsrf',
+      'approve:tsrf',
+      'update:vehicle_km',
+      'schedule:pms',
     ],
     isSystem: true,
     createdAt: '2026-01-01',
@@ -158,8 +171,12 @@ export const DEFAULT_ROLES: RoleDefinition[] = [
     description: 'Creates PRs and tracks vendor procurement fulfillment.',
     color: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
     permissions: [
-      'view:dashboard', 'view:procurement', 'view:fleet', 'view:reports',
-      'create:pr', 'approve:work_order',
+      'view:dashboard',
+      'view:procurement',
+      'view:fleet',
+      'view:reports',
+      'create:pr',
+      'approve:work_order',
     ],
     isSystem: true,
     createdAt: '2026-01-01',
@@ -190,16 +207,25 @@ export const DEFAULT_ROLES: RoleDefinition[] = [
 
 interface RolesContextValue {
   roles: RoleDefinition[];
+  allPermissions: Permission[];
+  permissionGroups: { label: string; permissions: Permission[] }[];
+  permissionLabels: Record<string, string>;
   addRole: (role: Omit<RoleDefinition, 'id' | 'createdAt'>) => void;
   updateRole: (id: string, updates: Partial<RoleDefinition>) => void;
   deleteRole: (id: string) => void;
   getRoleByKey: (key: string) => RoleDefinition | undefined;
+  addSystemPermission: (key: string, label: string, group: string) => void;
+  updateSystemPermission: (key: string, label: string, group: string) => void;
+  deleteSystemPermission: (key: string) => void;
 }
 
 const RolesContext = createContext<RolesContextValue | null>(null);
 
 export function RolesProvider({ children }: { children: React.ReactNode }) {
   const [roles, setRoles] = useState<RoleDefinition[]>(DEFAULT_ROLES);
+  const [allPermissions, setAllPermissions] = useState<Permission[]>(DEFAULT_ALL_PERMISSIONS);
+  const [permissionGroups, setPermissionGroups] = useState(DEFAULT_PERMISSION_GROUPS);
+  const [permissionLabels, setPermissionLabels] = useState(DEFAULT_PERMISSION_LABELS);
 
   const addRole = (role: Omit<RoleDefinition, 'id' | 'createdAt'>) => {
     setRoles((prev) => [
@@ -218,8 +244,82 @@ export function RolesProvider({ children }: { children: React.ReactNode }) {
 
   const getRoleByKey = (key: string) => roles.find((r) => r.key === key);
 
+  const addSystemPermission = (key: string, label: string, groupName: string) => {
+    if (allPermissions.includes(key)) return;
+    setAllPermissions((prev) => [...prev, key]);
+    setPermissionLabels((prev) => ({ ...prev, [key]: label }));
+
+    setPermissionGroups((prev) => {
+      const existingGroupIndex = prev.findIndex((g) => g.label === groupName);
+      if (existingGroupIndex >= 0) {
+        const newGroups = [...prev];
+        newGroups[existingGroupIndex] = {
+          ...newGroups[existingGroupIndex],
+          permissions: [...newGroups[existingGroupIndex].permissions, key],
+        };
+        return newGroups;
+      } else {
+        return [...prev, { label: groupName, permissions: [key] }];
+      }
+    });
+
+    // Also update System Admin role automatically so they have the new permission
+    setRoles((prev) =>
+      prev.map((r) =>
+        r.key === 'system_admin' ? { ...r, permissions: [...r.permissions, key] } : r,
+      ),
+    );
+  };
+
+  const updateSystemPermission = (key: string, newLabel: string, newGroup: string) => {
+    setPermissionLabels((prev) => ({ ...prev, [key]: newLabel }));
+    setPermissionGroups((prev) => {
+      // Remove from old group
+      let newGroups = prev.map((g) => ({
+        ...g,
+        permissions: g.permissions.filter((p) => p !== key),
+      }));
+      newGroups = newGroups.filter((g) => g.permissions.length > 0);
+
+      // Add to new group
+      const existingGroupIndex = newGroups.findIndex((g) => g.label === newGroup);
+      if (existingGroupIndex >= 0) {
+        newGroups[existingGroupIndex].permissions.push(key);
+      } else {
+        newGroups.push({ label: newGroup, permissions: [key] });
+      }
+      return newGroups;
+    });
+  };
+
+  const deleteSystemPermission = (key: string) => {
+    setAllPermissions((prev) => prev.filter((p) => p !== key));
+    setPermissionGroups((prev) =>
+      prev
+        .map((g) => ({ ...g, permissions: g.permissions.filter((p) => p !== key) }))
+        .filter((g) => g.permissions.length > 0),
+    );
+    setRoles((prev) =>
+      prev.map((r) => ({ ...r, permissions: r.permissions.filter((p) => p !== key) })),
+    );
+  };
+
   return (
-    <RolesContext.Provider value={{ roles, addRole, updateRole, deleteRole, getRoleByKey }}>
+    <RolesContext.Provider
+      value={{
+        roles,
+        allPermissions,
+        permissionGroups,
+        permissionLabels,
+        addRole,
+        updateRole,
+        deleteRole,
+        getRoleByKey,
+        addSystemPermission,
+        updateSystemPermission,
+        deleteSystemPermission,
+      }}
+    >
       {children}
     </RolesContext.Provider>
   );

@@ -1,10 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import {
-  type Permission,
-  type RoleDefinition,
-  DEFAULT_ROLES,
-  ROLE_PERMISSIONS_MAP,
-} from '@/features/roles/RolesContext';
+import { type Permission, type RoleDefinition, DEFAULT_ROLES } from '@/features/roles/RolesContext';
 
 // Re-export Permission for convenience
 export type { Permission };
@@ -14,11 +9,11 @@ export type Role = string;
 
 // Static badge colors and labels for the built-in roles (fallback)
 export const ROLE_LABELS: Record<string, string> = Object.fromEntries(
-  DEFAULT_ROLES.map((r) => [r.key, r.label])
+  DEFAULT_ROLES.map((r) => [r.key, r.label]),
 );
 
 export const ROLE_COLORS: Record<string, string> = Object.fromEntries(
-  DEFAULT_ROLES.map((r) => [r.key, r.color])
+  DEFAULT_ROLES.map((r) => [r.key, r.color]),
 );
 
 // ─── User Types ───────────────────────────────────────────────────────────────
@@ -37,11 +32,56 @@ export interface User {
 // ─── Default Users ────────────────────────────────────────────────────────────
 
 const DEFAULT_USERS: User[] = [
-  { id: 'u-1', name: 'Admin User', email: 'admin@hulma.com', role: 'system_admin', department: 'IT / Systems', avatarInitials: 'AU', createdAt: '2026-01-01', isActive: true },
-  { id: 'u-2', name: 'Marco Reyes', email: 'marco.reyes@hulma.com', role: 'fleet_manager', department: 'Fleet Operations', avatarInitials: 'MR', createdAt: '2026-02-15', isActive: true },
-  { id: 'u-3', name: 'Sandra Cruz', email: 'sandra.cruz@hulma.com', role: 'finance_manager', department: 'Finance & Accounting', avatarInitials: 'SC', createdAt: '2026-03-01', isActive: true },
-  { id: 'u-4', name: 'Jose Lim', email: 'jose.lim@hulma.com', role: 'procurement_officer', department: 'Procurement', avatarInitials: 'JL', createdAt: '2026-03-10', isActive: true },
-  { id: 'u-5', name: 'Ana Santos', email: 'ana.santos@hulma.com', role: 'department_requester', department: 'Human Resources', avatarInitials: 'AS', createdAt: '2026-04-05', isActive: true },
+  {
+    id: 'u-1',
+    name: 'Admin User',
+    email: 'admin@hulma.com',
+    role: 'system_admin',
+    department: 'IT / Systems',
+    avatarInitials: 'AU',
+    createdAt: '2026-01-01',
+    isActive: true,
+  },
+  {
+    id: 'u-2',
+    name: 'Marco Reyes',
+    email: 'marco.reyes@hulma.com',
+    role: 'fleet_manager',
+    department: 'Fleet Operations',
+    avatarInitials: 'MR',
+    createdAt: '2026-02-15',
+    isActive: true,
+  },
+  {
+    id: 'u-3',
+    name: 'Sandra Cruz',
+    email: 'sandra.cruz@hulma.com',
+    role: 'finance_manager',
+    department: 'Finance & Accounting',
+    avatarInitials: 'SC',
+    createdAt: '2026-03-01',
+    isActive: true,
+  },
+  {
+    id: 'u-4',
+    name: 'Jose Lim',
+    email: 'jose.lim@hulma.com',
+    role: 'procurement_officer',
+    department: 'Procurement',
+    avatarInitials: 'JL',
+    createdAt: '2026-03-10',
+    isActive: true,
+  },
+  {
+    id: 'u-5',
+    name: 'Ana Santos',
+    email: 'ana.santos@hulma.com',
+    role: 'department_requester',
+    department: 'Human Resources',
+    avatarInitials: 'AS',
+    createdAt: '2026-04-05',
+    isActive: true,
+  },
 ];
 
 const USER_PASSWORDS: Record<string, string> = {
@@ -109,10 +149,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return roleDef.permissions.includes(permission);
   };
 
-  const addUser = (userData: Omit<User, 'id' | 'avatarInitials' | 'createdAt'> & { password: string }) => {
+  const addUser = (
+    userData: Omit<User, 'id' | 'avatarInitials' | 'createdAt'> & { password: string },
+  ) => {
     const { password, ...rest } = userData;
-    const initials = rest.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
-    const newUser: User = { ...rest, id: `u-${Date.now()}`, avatarInitials: initials, createdAt: new Date().toISOString().split('T')[0] };
+    const initials = rest.name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+    const newUser: User = {
+      ...rest,
+      id: `u-${Date.now()}`,
+      avatarInitials: initials,
+      createdAt: new Date().toISOString().split('T')[0],
+    };
     setAllUsers((prev) => [...prev, newUser]);
     setPasswords((prev) => ({ ...prev, [newUser.email]: password }));
   };
@@ -123,7 +175,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (u.id !== id) return u;
         const updated = { ...u, ...updates };
         if (updates.name) {
-          updated.avatarInitials = updates.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
+          updated.avatarInitials = updates.name
+            .split(' ')
+            .map((n: string) => n[0])
+            .join('')
+            .toUpperCase()
+            .slice(0, 2);
         }
         return updated;
       }),
@@ -139,7 +196,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ currentUser, allUsers, isAuthenticated: !!currentUser, roleDefinitions, setRoleDefinitions, login, logout, hasPermission, addUser, updateUser, deleteUser }}
+      value={{
+        currentUser,
+        allUsers,
+        isAuthenticated: !!currentUser,
+        roleDefinitions,
+        setRoleDefinitions,
+        login,
+        logout,
+        hasPermission,
+        addUser,
+        updateUser,
+        deleteUser,
+      }}
     >
       {children}
     </AuthContext.Provider>

@@ -1,22 +1,28 @@
 import React, { useState } from 'react';
-import {
-  useRoles,
-  PERMISSION_GROUPS,
-  PERMISSION_LABELS,
-  ALL_PERMISSIONS,
-  type Permission,
-  type RoleDefinition,
-} from './RolesContext';
+import { useRoles, type Permission, type RoleDefinition } from './RolesContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from '@/components/ui/table';
 import {
-  Plus, Pencil, Trash2, X, Check, ShieldCheck, ChevronRight,
-  ChevronLeft, Lock, Sparkles,
+  Plus,
+  Pencil,
+  Trash2,
+  X,
+  Check,
+  ShieldCheck,
+  ChevronRight,
+  ChevronLeft,
+  Lock,
+  Sparkles,
 } from 'lucide-react';
 
 const BADGE_COLOR_OPTIONS = [
@@ -30,7 +36,7 @@ const BADGE_COLOR_OPTIONS = [
   { label: 'Slate', value: 'bg-slate-500/20 text-slate-400 border-slate-500/30' },
 ];
 
-type View = 'list' | 'edit';
+type View = 'list' | 'edit' | 'permissions';
 
 interface RoleFormState {
   key: string;
@@ -51,13 +57,30 @@ const EMPTY_FORM: RoleFormState = {
 };
 
 export function RolesManagementPage() {
-  const { roles, addRole, updateRole, deleteRole } = useRoles();
+  const {
+    roles,
+    addRole,
+    updateRole,
+    deleteRole,
+    allPermissions,
+    permissionGroups,
+    permissionLabels,
+    addSystemPermission,
+    updateSystemPermission,
+    deleteSystemPermission,
+  } = useRoles();
 
   const [view, setView] = useState<View>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<RoleFormState>(EMPTY_FORM);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+
+  // New permission form state
+  const [newPermKey, setNewPermKey] = useState('');
+  const [newPermLabel, setNewPermLabel] = useState('');
+  const [newPermGroup, setNewPermGroup] = useState('');
+  const [editingPermKey, setEditingPermKey] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -125,16 +148,62 @@ export function RolesManagementPage() {
     }
   };
 
-  const selectAll = () => setForm((prev) => ({ ...prev, permissions: [...ALL_PERMISSIONS] }));
+  const selectAll = () => setForm((prev) => ({ ...prev, permissions: [...allPermissions] }));
   const clearAll = () => setForm((prev) => ({ ...prev, permissions: [] }));
+
+  const handleCreatePermission = () => {
+    if (!newPermKey || !newPermLabel || !newPermGroup) return;
+
+    if (editingPermKey) {
+      updateSystemPermission(editingPermKey, newPermLabel, newPermGroup);
+      showToast(`System Permission "${newPermLabel}" updated.`);
+    } else {
+      addSystemPermission(newPermKey, newPermLabel, newPermGroup);
+      showToast(`System Permission "${newPermLabel}" added.`);
+    }
+
+    setNewPermKey('');
+    setNewPermLabel('');
+    setNewPermGroup('');
+    setEditingPermKey(null);
+  };
+
+  const handleEditPermission = (key: string, label: string, group: string) => {
+    setEditingPermKey(key);
+    setNewPermKey(key);
+    setNewPermLabel(label);
+    setNewPermGroup(group);
+  };
+
+  const handleCancelEditPermission = () => {
+    setEditingPermKey(null);
+    setNewPermKey('');
+    setNewPermLabel('');
+    setNewPermGroup('');
+  };
 
   // ── List View ──────────────────────────────────────────────────────────────
 
   if (view === 'list') {
     return (
       <div className="space-y-6 animate-fade-in">
+        <div className="flex items-center gap-2 bg-muted/40 p-0.5 rounded-lg w-fit">
+          <button
+            onClick={() => setView('list')}
+            className="px-4 py-1.5 rounded-md text-sm font-medium bg-card shadow-sm text-foreground border border-border"
+          >
+            Roles Overview
+          </button>
+          <button
+            onClick={() => setView('permissions')}
+            className="px-4 py-1.5 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground"
+          >
+            System Permissions
+          </button>
+        </div>
+
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-2">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Roles Management</h1>
             <p className="text-muted-foreground text-sm mt-0.5">
@@ -151,8 +220,16 @@ export function RolesManagementPage() {
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           {[
             { label: 'Total Roles', value: roles.length, color: 'text-foreground' },
-            { label: 'System Roles', value: roles.filter((r) => r.isSystem).length, color: 'text-muted-foreground' },
-            { label: 'Custom Roles', value: roles.filter((r) => !r.isSystem).length, color: 'text-primary' },
+            {
+              label: 'System Roles',
+              value: roles.filter((r) => r.isSystem).length,
+              color: 'text-muted-foreground',
+            },
+            {
+              label: 'Custom Roles',
+              value: roles.filter((r) => !r.isSystem).length,
+              color: 'text-primary',
+            },
           ].map((s) => (
             <div key={s.label} className="bg-card border border-border rounded-xl p-4">
               <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
@@ -177,7 +254,9 @@ export function RolesManagementPage() {
               <TableRow key={role.id}>
                 <TableCell>
                   <div className="flex flex-col gap-1">
-                    <span className={`inline-flex w-fit text-[11px] font-semibold px-2.5 py-1 rounded-full border ${role.color}`}>
+                    <span
+                      className={`inline-flex w-fit text-[11px] font-semibold px-2.5 py-1 rounded-full border ${role.color}`}
+                    >
                       {role.label}
                     </span>
                     <span className="text-xs text-muted-foreground font-mono">{role.key}</span>
@@ -188,12 +267,16 @@ export function RolesManagementPage() {
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-semibold text-foreground">{role.permissions.length}</span>
-                    <span className="text-xs text-muted-foreground">/ {ALL_PERMISSIONS.length}</span>
+                    <span className="text-sm font-semibold text-foreground">
+                      {role.permissions.length}
+                    </span>
+                    <span className="text-xs text-muted-foreground">/ {allPermissions.length}</span>
                     <div className="hidden md:flex h-1.5 w-20 bg-muted rounded-full overflow-hidden">
                       <div
                         className="h-full bg-primary rounded-full transition-all"
-                        style={{ width: `${(role.permissions.length / ALL_PERMISSIONS.length) * 100}%` }}
+                        style={{
+                          width: `${(role.permissions.length / allPermissions.length) * 100}%`,
+                        }}
                       />
                     </div>
                   </div>
@@ -220,22 +303,30 @@ export function RolesManagementPage() {
                     >
                       <Pencil className="h-4 w-4" />
                     </button>
-                    {!role.isSystem && (
-                      deleteConfirmId === role.id ? (
+                    {!role.isSystem &&
+                      (deleteConfirmId === role.id ? (
                         <>
-                          <button onClick={() => handleDelete(role.id, role.label)} className="p-1.5 rounded-lg text-destructive hover:bg-destructive/10 transition-colors">
+                          <button
+                            onClick={() => handleDelete(role.id, role.label)}
+                            className="p-1.5 rounded-lg text-destructive hover:bg-destructive/10 transition-colors"
+                          >
                             <Check className="h-4 w-4" />
                           </button>
-                          <button onClick={() => setDeleteConfirmId(null)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-accent transition-colors">
+                          <button
+                            onClick={() => setDeleteConfirmId(null)}
+                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-accent transition-colors"
+                          >
                             <X className="h-4 w-4" />
                           </button>
                         </>
                       ) : (
-                        <button onClick={() => setDeleteConfirmId(role.id)} className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
+                        <button
+                          onClick={() => setDeleteConfirmId(role.id)}
+                          className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                        >
                           <Trash2 className="h-4 w-4" />
                         </button>
-                      )
-                    )}
+                      ))}
                   </div>
                 </TableCell>
               </TableRow>
@@ -245,7 +336,175 @@ export function RolesManagementPage() {
 
         {/* Toast */}
         {toast && (
-          <div className="fixed bottom-6 right-6 z-50 px-4 py-3 bg-card border border-border text-foreground text-sm rounded-xl shadow-2xl animate-slide-up flex items-center gap-2">
+          <div className="fixed top-6 right-6 z-50 px-4 py-3 bg-card border border-border text-foreground text-sm rounded-xl shadow-2xl animate-slide-in-right flex items-center gap-2">
+            <Check className="h-4 w-4 text-emerald-400 shrink-0" />
+            {toast}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Permissions View ───────────────────────────────────────────────────────
+
+  if (view === 'permissions') {
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <div className="flex items-center gap-2 bg-muted/40 p-0.5 rounded-lg w-fit">
+          <button
+            onClick={() => setView('list')}
+            className="px-4 py-1.5 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground"
+          >
+            Roles Overview
+          </button>
+          <button
+            onClick={() => setView('permissions')}
+            className="px-4 py-1.5 rounded-md text-sm font-medium bg-card shadow-sm text-foreground border border-border"
+          >
+            System Permissions
+          </button>
+        </div>
+
+        <div className="flex flex-col sm:flex-row justify-between gap-4 mt-2">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">System Permissions</h1>
+            <p className="text-muted-foreground text-sm mt-0.5">
+              Manage the master list of permissions available in the system.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-1 space-y-4">
+            <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+              <h3 className="font-semibold text-foreground text-sm">
+                {editingPermKey ? 'Edit Permission' : 'Add New Permission'}
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Only SuperAdmins should manage custom permissions.
+              </p>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="perm-key">Permission Key *</Label>
+                <Input
+                  id="perm-key"
+                  value={newPermKey}
+                  onChange={(e) => setNewPermKey(e.target.value.toLowerCase().replace(/\s+/g, '_'))}
+                  placeholder="e.g. view:custom_reports"
+                  className="font-mono text-xs"
+                  required
+                  disabled={!!editingPermKey}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="perm-label">Display Label *</Label>
+                <Input
+                  id="perm-label"
+                  value={newPermLabel}
+                  onChange={(e) => setNewPermLabel(e.target.value)}
+                  placeholder="e.g. View Custom Reports"
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="perm-group">Group Name *</Label>
+                <Input
+                  id="perm-group"
+                  value={newPermGroup}
+                  onChange={(e) => setNewPermGroup(e.target.value)}
+                  placeholder="e.g. Reports & Analytics"
+                  required
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleCreatePermission}
+                  disabled={!newPermKey || !newPermLabel || !newPermGroup}
+                  className="w-full"
+                >
+                  {editingPermKey ? 'Save Changes' : 'Add Permission'}
+                </Button>
+                {editingPermKey && (
+                  <Button variant="outline" onClick={handleCancelEditPermission}>
+                    Cancel
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="lg:col-span-2">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Key</TableHead>
+                  <TableHead>Label</TableHead>
+                  <TableHead>Group</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {allPermissions.map((key) => {
+                  const label = permissionLabels[key];
+                  const group =
+                    permissionGroups.find((g) => g.permissions.includes(key))?.label || 'Custom';
+                  const isCore = [
+                    'view:dashboard',
+                    'view:fleet',
+                    'view:users',
+                    'view:roles',
+                    'manage:roles',
+                  ].includes(key);
+
+                  return (
+                    <TableRow key={key}>
+                      <TableCell className="font-mono text-xs">{key}</TableCell>
+                      <TableCell className="font-medium text-sm">{label}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-[10px] font-normal">
+                          {group}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {!isCore && (
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => handleEditPermission(key, label, group)}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                              title="Edit Permission"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                deleteSystemPermission(key);
+                                showToast(`Permission "${key}" deleted.`);
+                              }}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                              title="Delete Permission"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        )}
+                        {isCore && (
+                          <Lock
+                            className="h-4 w-4 inline-block text-muted-foreground opacity-50"
+                            aria-label="Core Permission"
+                          />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+
+        {toast && (
+          <div className="fixed top-6 right-6 z-50 px-4 py-3 bg-card border border-border text-foreground text-sm rounded-xl shadow-2xl animate-slide-in-right flex items-center gap-2">
             <Check className="h-4 w-4 text-emerald-400 shrink-0" />
             {toast}
           </div>
@@ -298,7 +557,9 @@ export function RolesManagementPage() {
                 <Input
                   id="role-key"
                   value={form.key}
-                  onChange={(e) => setForm({ ...form, key: e.target.value.toLowerCase().replace(/\s+/g, '_') })}
+                  onChange={(e) =>
+                    setForm({ ...form, key: e.target.value.toLowerCase().replace(/\s+/g, '_') })
+                  }
                   placeholder="maintenance_supervisor"
                   className="font-mono text-xs"
                 />
@@ -328,7 +589,9 @@ export function RolesManagementPage() {
                     title={opt.label}
                     onClick={() => setForm({ ...form, color: opt.value })}
                     className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-all ${opt.value} ${
-                      form.color === opt.value ? 'ring-2 ring-white/40 scale-105' : 'opacity-70 hover:opacity-100'
+                      form.color === opt.value
+                        ? 'ring-2 ring-white/40 scale-105'
+                        : 'opacity-70 hover:opacity-100'
                     }`}
                   >
                     {opt.label}
@@ -341,7 +604,9 @@ export function RolesManagementPage() {
             <div className="space-y-2">
               <Label>Preview</Label>
               <div className="flex items-center gap-2">
-                <span className={`inline-flex text-[11px] font-semibold px-2.5 py-1 rounded-full border ${form.color}`}>
+                <span
+                  className={`inline-flex text-[11px] font-semibold px-2.5 py-1 rounded-full border ${form.color}`}
+                >
                   {form.label || 'Role Name'}
                 </span>
               </div>
@@ -357,7 +622,9 @@ export function RolesManagementPage() {
                   onChange={(e) => setForm({ ...form, isSystem: e.target.checked })}
                   className="rounded border-border"
                 />
-                <Label htmlFor="role-system" className="text-muted-foreground">Protected (cannot be deleted)</Label>
+                <Label htmlFor="role-system" className="text-muted-foreground">
+                  Protected (cannot be deleted)
+                </Label>
               </div>
             )}
             {editingRole?.isSystem && (
@@ -374,12 +641,14 @@ export function RolesManagementPage() {
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Selected</span>
-                <span className="font-semibold text-foreground">{form.permissions.length} / {ALL_PERMISSIONS.length}</span>
+                <span className="font-semibold text-foreground">
+                  {form.permissions.length} / {allPermissions.length}
+                </span>
               </div>
               <div className="h-2 bg-muted rounded-full overflow-hidden">
                 <div
                   className="h-full bg-primary rounded-full transition-all duration-300"
-                  style={{ width: `${(form.permissions.length / ALL_PERMISSIONS.length) * 100}%` }}
+                  style={{ width: `${(form.permissions.length / allPermissions.length) * 100}%` }}
                 />
               </div>
             </div>
@@ -402,39 +671,57 @@ export function RolesManagementPage() {
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-foreground text-sm">Permission Matrix</h3>
             <div className="flex gap-2">
-              <button onClick={selectAll} className="text-xs text-primary hover:underline">Select All</button>
+              <button onClick={selectAll} className="text-xs text-primary hover:underline">
+                Select All
+              </button>
               <span className="text-muted-foreground">·</span>
-              <button onClick={clearAll} className="text-xs text-muted-foreground hover:text-foreground">Clear All</button>
+              <button
+                onClick={clearAll}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                Clear All
+              </button>
             </div>
           </div>
 
           <div className="space-y-3">
-            {PERMISSION_GROUPS.map((group) => {
-              const groupSelected = group.permissions.filter((p) => form.permissions.includes(p)).length;
+            {permissionGroups.map((group) => {
+              const groupSelected = group.permissions.filter((p) =>
+                form.permissions.includes(p),
+              ).length;
               const allGroupSelected = groupSelected === group.permissions.length;
               const someGroupSelected = groupSelected > 0 && !allGroupSelected;
 
               return (
-                <div key={group.label} className="bg-card border border-border rounded-xl overflow-hidden">
+                <div
+                  key={group.label}
+                  className="bg-card border border-border rounded-xl overflow-hidden"
+                >
                   {/* Group header */}
                   <div
                     className="flex items-center justify-between px-4 py-3 bg-muted/30 border-b border-border cursor-pointer hover:bg-muted/50 transition-colors"
                     onClick={() => toggleGroupAll(group.permissions)}
                   >
                     <div className="flex items-center gap-2.5">
-                      <div className={`h-4 w-4 rounded flex items-center justify-center border transition-all ${
-                        allGroupSelected
-                          ? 'bg-primary border-primary'
-                          : someGroupSelected
-                          ? 'bg-primary/30 border-primary'
-                          : 'border-border bg-transparent'
-                      }`}>
-                        {allGroupSelected && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
+                      <div
+                        className={`h-4 w-4 rounded flex items-center justify-center border transition-all ${
+                          allGroupSelected
+                            ? 'bg-primary border-primary'
+                            : someGroupSelected
+                              ? 'bg-primary/30 border-primary'
+                              : 'border-border bg-transparent'
+                        }`}
+                      >
+                        {allGroupSelected && (
+                          <Check className="h-2.5 w-2.5 text-primary-foreground" />
+                        )}
                         {someGroupSelected && <div className="h-1.5 w-1.5 bg-primary rounded-sm" />}
                       </div>
                       <span className="text-sm font-semibold text-foreground">{group.label}</span>
                     </div>
-                    <span className="text-xs text-muted-foreground">{groupSelected}/{group.permissions.length}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {groupSelected}/{group.permissions.length}
+                    </span>
                   </div>
 
                   {/* Permissions grid */}
@@ -445,19 +732,27 @@ export function RolesManagementPage() {
                         <label
                           key={perm}
                           className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg cursor-pointer transition-all hover:bg-muted/50 ${
-                            isSelected ? 'bg-primary/5 border border-primary/20' : 'border border-transparent'
+                            isSelected
+                              ? 'bg-primary/5 border border-primary/20'
+                              : 'border border-transparent'
                           }`}
                         >
                           <div
                             className={`h-4 w-4 rounded flex items-center justify-center border transition-all shrink-0 ${
-                              isSelected ? 'bg-primary border-primary' : 'border-border bg-transparent'
+                              isSelected
+                                ? 'bg-primary border-primary'
+                                : 'border-border bg-transparent'
                             }`}
                             onClick={() => togglePermission(perm)}
                           >
-                            {isSelected && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
+                            {isSelected && (
+                              <Check className="h-2.5 w-2.5 text-primary-foreground" />
+                            )}
                           </div>
                           <div>
-                            <p className="text-xs font-medium text-foreground">{PERMISSION_LABELS[perm]}</p>
+                            <p className="text-xs font-medium text-foreground">
+                              {permissionLabels[perm]}
+                            </p>
                             <p className="text-[10px] text-muted-foreground font-mono">{perm}</p>
                           </div>
                         </label>
