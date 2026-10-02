@@ -10,7 +10,7 @@ import type { FormDefinition, FormField, FormValues } from './types';
 interface FormRendererProps {
   definition: FormDefinition;
   initialValues?: FormValues;
-  onSubmit: (values: FormValues) => void;
+  onSubmit: (values: FormValues) => void | Promise<void>;
   submitLabel?: string;
 }
 
@@ -131,6 +131,7 @@ export function FormRenderer({
     getInitialValues(definition, initialValues),
   );
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [submitting, setSubmitting] = useState(false);
   const updateValue = (key: string, value: FormValues[string]) =>
     setValues((current) => ({ ...current, [key]: value }));
   const resolvedDefinition: FormDefinition = {
@@ -147,15 +148,26 @@ export function FormRenderer({
       }),
     })),
   };
+  const submitForm = async () => {
+    const errors = validateFormValues(definition, values);
+    setValidationErrors(errors);
+    if (errors.length > 0) return;
+    setSubmitting(true);
+    try {
+      await onSubmit(values);
+      setValidationErrors([]);
+    } catch (error) {
+      setValidationErrors([error instanceof Error ? error.message : 'Submission failed.']);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <form
       onSubmit={(event) => {
         event.preventDefault();
-        const errors = validateFormValues(definition, values);
-        setValidationErrors(errors);
-        if (errors.length > 0) return;
-        onSubmit(values);
+        void submitForm();
       }}
       className="mx-auto max-w-4xl space-y-6"
     >
@@ -188,7 +200,9 @@ export function FormRenderer({
           </CardContent>
         </Card>
       ))}
-      <Button type="submit">{submitLabel}</Button>
+      <Button type="submit" disabled={submitting}>
+        {submitting ? 'Submitting...' : submitLabel}
+      </Button>
     </form>
   );
 }

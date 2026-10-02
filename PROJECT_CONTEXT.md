@@ -28,4 +28,5 @@
 ## 5. Feature Context
 
 - Form-builder and LOV architecture notes: `src/features/form-builder/AI_CONTEXT.md`.
-- Form-builder rules currently support client-side visibility, requiredness, and editability with publish validation; server-side submission enforcement and workflow-stage permissions remain pending.
+- Form-builder rules support client-side visibility, requiredness, and editability with publish validation; server validates version-pinned submissions and workflow transitions, while per-stage field-edit enforcement remains pending.
+- Published TSRF submissions are version-pinned and server-validated; workflow transitions are role-configured in the form version and recorded as submission events. Workflow editor and stage field-edit API are still pending.
