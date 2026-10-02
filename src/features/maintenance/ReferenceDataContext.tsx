@@ -1,6 +1,9 @@
-import React, { createContext, useContext, useState } from 'react';
+import React from 'react';
+import { LovProvider, useLov } from '@/features/lov';
+import type { LovItem } from '@/features/lov';
 
-// ─── Reference Data Types ─────────────────────────────────────────────────────
+// ─── Backward-Compatible Reference Data Types ─────────────────────────────────
+// These types match the original interfaces so existing consumers keep working.
 
 export interface Department {
   id: string;
@@ -36,47 +39,57 @@ export interface Vendor {
   isActive: boolean;
 }
 
-// ─── Default Seed Data ────────────────────────────────────────────────────────
+// ─── Mappers: LOV items → legacy types ────────────────────────────────────────
 
-const DEFAULT_DEPARTMENTS: Department[] = [
-  { id: 'd-1', code: 'FLEET', name: 'Fleet Operations', head: 'Marco Reyes', isActive: true },
-  { id: 'd-2', code: 'LOG', name: 'Logistics & Dispatch', head: 'Roberto Santos', isActive: true },
-  { id: 'd-3', code: 'FIN', name: 'Finance & Accounting', head: 'Sandra Cruz', isActive: true },
-  { id: 'd-4', code: 'PROC', name: 'Procurement', head: 'Jose Lim', isActive: true },
-  { id: 'd-5', code: 'HR', name: 'Human Resources', head: 'Ana Santos', isActive: true },
-  { id: 'd-6', code: 'IT', name: 'Information Technology', head: 'Bryan Tan', isActive: true },
-  { id: 'd-7', code: 'ADMIN', name: 'Administration', head: 'Maria Garcia', isActive: true },
-  { id: 'd-8', code: 'OPS', name: 'Field Operations', head: 'Carlos Villanueva', isActive: true },
-];
+function toDepartment(item: LovItem): Department {
+  return {
+    id: item.id,
+    code: item.code,
+    name: item.label,
+    head: (item.attrs.head as string) || '',
+    isActive: item.status === 'active',
+  };
+}
 
-const DEFAULT_VEHICLE_TYPES: VehicleType[] = [
-  { id: 'vt-1', code: 'VAN', label: 'Commuter Van', category: 'light', pmsIntervalKm: 5000, isActive: true },
-  { id: 'vt-2', code: 'PICKUP', label: 'Pickup Truck', category: 'light', pmsIntervalKm: 5000, isActive: true },
-  { id: 'vt-3', code: 'ELF', label: 'Isuzu Elf (4-Wheeler)', category: 'medium', pmsIntervalKm: 5000, isActive: true },
-  { id: 'vt-4', code: 'TRUCK6W', label: '6-Wheeler Truck', category: 'heavy', pmsIntervalKm: 5000, isActive: true },
-  { id: 'vt-5', code: 'TRUCK10W', label: '10-Wheeler Truck', category: 'heavy', pmsIntervalKm: 5000, isActive: true },
-  { id: 'vt-6', code: 'TRAILER', label: 'Trailer / Articulated', category: 'heavy', pmsIntervalKm: 10000, isActive: true },
-  { id: 'vt-7', code: 'CRANE', label: 'Crane / Heavy Equipment', category: 'special', pmsIntervalKm: 250, isActive: true },
-  { id: 'vt-8', code: 'FORKLIFT', label: 'Forklift', category: 'special', pmsIntervalKm: 250, isActive: true },
-];
+function toVehicleType(item: LovItem): VehicleType {
+  return {
+    id: item.id,
+    code: item.code,
+    label: item.label,
+    category: (item.attrs.category as VehicleType['category']) || 'medium',
+    pmsIntervalKm: (item.attrs.pms_interval_km as number) || 5000,
+    isActive: item.status === 'active',
+  };
+}
 
-const DEFAULT_MAINTENANCE_CATEGORIES: MaintenanceCategory[] = [
-  { id: 'mc-1', code: 'PMS', name: 'Preventive Maintenance Service', description: 'Scheduled 5,000 KM oil change, filter replacement', isActive: true },
-  { id: 'mc-2', code: 'BRAKE', name: 'Brake System Repair', description: 'Brake pad/disc replacement, hydraulic system', isActive: true },
-  { id: 'mc-3', code: 'ENGINE', name: 'Engine Overhaul', description: 'Major engine repair and component replacement', isActive: true },
-  { id: 'mc-4', code: 'TIRES', name: 'Tire Replacement', description: 'Tire replacement and rotation service', isActive: true },
-  { id: 'mc-5', code: 'ELECTRIC', name: 'Electrical System', description: 'Battery, alternator, wiring, lights repair', isActive: true },
-  { id: 'mc-6', code: 'BODY', name: 'Body & Collision Repair', description: 'Dent removal, painting, structural repair', isActive: true },
-  { id: 'mc-7', code: 'AIRCON', name: 'Air Conditioning', description: 'A/C compressor, refrigerant, blower repair', isActive: true },
-];
+function toMaintenanceCategory(item: LovItem): MaintenanceCategory {
+  return {
+    id: item.id,
+    code: item.code,
+    name: item.label,
+    description: (item.attrs.description as string) || '',
+    isActive: item.status === 'active',
+  };
+}
 
-const DEFAULT_VENDORS: Vendor[] = [
-  { id: 'ven-1', name: 'Pro Auto Service Center', contactPerson: 'Arturo Dela Vega', phone: '09171234567', specialization: 'General PMS & Engine', isActive: true },
-  { id: 'ven-2', name: 'Speedy Brake & Tire Shop', contactPerson: 'Leo Maravilla', phone: '09281234567', specialization: 'Brakes & Tires', isActive: true },
-  { id: 'ven-3', name: 'Hulma In-House Workshop', contactPerson: 'Fleet Team', phone: 'Internal', specialization: 'All categories', isActive: true },
-];
+function toVendor(item: LovItem): Vendor {
+  return {
+    id: item.id,
+    name: item.label,
+    contactPerson: (item.attrs.contact_person as string) || '',
+    phone: (item.attrs.phone as string) || '',
+    specialization: (item.attrs.specialization as string) || '',
+    isActive: item.status === 'active',
+  };
+}
 
-// ─── Context ──────────────────────────────────────────────────────────────────
+// ─── Provider (passthrough — LovProvider owns the state) ──────────────────────
+
+export function ReferenceDataProvider({ children }: { children: React.ReactNode }) {
+  return <LovProvider>{children}</LovProvider>;
+}
+
+// ─── Hook: backward-compatible adapter over useLov() ──────────────────────────
 
 interface ReferenceDataContextValue {
   departments: Department[];
@@ -97,51 +110,106 @@ interface ReferenceDataContextValue {
   deleteVendor: (id: string) => void;
 }
 
-const ReferenceDataContext = createContext<ReferenceDataContextValue | null>(null);
-
-export function ReferenceDataProvider({ children }: { children: React.ReactNode }) {
-  const [departments, setDepartments] = useState<Department[]>(DEFAULT_DEPARTMENTS);
-  const [vehicleTypes, setVehicleTypes] = useState<VehicleType[]>(DEFAULT_VEHICLE_TYPES);
-  const [maintenanceCategories, setMaintenanceCategories] = useState<MaintenanceCategory[]>(DEFAULT_MAINTENANCE_CATEGORIES);
-  const [vendors, setVendors] = useState<Vendor[]>(DEFAULT_VENDORS);
-
-  const mkAdd = <T extends { id: string }>(setter: React.Dispatch<React.SetStateAction<T[]>>) =>
-    (item: Omit<T, 'id'>) =>
-      setter((prev) => [...prev, { ...item, id: `ref-${Date.now()}` } as T]);
-
-  const mkUpdate = <T extends { id: string }>(setter: React.Dispatch<React.SetStateAction<T[]>>) =>
-    (id: string, updates: Partial<T>) =>
-      setter((prev) => prev.map((x) => (x.id === id ? { ...x, ...updates } : x)));
-
-  const mkDelete = <T extends { id: string }>(setter: React.Dispatch<React.SetStateAction<T[]>>) =>
-    (id: string) =>
-      setter((prev) => prev.filter((x) => x.id !== id));
-
-  return (
-    <ReferenceDataContext.Provider
-      value={{
-        departments, vehicleTypes, maintenanceCategories, vendors,
-        addDepartment: mkAdd(setDepartments),
-        updateDepartment: mkUpdate(setDepartments),
-        deleteDepartment: mkDelete(setDepartments),
-        addVehicleType: mkAdd(setVehicleTypes),
-        updateVehicleType: mkUpdate(setVehicleTypes),
-        deleteVehicleType: mkDelete(setVehicleTypes),
-        addMaintenanceCategory: mkAdd(setMaintenanceCategories),
-        updateMaintenanceCategory: mkUpdate(setMaintenanceCategories),
-        deleteMaintenanceCategory: mkDelete(setMaintenanceCategories),
-        addVendor: mkAdd(setVendors),
-        updateVendor: mkUpdate(setVendors),
-        deleteVendor: mkDelete(setVendors),
-      }}
-    >
-      {children}
-    </ReferenceDataContext.Provider>
-  );
-}
-
 export function useReferenceData(): ReferenceDataContextValue {
-  const ctx = useContext(ReferenceDataContext);
-  if (!ctx) throw new Error('useReferenceData must be used inside ReferenceDataProvider');
-  return ctx;
+  const { getItems, addItem, updateItem, deleteItem } = useLov();
+
+  const departments = getItems('DEPARTMENTS').map(toDepartment);
+  const vehicleTypes = getItems('VEHICLE_TYPES').map(toVehicleType);
+  const maintenanceCategories = getItems('MAINTENANCE_CATEGORIES').map(toMaintenanceCategory);
+  const vendors = getItems('VENDORS').map(toVendor);
+
+  return {
+    departments,
+    vehicleTypes,
+    maintenanceCategories,
+    vendors,
+    addDepartment: (d) =>
+      addItem('DEPARTMENTS', {
+        code: d.code,
+        label: d.name,
+        status: d.isActive ? 'active' : 'inactive',
+        attrs: { head: d.head },
+      }),
+    updateDepartment: (id, u) =>
+      updateItem(id, {
+        ...(u.code !== undefined && { code: u.code }),
+        ...(u.name !== undefined && { label: u.name }),
+        ...(u.isActive !== undefined && {
+          status: u.isActive ? ('active' as const) : ('inactive' as const),
+        }),
+        attrs: { head: u.head ?? departments.find((d) => d.id === id)?.head ?? '' },
+      }),
+    deleteDepartment: (id) => deleteItem(id),
+    addVehicleType: (v) =>
+      addItem('VEHICLE_TYPES', {
+        code: v.code,
+        label: v.label,
+        status: v.isActive ? 'active' : 'inactive',
+        attrs: { category: v.category, pms_interval_km: v.pmsIntervalKm },
+      }),
+    updateVehicleType: (id, u) => {
+      const existing = vehicleTypes.find((v) => v.id === id);
+      updateItem(id, {
+        ...(u.code !== undefined && { code: u.code }),
+        ...(u.label !== undefined && { label: u.label }),
+        ...(u.isActive !== undefined && {
+          status: u.isActive ? ('active' as const) : ('inactive' as const),
+        }),
+        attrs: {
+          category: u.category ?? existing?.category ?? 'medium',
+          pms_interval_km: u.pmsIntervalKm ?? existing?.pmsIntervalKm ?? 5000,
+        },
+      });
+    },
+    deleteVehicleType: (id) => deleteItem(id),
+    addMaintenanceCategory: (m) =>
+      addItem('MAINTENANCE_CATEGORIES', {
+        code: m.code,
+        label: m.name,
+        status: m.isActive ? 'active' : 'inactive',
+        attrs: { description: m.description },
+      }),
+    updateMaintenanceCategory: (id, u) =>
+      updateItem(id, {
+        ...(u.code !== undefined && { code: u.code }),
+        ...(u.name !== undefined && { label: u.name }),
+        ...(u.isActive !== undefined && {
+          status: u.isActive ? ('active' as const) : ('inactive' as const),
+        }),
+        attrs: {
+          description:
+            u.description ?? maintenanceCategories.find((m) => m.id === id)?.description ?? '',
+        },
+      }),
+    deleteMaintenanceCategory: (id) => deleteItem(id),
+    addVendor: (v) =>
+      addItem('VENDORS', {
+        code: v.name
+          .toUpperCase()
+          .replace(/[^A-Z0-9]+/g, '_')
+          .slice(0, 20),
+        label: v.name,
+        status: v.isActive ? 'active' : 'inactive',
+        attrs: {
+          contact_person: v.contactPerson,
+          phone: v.phone,
+          specialization: v.specialization,
+        },
+      }),
+    updateVendor: (id, u) => {
+      const existing = vendors.find((v) => v.id === id);
+      updateItem(id, {
+        ...(u.name !== undefined && { label: u.name }),
+        ...(u.isActive !== undefined && {
+          status: u.isActive ? ('active' as const) : ('inactive' as const),
+        }),
+        attrs: {
+          contact_person: u.contactPerson ?? existing?.contactPerson ?? '',
+          phone: u.phone ?? existing?.phone ?? '',
+          specialization: u.specialization ?? existing?.specialization ?? '',
+        },
+      });
+    },
+    deleteVendor: (id) => deleteItem(id),
+  };
 }

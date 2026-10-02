@@ -4,9 +4,9 @@ Phase 1 introduces the generic LOV foundation used by future schema-driven forms
 
 ## LOV Binding
 
-The four legacy reference-data collections are represented by the system LOV codes `DEPARTMENTS`, `VEHICLE_TYPES`, `MAINTENANCE_CATEGORIES`, and `VENDORS`. The frontend `LovProvider` currently owns client-side seed state, while `ReferenceDataContext` adapts those items to the legacy page and consumer types. The backend tables and `/api/lov` routes are additive and preserve the legacy tables and routes.
+The four legacy reference-data collections are represented by the system LOV codes `DEPARTMENTS`, `VEHICLE_TYPES`, `MAINTENANCE_CATEGORIES`, and `VENDORS`. `LovProvider` loads and mutates these collections through `/api/lov` when the backend is available; bundled seed state remains as an offline fallback. `ReferenceDataContext` adapts LOV items to legacy consumer types. The backend tables and routes are additive and preserve legacy tables and routes.
 
-LOV items store a stable code, display label, optional parent id, active/inactive status, and JSON attributes. Attributes are defined per list and can be used later by lookup labels and rules. Deactivation is preferred to deletion so historical submissions can retain their label snapshot.
+LOV items store a stable code, display label, optional parent id, active/inactive status, and JSON attributes. Attributes are defined per list and can be used by lookup labels and rules. Item delete routes soft-deactivate; attribute definitions currently support CRUD. Backend LOV reads require authenticated access and mutations require the admin-level `manage LovList` ability. The current auth middleware is simulated via role headers; do not treat client-supplied headers as production authentication.
 
 ## Adding Future Field Types
 

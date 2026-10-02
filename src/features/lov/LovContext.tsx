@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { useAuth } from '@/features/auth/AuthContext';
+import { toBackendRole } from '@/features/auth/backendRole';
 import type {
   LovList,
   LovAttribute,
@@ -7,6 +9,16 @@ import type {
   LovItemFormData,
   LovItemStatus,
 } from './types';
+
+async function lovRequest<T>(path: string, role: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`/api/lov${path}`, {
+    ...init,
+    headers: { 'Content-Type': 'application/json', 'x-user-role': role, ...init?.headers },
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error ?? 'Reference data request failed.');
+  return result as T;
+}
 
 // ─── Seed Data: Lists ─────────────────────────────────────────────────────────
 
@@ -419,30 +431,96 @@ const SEED_ITEMS: LovItem[] = [
 
 interface LovContextValue {
   lists: LovList[];
+  syncError: string | null;
   getList: (code: string) => LovList | undefined;
   getAttributes: (listCode: string) => LovAttribute[];
   getItems: (listCode: string) => LovItem[];
   getActiveItems: (listCode: string) => LovItem[];
 
-  addList: (data: LovListFormData) => void;
-  updateList: (id: string, updates: Partial<LovList>) => void;
+  addList: (data: LovListFormData) => Promise<void>;
+  updateList: (id: string, updates: Partial<LovList>) => Promise<void>;
 
-  addAttribute: (listCode: string, attr: Omit<LovAttribute, 'id' | 'listCode'>) => void;
-  updateAttribute: (id: string, updates: Partial<LovAttribute>) => void;
-  deleteAttribute: (id: string) => void;
+  addAttribute: (listCode: string, attr: Omit<LovAttribute, 'id' | 'listCode'>) => Promise<void>;
+  updateAttribute: (id: string, updates: Partial<LovAttribute>) => Promise<void>;
+  deleteAttribute: (id: string) => Promise<void>;
 
-  addItem: (listCode: string, data: LovItemFormData) => void;
-  updateItem: (id: string, updates: Partial<LovItemFormData>) => void;
-  deactivateItem: (id: string) => void;
-  deleteItem: (id: string) => void;
+  addItem: (listCode: string, data: LovItemFormData) => Promise<void>;
+  updateItem: (id: string, updates: Partial<LovItemFormData>) => Promise<void>;
+  deactivateItem: (id: string) => Promise<void>;
+  deleteItem: (id: string) => Promise<void>;
 }
 
 const LovContext = createContext<LovContextValue | null>(null);
 
 export function LovProvider({ children }: { children: React.ReactNode }) {
+  const { currentUser } = useAuth();
+  const apiRole = toBackendRole(currentUser?.role);
   const [lists, setLists] = useState<LovList[]>(SEED_LISTS);
   const [attributes, setAttributes] = useState<LovAttribute[]>(SEED_ATTRIBUTES);
   const [items, setItems] = useState<LovItem[]>(SEED_ITEMS);
+  const [apiAvailable, setApiAvailable] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const serverLists = await lovRequest<Array<LovList>>('/lists', apiRole);
+        const collections = await Promise.all(
+          serverLists.map(async (list) => {
+            const [metadata, serverItems] = await Promise.all([
+              lovRequest<
+                LovList & {
+                  attributes: Array<Omit<LovAttribute, 'listCode'> & { options: string[] }>;
+                }
+              >(`/lists/${encodeURIComponent(list.code)}`, apiRole),
+              lovRequest<Array<Omit<LovItem, 'listCode'> & { attrs: LovItem['attrs'] }>>(
+                `/lists/${encodeURIComponent(list.code)}/items`,
+                apiRole,
+              ),
+            ]);
+            return {
+              list: metadata,
+              attributes: metadata.attributes.map((attribute) => ({
+                ...attribute,
+                listCode: list.code,
+              })),
+              items: serverItems.map((item) => ({ ...item, listCode: list.code })),
+            };
+          }),
+        );
+        if (cancelled) return;
+        setLists(
+          collections.map(({ list }) => ({
+            id: list.id,
+            code: list.code,
+            name: list.name,
+            description: list.description,
+            isSystem: list.isSystem,
+            supportsHierarchy: list.supportsHierarchy,
+            status: list.status,
+          })),
+        );
+        setAttributes(collections.flatMap(({ attributes: listAttributes }) => listAttributes));
+        setItems(collections.flatMap(({ items: listItems }) => listItems));
+        setApiAvailable(true);
+        setSyncError(null);
+      } catch (error) {
+        if (!cancelled) {
+          setApiAvailable(false);
+          setSyncError(
+            error instanceof Error
+              ? error.message
+              : 'Reference data API unavailable; using local seed data.',
+          );
+        }
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [apiRole]);
 
   const getList = useCallback((code: string) => lists.find((l) => l.code === code), [lists]);
 
@@ -463,29 +541,76 @@ export function LovProvider({ children }: { children: React.ReactNode }) {
     [getItems],
   );
 
+  const request = useCallback(
+    async <T,>(path: string, method: string, body?: unknown): Promise<T | null> => {
+      try {
+        return await lovRequest<T>(path, apiRole, {
+          method,
+          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Reference data request failed.';
+        setSyncError(message);
+        return null;
+      }
+    },
+    [apiRole],
+  );
+
   // ── List CRUD ─────────────────────────────────────────────────────────────
 
-  const addList = useCallback((data: LovListFormData) => {
-    const newList: LovList = {
-      id: `lov-l-${Date.now()}`,
-      code: data.code,
-      name: data.name,
-      description: data.description,
-      isSystem: false,
-      supportsHierarchy: data.supportsHierarchy,
-      status: 'active',
-    };
-    setLists((prev) => [...prev, newList]);
-  }, []);
+  const addList = useCallback(
+    async (data: LovListFormData) => {
+      if (apiAvailable) {
+        const list = await request<LovList>('/lists', 'POST', data);
+        if (!list) return;
+        setLists((prev) => [...prev, list]);
+        setSyncError(null);
+        return;
+      }
+      const newList: LovList = {
+        id: `lov-l-${Date.now()}`,
+        code: data.code,
+        name: data.name,
+        description: data.description,
+        isSystem: false,
+        supportsHierarchy: data.supportsHierarchy,
+        status: 'active',
+      };
+      setLists((prev) => [...prev, newList]);
+    },
+    [apiAvailable, request],
+  );
 
-  const updateList = useCallback((id: string, updates: Partial<LovList>) => {
-    setLists((prev) => prev.map((l) => (l.id === id ? { ...l, ...updates } : l)));
-  }, []);
+  const updateList = useCallback(
+    async (id: string, updates: Partial<LovList>) => {
+      if (apiAvailable) {
+        const list = await request<LovList>(`/lists/${encodeURIComponent(id)}`, 'PUT', updates);
+        if (!list) return;
+        setLists((prev) => prev.map((current) => (current.id === id ? list : current)));
+        setSyncError(null);
+        return;
+      }
+      setLists((prev) => prev.map((l) => (l.id === id ? { ...l, ...updates } : l)));
+    },
+    [apiAvailable, request],
+  );
 
   // ── Attribute CRUD ────────────────────────────────────────────────────────
 
   const addAttribute = useCallback(
-    (listCode: string, attr: Omit<LovAttribute, 'id' | 'listCode'>) => {
+    async (listCode: string, attr: Omit<LovAttribute, 'id' | 'listCode'>) => {
+      if (apiAvailable) {
+        const saved = await request<Omit<LovAttribute, 'listCode'>>(
+          `/lists/${encodeURIComponent(listCode)}/attributes`,
+          'POST',
+          attr,
+        );
+        if (!saved) return;
+        setAttributes((prev) => [...prev, { ...saved, listCode }]);
+        setSyncError(null);
+        return;
+      }
       const newAttr: LovAttribute = {
         ...attr,
         id: `lov-a-${Date.now()}`,
@@ -493,68 +618,148 @@ export function LovProvider({ children }: { children: React.ReactNode }) {
       };
       setAttributes((prev) => [...prev, newAttr]);
     },
-    [],
+    [apiAvailable, request],
   );
 
-  const updateAttribute = useCallback((id: string, updates: Partial<LovAttribute>) => {
-    setAttributes((prev) => prev.map((a) => (a.id === id ? { ...a, ...updates } : a)));
-  }, []);
+  const updateAttribute = useCallback(
+    async (id: string, updates: Partial<LovAttribute>) => {
+      if (apiAvailable) {
+        const saved = await request<Omit<LovAttribute, 'listCode'>>(
+          `/attributes/${encodeURIComponent(id)}`,
+          'PUT',
+          updates,
+        );
+        if (!saved) return;
+        setAttributes((prev) =>
+          prev.map((attribute) =>
+            attribute.id === id ? { ...saved, listCode: attribute.listCode } : attribute,
+          ),
+        );
+        setSyncError(null);
+        return;
+      }
+      setAttributes((prev) => prev.map((a) => (a.id === id ? { ...a, ...updates } : a)));
+    },
+    [apiAvailable, request],
+  );
 
-  const deleteAttribute = useCallback((id: string) => {
-    setAttributes((prev) => prev.filter((a) => a.id !== id));
-  }, []);
+  const deleteAttribute = useCallback(
+    async (id: string) => {
+      if (apiAvailable && !(await request(`/attributes/${encodeURIComponent(id)}`, 'DELETE')))
+        return;
+      setAttributes((prev) => prev.filter((a) => a.id !== id));
+      setSyncError(null);
+    },
+    [apiAvailable, request],
+  );
 
   // ── Item CRUD ─────────────────────────────────────────────────────────────
 
-  const addItem = useCallback((listCode: string, data: LovItemFormData) => {
-    const newItem: LovItem = {
-      id: `lov-i-${Date.now()}`,
-      listCode,
-      parentId: null,
-      code: data.code,
-      label: data.label,
-      sortOrder: 0,
-      status: data.status,
-      attrs: data.attrs,
-    };
-    setItems((prev) => [...prev, newItem]);
-  }, []);
+  const addItem = useCallback(
+    async (listCode: string, data: LovItemFormData) => {
+      if (apiAvailable) {
+        const saved = await request<Omit<LovItem, 'listCode'>>(
+          `/lists/${encodeURIComponent(listCode)}/items`,
+          'POST',
+          data,
+        );
+        if (!saved) return;
+        setItems((prev) => [...prev, { ...saved, listCode }]);
+        setSyncError(null);
+        return;
+      }
+      const newItem: LovItem = {
+        id: `lov-i-${Date.now()}`,
+        listCode,
+        parentId: null,
+        code: data.code,
+        label: data.label,
+        sortOrder: 0,
+        status: data.status,
+        attrs: data.attrs,
+      };
+      setItems((prev) => [...prev, newItem]);
+    },
+    [apiAvailable, request],
+  );
 
-  const updateItem = useCallback((id: string, updates: Partial<LovItemFormData>) => {
-    setItems((prev) =>
-      prev.map((item) => {
-        if (item.id !== id) return item;
-        return {
-          ...item,
-          ...(updates.code !== undefined && { code: updates.code }),
-          ...(updates.label !== undefined && { label: updates.label }),
-          ...(updates.status !== undefined && { status: updates.status }),
-          ...(updates.attrs !== undefined && { attrs: updates.attrs }),
-        };
-      }),
-    );
-  }, []);
+  const updateItem = useCallback(
+    async (id: string, updates: Partial<LovItemFormData>) => {
+      if (apiAvailable) {
+        const saved = await request<Omit<LovItem, 'listCode'>>(
+          `/items/${encodeURIComponent(id)}`,
+          'PUT',
+          updates,
+        );
+        if (!saved) return;
+        const existing = items.find((item) => item.id === id);
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === id ? { ...saved, listCode: existing?.listCode ?? item.listCode } : item,
+          ),
+        );
+        setSyncError(null);
+        return;
+      }
+      setItems((prev) =>
+        prev.map((item) => {
+          if (item.id !== id) return item;
+          return {
+            ...item,
+            ...(updates.code !== undefined && { code: updates.code }),
+            ...(updates.label !== undefined && { label: updates.label }),
+            ...(updates.status !== undefined && { status: updates.status }),
+            ...(updates.attrs !== undefined && { attrs: updates.attrs }),
+          };
+        }),
+      );
+    },
+    [apiAvailable, items, request],
+  );
 
-  const deactivateItem = useCallback((id: string) => {
-    setItems((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, status: 'inactive' as LovItemStatus } : item,
-      ),
-    );
-  }, []);
+  const deactivateItem = useCallback(
+    async (id: string) => {
+      if (apiAvailable) {
+        if (!(await request(`/items/${encodeURIComponent(id)}`, 'DELETE'))) return;
+        setItems((prev) =>
+          prev.map((item) => (item.id === id ? { ...item, status: 'inactive' } : item)),
+        );
+        setSyncError(null);
+        return;
+      }
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === id ? { ...item, status: 'inactive' as LovItemStatus } : item,
+        ),
+      );
+    },
+    [apiAvailable, request],
+  );
 
-  const deleteItem = useCallback((id: string) => {
-    setItems((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, status: 'inactive' as LovItemStatus } : item,
-      ),
-    );
-  }, []);
+  const deleteItem = useCallback(
+    async (id: string) => {
+      if (apiAvailable) {
+        if (!(await request(`/items/${encodeURIComponent(id)}`, 'DELETE'))) return;
+        setItems((prev) =>
+          prev.map((item) => (item.id === id ? { ...item, status: 'inactive' } : item)),
+        );
+        setSyncError(null);
+        return;
+      }
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === id ? { ...item, status: 'inactive' as LovItemStatus } : item,
+        ),
+      );
+    },
+    [apiAvailable, request],
+  );
 
   return (
     <LovContext.Provider
       value={{
         lists,
+        syncError,
         getList,
         getAttributes,
         getItems,
