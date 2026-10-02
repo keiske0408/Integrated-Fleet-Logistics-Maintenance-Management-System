@@ -32,7 +32,7 @@ export function PublishedTsrfForm({ onSubmit }: PublishedTsrfFormProps) {
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/forms/tsrf')
+    fetch('/api/forms/published/tsrf')
       .then(async (response) => (response.ok ? response.json() : null))
       .then((saved) => {
         if (cancelled || !saved || !Array.isArray(saved.versions)) return;
