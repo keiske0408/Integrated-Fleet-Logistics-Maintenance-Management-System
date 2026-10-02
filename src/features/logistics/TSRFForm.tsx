@@ -3,7 +3,17 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Clock, MapPin, Users, Package, AlertTriangle, CheckCircle2, Trash2, Plus, Send } from 'lucide-react';
+import {
+  Clock,
+  MapPin,
+  Users,
+  Package,
+  AlertTriangle,
+  CheckCircle2,
+  Trash2,
+  Plus,
+  Send,
+} from 'lucide-react';
 
 export interface RouteStop {
   stopOrder: number;
@@ -34,6 +44,9 @@ export interface TSRFFormData {
   departureDate: string;
   callTime: string;
   vehicleType: string;
+  allocationType?: 'fleet_asset' | 'third_party_trucker';
+  assignedVehicleId?: string;
+  truckerName?: string;
   stops: RouteStop[];
   passengers: Passenger[];
   cargo: CargoItem[];
@@ -105,7 +118,12 @@ export function TSRFForm({ onSubmit, isSubmitting = false }: TSRFFormProps) {
 
   // Cargo Control
   const [cargo, setCargo] = useState<CargoItem[]>([
-    { description: 'KE Biometric Scanners (Pack of 10)', quantity: 2, weightKg: 15, isFragile: true },
+    {
+      description: 'KE Biometric Scanners (Pack of 10)',
+      quantity: 2,
+      weightKg: 15,
+      isFragile: true,
+    },
   ]);
   const [newCargoDesc, setNewCargoDesc] = useState('');
   const [newCargoQty, setNewCargoQty] = useState(1);
@@ -178,7 +196,10 @@ export function TSRFForm({ onSubmit, isSubmitting = false }: TSRFFormProps) {
             </div>
             <p className="mt-1 text-destructive/90">
               Submissions after <strong>4:00 PM (16:00)</strong> are automatically flagged with{' '}
-              <code className="bg-destructive/20 px-1 py-0.5 rounded font-mono">is_flagged_after_cutoff = true</code> and require supervisory exception review before dispatch scheduling.
+              <code className="bg-destructive/20 px-1 py-0.5 rounded font-mono">
+                is_flagged_after_cutoff = true
+              </code>{' '}
+              and require supervisory exception review before dispatch scheduling.
             </p>
           </div>
         </div>
@@ -199,7 +220,9 @@ export function TSRFForm({ onSubmit, isSubmitting = false }: TSRFFormProps) {
             <Clock className="h-5 w-5 text-primary" />
             <CardTitle>1. Transportation Service Request (TSRF) Intake</CardTitle>
           </div>
-          <CardDescription>Specify the project, schedule, and vehicle allocation requirements</CardDescription>
+          <CardDescription>
+            Specify the project, schedule, and vehicle allocation requirements
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 pt-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -282,7 +305,9 @@ export function TSRFForm({ onSubmit, isSubmitting = false }: TSRFFormProps) {
               <MapPin className="h-5 w-5 text-primary" />
               <div>
                 <CardTitle>2. Multi-Stop Route & Location Management</CardTitle>
-                <CardDescription>Track origins, destinations, and intermediate facilities</CardDescription>
+                <CardDescription>
+                  Track origins, destinations, and intermediate facilities
+                </CardDescription>
               </div>
             </div>
             <Badge variant="outline" className="text-xs">
@@ -364,12 +389,7 @@ export function TSRFForm({ onSubmit, isSubmitting = false }: TSRFFormProps) {
                 onChange={(e) => setNewStopAddress(e.target.value)}
                 className="flex-1 bg-card"
               />
-              <Button
-                type="button"
-                size="sm"
-                onClick={handleAddStop}
-                className="shrink-0"
-              >
+              <Button type="button" size="sm" onClick={handleAddStop} className="shrink-0">
                 <Plus className="h-3.5 w-3.5 mr-1" /> Add Stop
               </Button>
             </div>
@@ -397,7 +417,9 @@ export function TSRFForm({ onSubmit, isSubmitting = false }: TSRFFormProps) {
               <Users className="h-4 w-4 text-primary" />
               <CardTitle className="text-base">3. Passenger Manifest</CardTitle>
             </div>
-            <CardDescription className="text-xs">Mandatory recording of all passengers</CardDescription>
+            <CardDescription className="text-xs">
+              Mandatory recording of all passengers
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 pt-4">
             <div className="space-y-1.5">
@@ -456,7 +478,9 @@ export function TSRFForm({ onSubmit, isSubmitting = false }: TSRFFormProps) {
               <Package className="h-4 w-4 text-primary" />
               <CardTitle className="text-base">4. Cargo & Equipment Control</CardTitle>
             </div>
-            <CardDescription className="text-xs">Loaded products and asset accountability</CardDescription>
+            <CardDescription className="text-xs">
+              Loaded products and asset accountability
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 pt-4">
             <ul className="divide-y divide-border border border-border rounded-md overflow-hidden">
@@ -521,12 +545,7 @@ export function TSRFForm({ onSubmit, isSubmitting = false }: TSRFFormProps) {
       </div>
 
       <div className="flex justify-end pt-2">
-        <Button
-          type="submit"
-          size="lg"
-          disabled={isSubmitting}
-          className="shadow-md"
-        >
+        <Button type="submit" size="lg" disabled={isSubmitting} className="shadow-md">
           <Send className="h-4 w-4 mr-2" />
           {isSubmitting ? 'Submitting...' : 'Submit Transportation Service Request (TSRF)'}
         </Button>

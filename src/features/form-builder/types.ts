@@ -6,6 +6,7 @@ export type FieldType =
   | 'time'
   | 'select'
   | 'lookup'
+  | 'entity_lookup'
   | 'checkbox'
   | 'notice'
   | 'repeater';
@@ -20,7 +21,9 @@ export interface FormField {
   placeholder?: string;
   defaultValue?: FormValue;
   options?: Array<{ value: string; label: string }>;
-  dataSource?: { kind: 'lov'; listCode: string };
+  dataSource?:
+    | { kind: 'lov'; listCode: string }
+    | { kind: 'entity'; entity: 'vehicles'; valueField: 'id'; labelField: 'plateNumber' };
   content?: string;
   width?: 'full' | 'half';
   rules?: import('./rules').FieldRule[];

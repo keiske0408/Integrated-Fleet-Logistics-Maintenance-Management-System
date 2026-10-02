@@ -24,6 +24,14 @@ describe('TSRF form definition', () => {
     expect(fields.find((field) => field.key === 'stops')?.type).toBe('repeater');
     expect(fields.find((field) => field.key === 'passengers')?.type).toBe('repeater');
     expect(fields.find((field) => field.key === 'cargo')?.type).toBe('repeater');
+    const allocationType = fields.find((field) => field.key === 'allocationType');
+    const fleetVehicle = fields.find((field) => field.key === 'assignedVehicleId');
+    const thirdParty = fields.find((field) => field.key === 'truckerName');
+    expect(allocationType?.type).toBe('select');
+    expect(fleetVehicle?.type).toBe('entity_lookup');
+    expect(fleetVehicle?.dataSource).toMatchObject({ kind: 'entity', entity: 'vehicles' });
+    expect(fleetVehicle?.rules?.[0].when.value).toBe('third_party_trucker');
+    expect(thirdParty?.rules?.[0].when.value).toBe('fleet_asset');
   });
 
   it('evaluates declarative visibility and requiredness rules', () => {
@@ -83,6 +91,7 @@ describe('TSRF form definition', () => {
       departureDate: '2026-10-02',
       callTime: '08:00',
       vehicleType: 'VAN',
+      allocationType: 'fleet_asset',
       stops: [{ locationName: 'Origin', address: 'Address', waitingTimeMinutes: 10 }],
       passengers: [{ name: 'Passenger', department: 'IT', role: 'Tech' }],
       cargo: [{ description: 'Tools', quantity: 2, isFragile: false }],
@@ -96,6 +105,7 @@ describe('TSRF form definition', () => {
       departureDate: '2026-10-02',
       callTime: '08:00',
       vehicleType: 'VAN',
+      allocationType: 'fleet_asset',
       stops: [{ stopOrder: 1, locationName: 'Origin', address: 'Address', waitingTimeMinutes: 10 }],
       passengers: [{ name: 'Passenger', department: 'IT', role: 'Tech' }],
       cargo: [{ description: 'Tools', quantity: 2, isFragile: false }],

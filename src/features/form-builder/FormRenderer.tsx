@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLov } from '@/features/lov';
+import { useAuth } from '@/features/auth/AuthContext';
+import { toBackendRole } from '@/features/auth/backendRole';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { fieldRegistry } from './registry';
@@ -127,11 +129,50 @@ export function FormRenderer({
   submitLabel = 'Submit Request',
 }: FormRendererProps) {
   const { getActiveItems } = useLov();
+  const { currentUser } = useAuth();
+  const apiRole = toBackendRole(currentUser?.role);
+  const [vehicleOptions, setVehicleOptions] = useState<Array<{ value: string; label: string }>>([]);
   const [values, setValues] = useState<FormValues>(() =>
     getInitialValues(definition, initialValues),
   );
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  useEffect(() => {
+    const hasVehicleLookup = definition.sections.some((section) =>
+      section.fields.some(
+        (field) => field.dataSource?.kind === 'entity' && field.dataSource.entity === 'vehicles',
+      ),
+    );
+    if (!hasVehicleLookup) return;
+    let cancelled = false;
+    fetch('/api/vehicles', { headers: { 'x-user-role': apiRole } })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Unable to load fleet vehicles.');
+        return response.json();
+      })
+      .then(
+        (vehicles: Array<{ id: string; plateNumber: string; model: string; status: string }>) => {
+          if (cancelled) return;
+          setVehicleOptions(
+            vehicles
+              .filter((vehicle) => vehicle.status === 'active')
+              .map((vehicle) => ({
+                value: vehicle.id,
+                label: `${vehicle.plateNumber} · ${vehicle.model}`,
+              })),
+          );
+        },
+      )
+      .catch((error: unknown) => {
+        if (!cancelled)
+          setValidationErrors([
+            error instanceof Error ? error.message : 'Unable to load fleet vehicles.',
+          ]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiRole, definition]);
   const updateValue = (key: string, value: FormValues[string]) =>
     setValues((current) => ({ ...current, [key]: value }));
   const resolvedDefinition: FormDefinition = {
@@ -139,7 +180,11 @@ export function FormRenderer({
     sections: definition.sections.map((section) => ({
       ...section,
       fields: section.fields.map((field) => {
-        if (!field.dataSource || field.type !== 'lookup') return field;
+        if (field.dataSource?.kind === 'entity' && field.dataSource.entity === 'vehicles') {
+          return { ...field, options: vehicleOptions };
+        }
+        if (!field.dataSource || field.dataSource.kind !== 'lov' || field.type !== 'lookup')
+          return field;
         const options = getActiveItems(field.dataSource.listCode).map((item) => ({
           value: item.code,
           label: item.label,

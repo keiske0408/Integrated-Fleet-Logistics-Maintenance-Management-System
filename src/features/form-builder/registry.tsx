@@ -74,6 +74,22 @@ export const fieldRegistry: Record<FieldType, FieldRenderer> = {
       ))}
     </Select>
   ),
+  entity_lookup: ({ field, value, onChange, disabled }) => (
+    <Select
+      id={field.key}
+      value={typeof value === 'string' || typeof value === 'number' ? value : ''}
+      required={field.required}
+      disabled={disabled}
+      onChange={(event) => onChange(event.target.value)}
+    >
+      <option value="">Select {field.label.toLowerCase()}</option>
+      {(field.options ?? []).map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </Select>
+  ),
   checkbox: ({ field, value, onChange, disabled }) => (
     <label className="flex items-center gap-2 text-sm">
       <input

@@ -126,6 +126,55 @@ export const TSRF_V1: FormDefinition = {
             { value: 'TRUCK10W', label: '10-Wheeler Truck' },
           ],
         },
+        {
+          id: 'allocation-type',
+          key: 'allocationType',
+          type: 'select',
+          label: 'Allocation Type',
+          section: 'trip-details',
+          required: true,
+          defaultValue: 'fleet_asset',
+          options: [
+            { value: 'fleet_asset', label: 'Fleet Asset' },
+            { value: 'third_party_trucker', label: '3rd Party Trucker' },
+          ],
+        },
+        {
+          id: 'assigned-vehicle',
+          key: 'assignedVehicleId',
+          type: 'entity_lookup',
+          label: 'Fleet Vehicle',
+          section: 'trip-details',
+          required: false,
+          defaultValue: '',
+          dataSource: {
+            kind: 'entity',
+            entity: 'vehicles',
+            valueField: 'id',
+            labelField: 'plateNumber',
+          },
+          rules: [
+            {
+              when: { field: 'allocationType', operator: 'eq', value: 'third_party_trucker' },
+              show: false,
+            },
+          ],
+        },
+        {
+          id: 'trucker-name',
+          key: 'truckerName',
+          type: 'text',
+          label: 'Third-party Trucker',
+          section: 'trip-details',
+          required: true,
+          defaultValue: '',
+          rules: [
+            {
+              when: { field: 'allocationType', operator: 'eq', value: 'fleet_asset' },
+              show: false,
+            },
+          ],
+        },
       ],
     },
     {
@@ -318,6 +367,11 @@ export function serializeTsrfValues(values: FormValues): TSRFFormData {
     departureDate: String(values.departureDate ?? ''),
     callTime: String(values.callTime ?? ''),
     vehicleType: String(values.vehicleType ?? ''),
+    allocationType: String(
+      values.allocationType ?? 'fleet_asset',
+    ) as TSRFFormData['allocationType'],
+    ...(values.assignedVehicleId ? { assignedVehicleId: String(values.assignedVehicleId) } : {}),
+    ...(values.truckerName ? { truckerName: String(values.truckerName) } : {}),
     stops: rowsFor(values, 'stops').map((row, index) => ({
       stopOrder: Number(row.stopOrder ?? index + 1),
       locationName: String(row.locationName ?? ''),

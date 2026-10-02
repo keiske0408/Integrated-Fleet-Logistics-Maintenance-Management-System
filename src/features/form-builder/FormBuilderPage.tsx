@@ -26,6 +26,7 @@ const PALETTE: Array<{ type: FieldType; label: string }> = [
   { type: 'date', label: 'Date' },
   { type: 'time', label: 'Time' },
   { type: 'lookup', label: 'LOV Lookup' },
+  { type: 'entity_lookup', label: 'Fleet Vehicle' },
   { type: 'notice', label: 'Notice' },
 ];
 const WORKFLOW_ROLES = [
@@ -238,6 +239,16 @@ export function FormBuilderPage() {
       label: `New ${type} field`,
       section: 'trip-details',
       required: false,
+      ...(type === 'entity_lookup'
+        ? {
+            dataSource: {
+              kind: 'entity' as const,
+              entity: 'vehicles' as const,
+              valueField: 'id' as const,
+              labelField: 'plateNumber' as const,
+            },
+          }
+        : {}),
     };
     setDefinition((current) => ({
       ...current,
@@ -408,7 +419,23 @@ export function FormBuilderPage() {
                   <label className="mb-1 block text-xs font-semibold">Type</label>
                   <Select
                     value={selectedField.type}
-                    onChange={(event) => updateField({ type: event.target.value as FieldType })}
+                    onChange={(event) => {
+                      const type = event.target.value as FieldType;
+                      updateField({
+                        type,
+                        dataSource:
+                          type === 'entity_lookup'
+                            ? {
+                                kind: 'entity',
+                                entity: 'vehicles',
+                                valueField: 'id',
+                                labelField: 'plateNumber',
+                              }
+                            : type === 'lookup'
+                              ? undefined
+                              : selectedField.dataSource,
+                      });
+                    }}
                   >
                     {PALETTE.map((item) => (
                       <option key={item.type} value={item.type}>
@@ -417,6 +444,40 @@ export function FormBuilderPage() {
                     ))}
                   </Select>
                 </div>
+                {selectedField.type === 'lookup' && (
+                  <div>
+                    <label htmlFor="field-lov-source" className="mb-1 block text-xs font-semibold">
+                      Reference Data list
+                    </label>
+                    <Select
+                      id="field-lov-source"
+                      value={
+                        selectedField.dataSource?.kind === 'lov'
+                          ? selectedField.dataSource.listCode
+                          : ''
+                      }
+                      onChange={(event) =>
+                        updateField({
+                          dataSource: event.target.value
+                            ? { kind: 'lov', listCode: event.target.value }
+                            : undefined,
+                        })
+                      }
+                    >
+                      <option value="">Choose a list</option>
+                      {lists.map((list) => (
+                        <option key={list.code} value={list.code}>
+                          {list.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                )}
+                {selectedField.type === 'entity_lookup' && (
+                  <p className="text-xs text-muted-foreground">
+                    Bound to active fleet vehicles. The submitted value is the vehicle ID.
+                  </p>
+                )}
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"

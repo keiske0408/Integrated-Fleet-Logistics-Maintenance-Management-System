@@ -12,7 +12,7 @@ LOV items store a stable code, display label, optional parent id, active/inactiv
 
 The form-builder field registry should keep each type's default configuration, validation, runtime renderer, serializer, and print renderer together. The builder core should consume the registry rather than branch on individual field types. Field keys become immutable after first publish; labels remain editable.
 
-The current registry includes scalar inputs, LOV lookups, notices, and repeaters. `FormRenderer` supports repeaters with child fields, row limits, and declarative rules. `FormBuilderPage` provides a local design canvas with palette insertion, drag reorder, property editing, preview, and JSON export. Backend definitions are persisted through `/api/forms`, with draft and publish version lifecycle endpoints.
+The current registry includes scalar inputs, LOV lookups, active Fleet Vehicle entity lookups, notices, and repeaters. `FormRenderer` supports repeaters with child fields, row limits, and declarative rules. `FormBuilderPage` provides a local design canvas with palette insertion, drag reorder, property editing, preview, and JSON export. Backend definitions are persisted through `/api/forms`, with draft and publish version lifecycle endpoints.
 
 The builder loads the latest draft or published version from `/api/forms/:key`. Saving an unpersisted definition creates v1; saving edits creates or updates a draft version. Publishing requires an existing draft and passes client and server validation for duplicate keys, invalid rule/LOV references, required metadata, and the 256 KB schema limit. Runtime submission validation enforces required fields and repeater min/max constraints before invoking the submit callback.
 
@@ -26,7 +26,9 @@ The client evaluator supports equality, inequality, membership, existence, visib
 
 Server submission validation rejects unknown/hidden fields, missing required values, invalid or inactive LOV selections, and invalid repeater rows; it stores code-to-label snapshots and pins submissions to the published version. Workflow transitions use the version's `workflowJson`, enforce allowed roles/reasons/required fields/status categories, and create an actor/comment event. Submission data PATCHes are restricted by current stage field-access maps. Cutoff evaluation uses configured `Intl` timezone conversion; late requests are flagged and routed to the exception stage when that policy is selected. `GET /api/forms/:key/submissions/report` returns reportable data only, recursively excluding fields marked PII, with a bounded result limit.
 
-Still pending: field access filtering in read responses, requestor returned-edit/resubmit UI, finance/approval stamp fields, end-to-end Activity History linkage for builder/workflow edits, entity lookup fields, print output, and the remaining paper-form fields.
+The seeded request includes Fleet Asset versus 3rd Party Trucker selection: Fleet Asset conditionally exposes an active-vehicle lookup; third-party selection exposes a trucker name. Vehicle IDs are validated server-side and plate labels are snapshot for history. Driver entity lookup is not available because the backend has no driver entity/table yet.
+
+Still pending: field access filtering in read responses, requestor returned-edit/resubmit UI, finance/approval stamp fields, end-to-end Activity History linkage for builder/workflow edits, driver entity lookup, print output, and the remaining paper-form fields.
 
 ## Validation
 

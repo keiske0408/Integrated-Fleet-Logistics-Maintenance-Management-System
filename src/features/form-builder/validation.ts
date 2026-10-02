@@ -47,10 +47,13 @@ export function validateFormDefinition(
     else keys.add(scopedKey);
 
     if (!field.label.trim()) errors.push(`Field "${field.key}" is missing a label.`);
-    if (field.dataSource && !availableLovCodes.has(field.dataSource.listCode)) {
+    if (field.dataSource?.kind === 'lov' && !availableLovCodes.has(field.dataSource.listCode)) {
       errors.push(
         `Field "${field.label}" references unknown LOV list "${field.dataSource.listCode}".`,
       );
+    }
+    if (field.dataSource?.kind === 'entity' && field.dataSource.entity !== 'vehicles') {
+      errors.push(`Field "${field.label}" references an unsupported entity.`);
     }
     field.rules?.forEach((rule) => {
       if (!availableRuleKeys.has(rule.when.field)) {
@@ -173,6 +176,14 @@ export function validateFormValues(definition: FormDefinition, values: FormValue
       }
       if (required && (value === undefined || value === '' || value === false)) {
         errors.push(`${scope}${field.label} is required.`);
+      }
+      if (
+        field.type === 'entity_lookup' &&
+        value !== undefined &&
+        value !== '' &&
+        !(field.options ?? []).some((option) => option.value === value)
+      ) {
+        errors.push(`${scope}${field.label} must be selected from the available fleet records.`);
       }
     });
   };
