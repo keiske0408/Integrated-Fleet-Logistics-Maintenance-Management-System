@@ -22,7 +22,11 @@ Live TSRF pages use `PublishedTsrfForm`, which selects the newest published vers
 
 Rules must be declarative data evaluated by a shared client/server evaluator. Do not use `eval` or `new Function`. Workflow stages control field visibility and editability, and server-side validation must enforce those permissions for submissions.
 
-The client evaluator supports equality, inequality, membership, existence, visibility, requiredness, and enabled-state actions. The field Properties panel can create conditions against another top-level field and set visibility, requiredness, and editability. Server submission validation now rejects unknown/hidden fields, missing required values, invalid or inactive LOV selections, and invalid repeater rows; it stores code-to-label snapshots and pins submissions to the published version. Workflow transitions use the version's `workflowJson`, fixed system status categories, role allowlists, required fields, reason requirements, and an actor/comment event trail. Builder workflow editing, server-side field edits by stage, configured cutoff policy, and the rest of the paper-form field types remain outstanding.
+The client evaluator supports equality, inequality, membership, existence, visibility, requiredness, and enabled-state actions. The field Properties panel authors these conditional rules. The Workflow & Cut-off panel edits stages, fixed system status categories, role allowlists, transition-required fields/reasons, per-role field access, and the cutoff time/timezone/late policy.
+
+Server submission validation rejects unknown/hidden fields, missing required values, invalid or inactive LOV selections, and invalid repeater rows; it stores code-to-label snapshots and pins submissions to the published version. Workflow transitions use the version's `workflowJson`, enforce allowed roles/reasons/required fields/status categories, and create an actor/comment event. Submission data PATCHes are restricted by current stage field-access maps. Cutoff evaluation uses configured `Intl` timezone conversion; late requests are flagged and routed to the exception stage when that policy is selected.
+
+Still pending: field access filtering in read responses, requestor returned-edit/resubmit UI, finance/approval stamp fields, end-to-end Activity History linkage for builder/workflow edits, and the remaining paper-form field types/entity lookups/print output.
 
 ## Validation
 

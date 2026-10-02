@@ -5,12 +5,18 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { FormRenderer } from './FormRenderer';
-import { TSRF_V1 } from './seed';
+import { TSRF_V1, TSRF_WORKFLOW } from './seed';
 import { useLov } from '@/features/lov';
 import { useAuth } from '@/features/auth/AuthContext';
 import { toBackendRole } from '@/features/auth/backendRole';
-import { validateFormDefinition } from './validation';
-import type { FieldType, FormDefinition, FormField } from './types';
+import { validateFormDefinition, validateFormWorkflow } from './validation';
+import type {
+  FieldType,
+  FormDefinition,
+  FormField,
+  FormWorkflow,
+  SystemStatusCategory,
+} from './types';
 import type { FieldRule, RuleOperator } from './rules';
 
 const PALETTE: Array<{ type: FieldType; label: string }> = [
@@ -22,6 +28,37 @@ const PALETTE: Array<{ type: FieldType; label: string }> = [
   { type: 'lookup', label: 'LOV Lookup' },
   { type: 'notice', label: 'Notice' },
 ];
+const WORKFLOW_ROLES = [
+  'department_requester',
+  'approver',
+  'finance',
+  'fleet_team',
+  'procurement',
+  'admin',
+];
+const STATUS_CATEGORIES: SystemStatusCategory[] = [
+  'draft',
+  'in_review',
+  'returned',
+  'approved',
+  'in_progress',
+  'completed',
+  'rejected',
+  'cancelled',
+];
+
+function flattenPermissionFields(
+  fields: FormField[],
+  prefix = '',
+): Array<{ key: string; label: string }> {
+  return fields.flatMap((field) => {
+    const key = prefix ? `${prefix}.${field.key}` : field.key;
+    return [
+      { key, label: `${prefix ? `${prefix} / ` : ''}${field.label}` },
+      ...flattenPermissionFields(field.rowFields ?? [], key),
+    ];
+  });
+}
 
 function cloneDefinition(): FormDefinition {
   return structuredClone(TSRF_V1);
@@ -29,6 +66,7 @@ function cloneDefinition(): FormDefinition {
 
 export function FormBuilderPage() {
   const [definition, setDefinition] = useState<FormDefinition>(cloneDefinition);
+  const [workflow, setWorkflow] = useState<FormWorkflow>(() => structuredClone(TSRF_WORKFLOW));
   const [selectedId, setSelectedId] = useState(definition.sections[1]?.fields[0]?.id ?? '');
   const [preview, setPreview] = useState(false);
   const [draggedId, setDraggedId] = useState<string | null>(null);
@@ -36,11 +74,16 @@ export function FormBuilderPage() {
   const [draftVersionId, setDraftVersionId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [permissionRole, setPermissionRole] = useState('department_requester');
+  const [permissionStageId, setPermissionStageId] = useState('dispatch_assignment');
   const { lists } = useLov();
   const { currentUser } = useAuth();
   const apiRole = toBackendRole(currentUser?.role);
   const fields = definition.sections.flatMap((section) => section.fields);
   const selectedField = fields.find((field) => field.id === selectedId);
+  const permissionFields = flattenPermissionFields(fields);
+  const selectedPermissionStage =
+    workflow.stages.find((stage) => stage.id === permissionStageId) ?? workflow.stages[0];
 
   useEffect(() => {
     let cancelled = false;
@@ -60,6 +103,9 @@ export function FormBuilderPage() {
         const selected = activeDraft ?? versions.find((version) => version.status === 'published');
         if (selected?.schema) {
           setDefinition({ ...selected.schema, version: selected.version, status: selected.status });
+          setWorkflow(
+            selected.workflow?.stages ? selected.workflow : structuredClone(TSRF_WORKFLOW),
+          );
           setDraftVersionId(selected.status === 'draft' ? selected.id : null);
           setSelectedId(selected.schema.sections[1]?.fields[0]?.id ?? '');
         }
@@ -83,19 +129,19 @@ export function FormBuilderPage() {
         response = await fetch('/api/forms', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-user-role': apiRole },
-          body: JSON.stringify({ key: draft.key, name: draft.name, schema: draft }),
+          body: JSON.stringify({ key: draft.key, name: draft.name, schema: draft, workflow }),
         });
       } else if (draftVersionId) {
         response = await fetch(`/api/forms/versions/${encodeURIComponent(draftVersionId)}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', 'x-user-role': apiRole },
-          body: JSON.stringify({ schema: draft }),
+          body: JSON.stringify({ schema: draft, workflow }),
         });
       } else {
         response = await fetch(`/api/forms/${encodeURIComponent(definitionId)}/versions`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-user-role': apiRole },
-          body: JSON.stringify({ schema: draft }),
+          body: JSON.stringify({ schema: draft, workflow }),
         });
       }
       const result = await response.json();
@@ -113,7 +159,10 @@ export function FormBuilderPage() {
   };
 
   const publish = async () => {
-    const errors = validateFormDefinition(definition, new Set(lists.map((list) => list.code)));
+    const errors = [
+      ...validateFormDefinition(definition, new Set(lists.map((list) => list.code))),
+      ...validateFormWorkflow(workflow, fields),
+    ];
     if (errors.length) {
       setMessage(errors.join(' '));
       return;
@@ -152,6 +201,35 @@ export function FormBuilderPage() {
       })),
     }));
   const updateRules = (rules: FieldRule[]) => updateField({ rules });
+  const updateWorkflow = (updates: Partial<FormWorkflow>) =>
+    setWorkflow((current) => ({ ...current, ...updates }));
+  const updateStage = (index: number, updates: Partial<FormWorkflow['stages'][number]>) =>
+    updateWorkflow({
+      stages: workflow.stages.map((stage, stageIndex) =>
+        stageIndex === index ? { ...stage, ...updates } : stage,
+      ),
+    });
+  const updateTransition = (index: number, updates: Partial<FormWorkflow['transitions'][number]>) =>
+    updateWorkflow({
+      transitions: workflow.transitions.map((transition, transitionIndex) =>
+        transitionIndex === index ? { ...transition, ...updates } : transition,
+      ),
+    });
+  const updateFieldPermission = (fieldKey: string, permission: '' | 'edit' | 'read' | 'hidden') => {
+    if (!selectedPermissionStage) return;
+    const stageIndex = workflow.stages.findIndex(
+      (stage) => stage.id === selectedPermissionStage.id,
+    );
+    const currentFieldPermissions = selectedPermissionStage.fieldPermissions ?? {};
+    const currentRoles = currentFieldPermissions[fieldKey] ?? {};
+    const nextRoles = { ...currentRoles };
+    if (permission) nextRoles[permissionRole] = permission;
+    else delete nextRoles[permissionRole];
+    const nextFieldPermissions = { ...currentFieldPermissions };
+    if (Object.keys(nextRoles).length) nextFieldPermissions[fieldKey] = nextRoles;
+    else delete nextFieldPermissions[fieldKey];
+    updateStage(stageIndex, { fieldPermissions: nextFieldPermissions });
+  };
   const addField = (type: FieldType) => {
     const field: FormField = {
       id: `field-${Date.now()}`,
@@ -543,6 +621,427 @@ export function FormBuilderPage() {
           </CardContent>
         </Card>
       </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Workflow & Cut-off</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-6 xl:grid-cols-2">
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Stages</h3>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const id = `stage_${Date.now()}`;
+                  updateWorkflow({
+                    stages: [
+                      ...workflow.stages,
+                      { id, label: 'New Stage', statusCategory: 'in_review' },
+                    ],
+                  });
+                }}
+              >
+                Add Stage
+              </Button>
+            </div>
+            <div>
+              <label htmlFor="workflow-initial-stage" className="mb-1 block text-xs font-semibold">
+                Initial stage
+              </label>
+              <Select
+                id="workflow-initial-stage"
+                value={workflow.initialStage}
+                onChange={(event) => updateWorkflow({ initialStage: event.target.value })}
+              >
+                {workflow.stages.map((stage) => (
+                  <option key={stage.id} value={stage.id}>
+                    {stage.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            {workflow.stages.map((stage, index) => (
+              <div
+                key={stage.id}
+                className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_150px_auto] gap-2 items-end"
+              >
+                <div>
+                  <label
+                    htmlFor={`stage-label-${stage.id}`}
+                    className="mb-1 block text-xs font-semibold"
+                  >
+                    Stage label
+                  </label>
+                  <Input
+                    id={`stage-label-${stage.id}`}
+                    value={stage.label}
+                    onChange={(event) => updateStage(index, { label: event.target.value })}
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor={`stage-id-${stage.id}`}
+                    className="mb-1 block text-xs font-semibold"
+                  >
+                    Stage key
+                  </label>
+                  <Input
+                    id={`stage-id-${stage.id}`}
+                    value={stage.id}
+                    onChange={(event) => {
+                      const oldId = stage.id;
+                      const nextId = event.target.value;
+                      updateStage(index, { id: nextId });
+                      updateWorkflow({
+                        initialStage:
+                          workflow.initialStage === oldId ? nextId : workflow.initialStage,
+                        transitions: workflow.transitions.map((item) => ({
+                          ...item,
+                          from: item.from === oldId ? nextId : item.from,
+                          to: item.to === oldId ? nextId : item.to,
+                        })),
+                      });
+                    }}
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor={`stage-category-${stage.id}`}
+                    className="mb-1 block text-xs font-semibold"
+                  >
+                    Report status
+                  </label>
+                  <Select
+                    id={`stage-category-${stage.id}`}
+                    value={stage.statusCategory}
+                    onChange={(event) =>
+                      updateStage(index, {
+                        statusCategory: event.target.value as SystemStatusCategory,
+                      })
+                    }
+                  >
+                    {STATUS_CATEGORIES.map((status) => (
+                      <option key={status} value={status}>
+                        {status.replaceAll('_', ' ')}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  title="Remove stage"
+                  disabled={workflow.stages.length <= 1}
+                  onClick={() => {
+                    const remaining = workflow.stages.filter(
+                      (_, stageIndex) => stageIndex !== index,
+                    );
+                    updateWorkflow({
+                      stages: remaining,
+                      initialStage:
+                        workflow.initialStage === stage.id
+                          ? remaining[0].id
+                          : workflow.initialStage,
+                      transitions: workflow.transitions.filter(
+                        (item) => item.from !== stage.id && item.to !== stage.id,
+                      ),
+                    });
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </section>
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Transitions</h3>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={workflow.stages.length < 2}
+                onClick={() =>
+                  updateWorkflow({
+                    transitions: [
+                      ...workflow.transitions,
+                      { from: workflow.stages[0].id, to: workflow.stages[1].id, roles: [] },
+                    ],
+                  })
+                }
+              >
+                Add Transition
+              </Button>
+            </div>
+            {workflow.transitions.map((transition, index) => (
+              <div
+                key={`${transition.from}-${transition.to}-${index}`}
+                className="space-y-2 rounded-md border border-border p-3"
+              >
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label
+                      htmlFor={`transition-from-${index}`}
+                      className="mb-1 block text-xs font-semibold"
+                    >
+                      From
+                    </label>
+                    <Select
+                      id={`transition-from-${index}`}
+                      value={transition.from}
+                      onChange={(event) => updateTransition(index, { from: event.target.value })}
+                    >
+                      {workflow.stages.map((stage) => (
+                        <option key={stage.id} value={stage.id}>
+                          {stage.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                  <div>
+                    <label
+                      htmlFor={`transition-to-${index}`}
+                      className="mb-1 block text-xs font-semibold"
+                    >
+                      To
+                    </label>
+                    <Select
+                      id={`transition-to-${index}`}
+                      value={transition.to}
+                      onChange={(event) => updateTransition(index, { to: event.target.value })}
+                    >
+                      {workflow.stages.map((stage) => (
+                        <option key={stage.id} value={stage.id}>
+                          {stage.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                </div>
+                <div>
+                  <span className="mb-1 block text-xs font-semibold">Allowed roles</span>
+                  <div className="flex flex-wrap gap-x-4 gap-y-2">
+                    {WORKFLOW_ROLES.map((role) => (
+                      <label key={role} className="flex items-center gap-2 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={transition.roles.includes(role)}
+                          onChange={(event) =>
+                            updateTransition(index, {
+                              roles: event.target.checked
+                                ? [...transition.roles, role]
+                                : transition.roles.filter((value) => value !== role),
+                            })
+                          }
+                        />
+                        {role.replaceAll('_', ' ')}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label
+                    htmlFor={`transition-required-${index}`}
+                    className="mb-1 block text-xs font-semibold"
+                  >
+                    Required fields
+                  </label>
+                  <Select
+                    id={`transition-required-${index}`}
+                    multiple
+                    value={transition.requiredFields ?? []}
+                    onChange={(event) =>
+                      updateTransition(index, {
+                        requiredFields: Array.from(
+                          event.currentTarget.selectedOptions,
+                          (option) => option.value,
+                        ),
+                      })
+                    }
+                  >
+                    {fields
+                      .filter((field) => field.type !== 'notice')
+                      .map((field) => (
+                        <option key={field.key} value={field.key}>
+                          {field.label}
+                        </option>
+                      ))}
+                  </Select>
+                </div>
+                <label className="flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={transition.reasonRequired ?? false}
+                    onChange={(event) =>
+                      updateTransition(index, { reasonRequired: event.target.checked })
+                    }
+                  />
+                  Require a reason
+                </label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive"
+                  onClick={() =>
+                    updateWorkflow({
+                      transitions: workflow.transitions.filter(
+                        (_, transitionIndex) => transitionIndex !== index,
+                      ),
+                    })
+                  }
+                >
+                  Remove Transition
+                </Button>
+              </div>
+            ))}
+          </section>
+          <section className="space-y-3 xl:col-span-2 border-t border-border pt-4">
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="min-w-48">
+                <label htmlFor="permission-stage" className="mb-1 block text-xs font-semibold">
+                  Stage field access
+                </label>
+                <Select
+                  id="permission-stage"
+                  value={selectedPermissionStage?.id ?? ''}
+                  onChange={(event) => setPermissionStageId(event.target.value)}
+                >
+                  {workflow.stages.map((stage) => (
+                    <option key={stage.id} value={stage.id}>
+                      {stage.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="min-w-48">
+                <label htmlFor="permission-role" className="mb-1 block text-xs font-semibold">
+                  Role
+                </label>
+                <Select
+                  id="permission-role"
+                  value={permissionRole}
+                  onChange={(event) => setPermissionRole(event.target.value)}
+                >
+                  {WORKFLOW_ROLES.map((role) => (
+                    <option key={role} value={role}>
+                      {role.replaceAll('_', ' ')}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            </div>
+            <div className="grid gap-x-4 sm:grid-cols-2">
+              {permissionFields.map((field) => (
+                <div
+                  key={field.key}
+                  className="flex items-center justify-between gap-3 border-b border-border/60 py-2"
+                >
+                  <span className="min-w-0 truncate text-sm">{field.label}</span>
+                  <Select
+                    aria-label={`${field.label} access for ${permissionRole}`}
+                    className="w-36"
+                    value={
+                      selectedPermissionStage?.fieldPermissions?.[field.key]?.[permissionRole] ?? ''
+                    }
+                    onChange={(event) =>
+                      updateFieldPermission(
+                        field.key,
+                        event.target.value as '' | 'edit' | 'read' | 'hidden',
+                      )
+                    }
+                  >
+                    <option value="">No override</option>
+                    <option value="edit">Editable</option>
+                    <option value="read">Read only</option>
+                    <option value="hidden">Hidden</option>
+                  </Select>
+                </div>
+              ))}
+            </div>
+          </section>
+          <section className="space-y-3 xl:col-span-2 border-t border-border pt-4">
+            <h3 className="text-sm font-semibold">Daily Cut-off</h3>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div>
+                <label htmlFor="cutoff-time" className="mb-1 block text-xs font-semibold">
+                  Cut-off time
+                </label>
+                <Input
+                  id="cutoff-time"
+                  type="time"
+                  value={workflow.cutoff.time}
+                  onChange={(event) =>
+                    updateWorkflow({ cutoff: { ...workflow.cutoff, time: event.target.value } })
+                  }
+                />
+              </div>
+              <div>
+                <label htmlFor="cutoff-timezone" className="mb-1 block text-xs font-semibold">
+                  Timezone
+                </label>
+                <Input
+                  id="cutoff-timezone"
+                  value={workflow.cutoff.timezone}
+                  onChange={(event) =>
+                    updateWorkflow({ cutoff: { ...workflow.cutoff, timezone: event.target.value } })
+                  }
+                />
+              </div>
+              <div>
+                <label htmlFor="cutoff-policy" className="mb-1 block text-xs font-semibold">
+                  Late policy
+                </label>
+                <Select
+                  id="cutoff-policy"
+                  value={workflow.cutoff.latePolicy}
+                  onChange={(event) =>
+                    updateWorkflow({
+                      cutoff: {
+                        ...workflow.cutoff,
+                        latePolicy: event.target.value as FormWorkflow['cutoff']['latePolicy'],
+                      },
+                    })
+                  }
+                >
+                  <option value="flag">Flag late</option>
+                  <option value="flag_and_exception_approval">
+                    Flag and require exception approval
+                  </option>
+                </Select>
+              </div>
+              {workflow.cutoff.latePolicy === 'flag_and_exception_approval' && (
+                <div>
+                  <label
+                    htmlFor="cutoff-exception-stage"
+                    className="mb-1 block text-xs font-semibold"
+                  >
+                    Exception review stage
+                  </label>
+                  <Select
+                    id="cutoff-exception-stage"
+                    value={workflow.cutoff.exceptionStage ?? ''}
+                    onChange={(event) =>
+                      updateWorkflow({
+                        cutoff: { ...workflow.cutoff, exceptionStage: event.target.value },
+                      })
+                    }
+                  >
+                    {workflow.stages.map((stage) => (
+                      <option key={stage.id} value={stage.id}>
+                        {stage.label}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              )}
+            </div>
+          </section>
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -1,8 +1,12 @@
 import React from 'react';
 import { describe, expect, it } from 'vitest';
-import { serializeTsrfValues, TSRF_V1 } from '@/features/form-builder';
+import { serializeTsrfValues, TSRF_V1, TSRF_WORKFLOW } from '@/features/form-builder';
 import { evaluateCondition, getFieldState } from '@/features/form-builder';
-import { validateFormDefinition, validateFormValues } from '@/features/form-builder';
+import {
+  validateFormDefinition,
+  validateFormValues,
+  validateFormWorkflow,
+} from '@/features/form-builder';
 import { choosePublishedDefinition } from '@/features/form-builder';
 import { fieldRegistry } from '@/features/form-builder';
 
@@ -39,6 +43,23 @@ describe('TSRF form definition', () => {
         values,
       ),
     ).toEqual({ visible: true, required: true, enabled: true });
+  });
+
+  it('validates workflow stages, transition roles, and cutoff configuration', () => {
+    const fields = TSRF_V1.sections.flatMap((section) => section.fields);
+    expect(validateFormWorkflow(TSRF_WORKFLOW, fields)).toEqual([]);
+
+    const invalid = structuredClone(TSRF_WORKFLOW);
+    invalid.cutoff.time = '25:90';
+    invalid.transitions[0].roles = [];
+    invalid.stages[0].fieldPermissions = { missing_field: { department_requester: 'edit' } };
+    expect(validateFormWorkflow(invalid, fields)).toEqual(
+      expect.arrayContaining([
+        'Workflow transition 1 must allow at least one role.',
+        'Cutoff time must use 24-hour HH:MM format.',
+        'Stage "Draft" permissions reference unknown field "missing_field".',
+      ]),
+    );
   });
 
   it('passes disabled rule state to registered field controls', () => {

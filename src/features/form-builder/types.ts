@@ -44,5 +44,45 @@ export interface FormDefinition {
   sections: FormSection[];
 }
 
+export type SystemStatusCategory =
+  | 'draft'
+  | 'in_review'
+  | 'returned'
+  | 'approved'
+  | 'in_progress'
+  | 'completed'
+  | 'rejected'
+  | 'cancelled';
+
+export type StageFieldPermission = 'edit' | 'read' | 'hidden';
+
+export interface WorkflowStage {
+  id: string;
+  label: string;
+  statusCategory: SystemStatusCategory;
+  fieldPermissions?: Record<string, Record<string, StageFieldPermission>>;
+}
+
+export interface WorkflowTransition {
+  from: string;
+  to: string;
+  roles: string[];
+  requiredFields?: string[];
+  reasonRequired?: boolean;
+  action?: string;
+}
+
+export interface FormWorkflow {
+  initialStage: string;
+  stages: WorkflowStage[];
+  transitions: WorkflowTransition[];
+  cutoff: {
+    time: string;
+    timezone: string;
+    latePolicy: 'flag' | 'flag_and_exception_approval';
+    exceptionStage?: string;
+  };
+}
+
 export type FormValue = string | number | boolean | FormValues[] | undefined;
 export type FormValues = Record<string, FormValue>;

@@ -1,5 +1,49 @@
 import type { TSRFFormData } from '@/features/logistics/TSRFForm';
-import type { FormDefinition, FormValues } from './types';
+import type { FormDefinition, FormValues, FormWorkflow } from './types';
+
+export const TSRF_WORKFLOW: FormWorkflow = {
+  initialStage: 'submitted',
+  stages: [
+    { id: 'draft', label: 'Draft', statusCategory: 'draft' },
+    { id: 'submitted', label: 'Submitted', statusCategory: 'in_review' },
+    { id: 'endorsement', label: 'Endorsement', statusCategory: 'in_review' },
+    { id: 'finance_verification', label: 'Finance Verification', statusCategory: 'in_review' },
+    { id: 'approval', label: 'Approval', statusCategory: 'approved' },
+    { id: 'dispatch_assignment', label: 'Dispatch Assignment', statusCategory: 'approved' },
+    { id: 'confirmed', label: 'Confirmed', statusCategory: 'approved' },
+    { id: 'in_progress', label: 'In Progress', statusCategory: 'in_progress' },
+    { id: 'completed', label: 'Completed', statusCategory: 'completed' },
+    { id: 'returned', label: 'Returned', statusCategory: 'returned' },
+    { id: 'rejected', label: 'Rejected', statusCategory: 'rejected' },
+    { id: 'cancelled', label: 'Cancelled', statusCategory: 'cancelled' },
+  ],
+  transitions: [
+    { from: 'draft', to: 'submitted', roles: ['department_requester', 'admin'] },
+    { from: 'submitted', to: 'endorsement', roles: ['approver', 'admin'] },
+    { from: 'submitted', to: 'returned', roles: ['approver', 'admin'], reasonRequired: true },
+    { from: 'submitted', to: 'rejected', roles: ['approver', 'admin'], reasonRequired: true },
+    { from: 'endorsement', to: 'finance_verification', roles: ['finance', 'admin'] },
+    { from: 'endorsement', to: 'approval', roles: ['approver', 'admin'] },
+    { from: 'endorsement', to: 'returned', roles: ['approver', 'admin'], reasonRequired: true },
+    { from: 'finance_verification', to: 'approval', roles: ['finance', 'approver', 'admin'] },
+    { from: 'approval', to: 'dispatch_assignment', roles: ['approver', 'admin'] },
+    { from: 'dispatch_assignment', to: 'confirmed', roles: ['fleet_team', 'admin'] },
+    { from: 'confirmed', to: 'in_progress', roles: ['fleet_team', 'admin'] },
+    { from: 'in_progress', to: 'completed', roles: ['fleet_team', 'admin'] },
+    {
+      from: 'draft',
+      to: 'cancelled',
+      roles: ['department_requester', 'admin'],
+      reasonRequired: true,
+    },
+  ],
+  cutoff: {
+    time: '16:00',
+    timezone: 'Asia/Manila',
+    latePolicy: 'flag_and_exception_approval',
+    exceptionStage: 'endorsement',
+  },
+};
 
 export const TSRF_V1: FormDefinition = {
   key: 'tsrf',
