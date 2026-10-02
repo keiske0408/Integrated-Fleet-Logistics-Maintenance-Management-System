@@ -87,6 +87,7 @@ export const TSRF_V1: FormDefinition = {
           section: 'trip-details',
           required: true,
           dataSource: { kind: 'lov', listCode: 'DEPARTMENTS' },
+          meta: { reportable: true, pii: false },
           options: [
             { value: 'IT', label: 'Information Technology' },
             { value: 'LOG', label: 'Logistics & Dispatch' },
@@ -99,6 +100,7 @@ export const TSRF_V1: FormDefinition = {
           label: 'Departure Date',
           section: 'trip-details',
           required: true,
+          meta: { reportable: true, pii: false },
         },
         {
           id: 'call-time',
@@ -116,6 +118,7 @@ export const TSRF_V1: FormDefinition = {
           section: 'trip-details',
           required: true,
           dataSource: { kind: 'lov', listCode: 'VEHICLE_TYPES' },
+          meta: { reportable: true, pii: false },
           width: 'full',
           options: [
             { value: 'VAN', label: 'Commuter Van' },
@@ -224,6 +227,7 @@ export const TSRF_V1: FormDefinition = {
               label: 'Name',
               section: 'passenger',
               required: true,
+              meta: { reportable: false, pii: true },
             },
             {
               id: 'passenger-department',

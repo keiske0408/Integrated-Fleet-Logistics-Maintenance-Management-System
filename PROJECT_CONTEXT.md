@@ -29,4 +29,4 @@
 
 - Form-builder and LOV architecture notes: `src/features/form-builder/AI_CONTEXT.md`.
 - Form-builder rules support client-side visibility, requiredness, and editability with publish validation; server validates version-pinned submissions and configured workflow transitions.
-- Workflow configuration is stored per form version; the builder edits stages/transitions/field access/cutoff, and the API enforces role transitions and stage-based data edits. Response masking, returned-edit/resubmit UI, and complete Activity History integration remain pending.
+- Workflow configuration is stored per form version; the builder edits stages/transitions/field access/cutoff, and the API enforces role transitions and stage-based data edits. Reports expose only configured reportable fields and exclude PII. Response masking, returned-edit/resubmit UI, approval stamps, and complete Activity History integration remain pending.

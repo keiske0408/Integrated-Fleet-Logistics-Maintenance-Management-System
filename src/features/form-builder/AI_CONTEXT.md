@@ -24,9 +24,9 @@ Rules must be declarative data evaluated by a shared client/server evaluator. Do
 
 The client evaluator supports equality, inequality, membership, existence, visibility, requiredness, and enabled-state actions. The field Properties panel authors these conditional rules. The Workflow & Cut-off panel edits stages, fixed system status categories, role allowlists, transition-required fields/reasons, per-role field access, and the cutoff time/timezone/late policy.
 
-Server submission validation rejects unknown/hidden fields, missing required values, invalid or inactive LOV selections, and invalid repeater rows; it stores code-to-label snapshots and pins submissions to the published version. Workflow transitions use the version's `workflowJson`, enforce allowed roles/reasons/required fields/status categories, and create an actor/comment event. Submission data PATCHes are restricted by current stage field-access maps. Cutoff evaluation uses configured `Intl` timezone conversion; late requests are flagged and routed to the exception stage when that policy is selected.
+Server submission validation rejects unknown/hidden fields, missing required values, invalid or inactive LOV selections, and invalid repeater rows; it stores code-to-label snapshots and pins submissions to the published version. Workflow transitions use the version's `workflowJson`, enforce allowed roles/reasons/required fields/status categories, and create an actor/comment event. Submission data PATCHes are restricted by current stage field-access maps. Cutoff evaluation uses configured `Intl` timezone conversion; late requests are flagged and routed to the exception stage when that policy is selected. `GET /api/forms/:key/submissions/report` returns reportable data only, recursively excluding fields marked PII, with a bounded result limit.
 
-Still pending: field access filtering in read responses, requestor returned-edit/resubmit UI, finance/approval stamp fields, end-to-end Activity History linkage for builder/workflow edits, and the remaining paper-form field types/entity lookups/print output.
+Still pending: field access filtering in read responses, requestor returned-edit/resubmit UI, finance/approval stamp fields, end-to-end Activity History linkage for builder/workflow edits, entity lookup fields, print output, and the remaining paper-form fields.
 
 ## Validation
 

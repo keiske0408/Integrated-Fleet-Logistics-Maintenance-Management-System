@@ -425,6 +425,30 @@ export function FormBuilderPage() {
                   />
                   Required
                 </label>
+                <div className="space-y-2 border-t border-border pt-3">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={selectedField.meta?.reportable ?? false}
+                      onChange={(event) =>
+                        updateField({
+                          meta: { ...selectedField.meta, reportable: event.target.checked },
+                        })
+                      }
+                    />
+                    Expose in reports
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={selectedField.meta?.pii ?? false}
+                      onChange={(event) =>
+                        updateField({ meta: { ...selectedField.meta, pii: event.target.checked } })
+                      }
+                    />
+                    Contains personal data
+                  </label>
+                </div>
                 <div className="space-y-3 border-t border-border pt-4">
                   <div className="flex items-center justify-between">
                     <h4 className="text-sm font-semibold">Conditional Rules</h4>

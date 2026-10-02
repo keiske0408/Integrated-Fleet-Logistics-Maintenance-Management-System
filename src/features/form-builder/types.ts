@@ -27,6 +27,7 @@ export interface FormField {
   rowFields?: FormField[];
   minRows?: number;
   maxRows?: number;
+  meta?: { reportable?: boolean; pii?: boolean };
 }
 
 export interface FormSection {
