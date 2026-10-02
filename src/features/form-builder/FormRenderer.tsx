@@ -113,6 +113,7 @@ function Field({
       {renderer({
         field: { ...field, required: field.required || state.required },
         value,
+        disabled: !state.enabled,
         onChange,
       })}
     </div>

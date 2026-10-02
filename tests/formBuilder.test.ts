@@ -1,8 +1,10 @@
+import React from 'react';
 import { describe, expect, it } from 'vitest';
 import { serializeTsrfValues, TSRF_V1 } from '@/features/form-builder';
 import { evaluateCondition, getFieldState } from '@/features/form-builder';
 import { validateFormDefinition, validateFormValues } from '@/features/form-builder';
 import { choosePublishedDefinition } from '@/features/form-builder';
+import { fieldRegistry } from '@/features/form-builder';
 
 describe('TSRF form definition', () => {
   it('contains published intake fields bound to the expected LOVs', () => {
@@ -39,6 +41,18 @@ describe('TSRF form definition', () => {
     ).toEqual({ visible: true, required: true, enabled: true });
   });
 
+  it('passes disabled rule state to registered field controls', () => {
+    const field = TSRF_V1.sections[1].fields[0];
+    const element = fieldRegistry.text({
+      field,
+      value: 'Project',
+      disabled: true,
+      onChange: () => undefined,
+    });
+    expect(React.isValidElement(element)).toBe(true);
+    expect((element as React.ReactElement<{ disabled?: boolean }>).props.disabled).toBe(true);
+  });
+
   it('serializes schema values into the existing TSRF submission shape', () => {
     const data = serializeTsrfValues({
       projectName: 'Project',
@@ -71,6 +85,14 @@ describe('TSRF form definition', () => {
     const codes = new Set(['DEPARTMENTS', 'VEHICLE_TYPES']);
     expect(validateFormDefinition(TSRF_V1, codes)).toEqual([]);
 
+    const nestedRule = structuredClone(TSRF_V1);
+    const stopFields = nestedRule.sections
+      .find((section) => section.id === 'route')
+      ?.fields.find((field) => field.key === 'stops')?.rowFields;
+    expect(stopFields).toBeDefined();
+    stopFields![0].rules = [{ when: { field: 'address', operator: 'exists' }, required: true }];
+    expect(validateFormDefinition(nestedRule, codes)).toEqual([]);
+
     const invalid = structuredClone(TSRF_V1);
     invalid.sections[1].fields[0].key = 'department';
     invalid.sections[1].fields[1].dataSource = { kind: 'lov', listCode: 'MISSING' };
@@ -78,6 +100,24 @@ describe('TSRF form definition', () => {
       expect.arrayContaining([
         'Field key "department" is duplicated.',
         'Field "Requesting Department" references unknown LOV list "MISSING".',
+      ]),
+    );
+  });
+
+  it('rejects rules with missing field references and required fields hidden without defaults', () => {
+    const invalid = structuredClone(TSRF_V1);
+    const projectName = invalid.sections[1].fields[0];
+    projectName.required = true;
+    projectName.defaultValue = undefined;
+    projectName.rules = [
+      { when: { field: 'missing_field', operator: 'exists' }, required: true },
+      { when: { field: 'department', operator: 'exists' }, show: false },
+    ];
+
+    expect(validateFormDefinition(invalid, new Set(['DEPARTMENTS', 'VEHICLE_TYPES']))).toEqual(
+      expect.arrayContaining([
+        'Field "Project Name" rule references unknown field "missing_field".',
+        'Required field "Project Name" is hidden by a rule and has no default.',
       ]),
     );
   });

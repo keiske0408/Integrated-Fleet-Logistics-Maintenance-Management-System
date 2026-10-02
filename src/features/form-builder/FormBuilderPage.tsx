@@ -9,6 +9,7 @@ import { TSRF_V1 } from './seed';
 import { useLov } from '@/features/lov';
 import { validateFormDefinition } from './validation';
 import type { FieldType, FormDefinition, FormField } from './types';
+import type { FieldRule, RuleOperator } from './rules';
 
 const PALETTE: Array<{ type: FieldType; label: string }> = [
   { type: 'text', label: 'Text' },
@@ -144,6 +145,7 @@ export function FormBuilderPage() {
         ),
       })),
     }));
+  const updateRules = (rules: FieldRule[]) => updateField({ rules });
   const addField = (type: FieldType) => {
     const field: FormField = {
       id: `field-${Date.now()}`,
@@ -339,6 +341,177 @@ export function FormBuilderPage() {
                   />
                   Required
                 </label>
+                <div className="space-y-3 border-t border-border pt-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-semibold">Conditional Rules</h4>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const source = fields.find(
+                          (field) =>
+                            field.id !== selectedId && !['notice', 'repeater'].includes(field.type),
+                        );
+                        if (!source) return;
+                        updateRules([
+                          ...(selectedField.rules ?? []),
+                          {
+                            when: { field: source.key, operator: 'exists' },
+                            show: true,
+                            required: false,
+                            enabled: true,
+                          },
+                        ]);
+                      }}
+                    >
+                      Add Rule
+                    </Button>
+                  </div>
+                  {(selectedField.rules ?? []).map((rule, index) => {
+                    const ruleId = `${selectedField.id}-rule-${index}`;
+                    const setRule = (updates: Partial<FieldRule>) =>
+                      updateRules(
+                        (selectedField.rules ?? []).map((item, itemIndex) =>
+                          itemIndex === index ? { ...item, ...updates } : item,
+                        ),
+                      );
+                    return (
+                      <div key={ruleId} className="space-y-3 rounded-md border border-border p-3">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label
+                              htmlFor={`${ruleId}-field`}
+                              className="mb-1 block text-xs font-semibold"
+                            >
+                              When field
+                            </label>
+                            <Select
+                              id={`${ruleId}-field`}
+                              value={rule.when.field}
+                              onChange={(event) =>
+                                setRule({ when: { ...rule.when, field: event.target.value } })
+                              }
+                            >
+                              {fields
+                                .filter(
+                                  (field) =>
+                                    field.id !== selectedId &&
+                                    !['notice', 'repeater'].includes(field.type),
+                                )
+                                .map((field) => (
+                                  <option key={field.id} value={field.key}>
+                                    {field.label}
+                                  </option>
+                                ))}
+                            </Select>
+                          </div>
+                          <div>
+                            <label
+                              htmlFor={`${ruleId}-operator`}
+                              className="mb-1 block text-xs font-semibold"
+                            >
+                              Operator
+                            </label>
+                            <Select
+                              id={`${ruleId}-operator`}
+                              value={rule.when.operator}
+                              onChange={(event) =>
+                                setRule({
+                                  when: {
+                                    ...rule.when,
+                                    operator: event.target.value as RuleOperator,
+                                  },
+                                })
+                              }
+                            >
+                              <option value="exists">Has a value</option>
+                              <option value="eq">Equals</option>
+                              <option value="neq">Does not equal</option>
+                              <option value="in">Is one of</option>
+                              <option value="not_in">Is not one of</option>
+                            </Select>
+                          </div>
+                        </div>
+                        {rule.when.operator !== 'exists' && (
+                          <div>
+                            <label
+                              htmlFor={`${ruleId}-value`}
+                              className="mb-1 block text-xs font-semibold"
+                            >
+                              Match value
+                            </label>
+                            <Input
+                              id={`${ruleId}-value`}
+                              value={
+                                Array.isArray(rule.when.value)
+                                  ? rule.when.value.join(', ')
+                                  : String(rule.when.value ?? '')
+                              }
+                              onChange={(event) =>
+                                setRule({
+                                  when: {
+                                    ...rule.when,
+                                    value: ['in', 'not_in'].includes(rule.when.operator)
+                                      ? event.target.value
+                                          .split(',')
+                                          .map((value) => value.trim())
+                                          .filter(Boolean)
+                                      : event.target.value,
+                                  },
+                                })
+                              }
+                              placeholder={
+                                ['in', 'not_in'].includes(rule.when.operator)
+                                  ? 'Separate values with commas'
+                                  : 'Enter a value'
+                              }
+                            />
+                          </div>
+                        )}
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={rule.show !== false}
+                            onChange={(event) => setRule({ show: event.target.checked })}
+                          />
+                          Show when matched
+                        </label>
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={rule.required ?? false}
+                            onChange={(event) => setRule({ required: event.target.checked })}
+                          />
+                          Require when matched
+                        </label>
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={rule.enabled !== false}
+                            onChange={(event) => setRule({ enabled: event.target.checked })}
+                          />
+                          Editable when matched
+                        </label>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive"
+                          onClick={() =>
+                            updateRules(
+                              (selectedField.rules ?? []).filter(
+                                (_, itemIndex) => itemIndex !== index,
+                              ),
+                            )
+                          }
+                        >
+                          Remove Rule
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
                 <Button
                   variant="destructive"
                   className="w-full"

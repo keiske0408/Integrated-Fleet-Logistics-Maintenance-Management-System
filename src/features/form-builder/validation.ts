@@ -8,7 +8,15 @@ export function validateFormDefinition(
   availableLovCodes: Set<string>,
 ): string[] {
   const errors: string[] = [];
-  const visit = (field: FormField, scope: string, keys: Set<string>) => {
+  const rootKeys = new Set(
+    definition.sections.flatMap((section) => section.fields.map((field) => field.key)),
+  );
+  const visit = (
+    field: FormField,
+    scope: string,
+    keys: Set<string>,
+    availableRuleKeys: Set<string>,
+  ) => {
     const scopedKey = `${scope}${field.key}`;
     if (!field.key.trim()) errors.push(`Field "${field.label}" is missing a key.`);
     else if (keys.has(scopedKey)) errors.push(`Field key "${scopedKey}" is duplicated.`);
@@ -20,8 +28,22 @@ export function validateFormDefinition(
         `Field "${field.label}" references unknown LOV list "${field.dataSource.listCode}".`,
       );
     }
+    field.rules?.forEach((rule) => {
+      if (!availableRuleKeys.has(rule.when.field)) {
+        errors.push(`Field "${field.label}" rule references unknown field "${rule.when.field}".`);
+      }
+      if (
+        rule.show === false &&
+        (field.required || rule.required) &&
+        field.defaultValue === undefined
+      ) {
+        errors.push(`Required field "${field.label}" is hidden by a rule and has no default.`);
+      }
+    });
+    const rowFields = field.rowFields ?? [];
     const childKeys = new Set<string>();
-    field.rowFields?.forEach((rowField) => visit(rowField, `${scopedKey}.`, childKeys));
+    const rowRuleKeys = new Set([...rootKeys, ...rowFields.map((rowField) => rowField.key)]);
+    rowFields.forEach((rowField) => visit(rowField, `${scopedKey}.`, childKeys, rowRuleKeys));
   };
 
   if (!definition.key.trim()) errors.push('Form key is required.');
@@ -29,7 +51,7 @@ export function validateFormDefinition(
   if (definition.sections.length === 0) errors.push('Add at least one section before publishing.');
   const keys = new Set<string>();
   definition.sections.forEach((section) =>
-    section.fields.forEach((field) => visit(field, '', keys)),
+    section.fields.forEach((field) => visit(field, '', keys, rootKeys)),
   );
   if (new TextEncoder().encode(JSON.stringify(definition)).byteLength > MAX_SCHEMA_BYTES) {
     errors.push('Form definition exceeds the 256 KB size limit.');

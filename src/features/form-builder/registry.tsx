@@ -7,17 +7,19 @@ export interface FieldRendererProps {
   field: FormField;
   value: FormValues[string];
   onChange: (value: FormValues[string]) => void;
+  disabled?: boolean;
 }
 
 type FieldRenderer = (props: FieldRendererProps) => React.ReactNode;
 
-const renderInput = ({ field, value, onChange }: FieldRendererProps, type: string) => (
+const renderInput = ({ field, value, onChange, disabled }: FieldRendererProps, type: string) => (
   <Input
     id={field.key}
     type={type}
     value={typeof value === 'string' || typeof value === 'number' ? value : ''}
     placeholder={field.placeholder}
     required={field.required}
+    disabled={disabled}
     onChange={(event) =>
       onChange(type === 'number' ? Number(event.target.value) : event.target.value)
     }
@@ -29,21 +31,23 @@ export const fieldRegistry: Record<FieldType, FieldRenderer> = {
   number: (props) => renderInput(props, 'number'),
   date: (props) => renderInput(props, 'date'),
   time: (props) => renderInput(props, 'time'),
-  textarea: ({ field, value, onChange }) => (
+  textarea: ({ field, value, onChange, disabled }) => (
     <textarea
       id={field.key}
       value={typeof value === 'string' || typeof value === 'number' ? value : ''}
       placeholder={field.placeholder}
       required={field.required}
+      disabled={disabled}
       onChange={(event) => onChange(event.target.value)}
       className="min-h-24 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
     />
   ),
-  select: ({ field, value, onChange }) => (
+  select: ({ field, value, onChange, disabled }) => (
     <Select
       id={field.key}
       value={typeof value === 'string' || typeof value === 'number' ? value : ''}
       required={field.required}
+      disabled={disabled}
       onChange={(event) => onChange(event.target.value)}
     >
       <option value="">Select {field.label.toLowerCase()}</option>
@@ -54,11 +58,12 @@ export const fieldRegistry: Record<FieldType, FieldRenderer> = {
       ))}
     </Select>
   ),
-  lookup: ({ field, value, onChange }) => (
+  lookup: ({ field, value, onChange, disabled }) => (
     <Select
       id={field.key}
       value={typeof value === 'string' || typeof value === 'number' ? value : ''}
       required={field.required}
+      disabled={disabled}
       onChange={(event) => onChange(event.target.value)}
     >
       <option value="">Select {field.label.toLowerCase()}</option>
@@ -69,12 +74,13 @@ export const fieldRegistry: Record<FieldType, FieldRenderer> = {
       ))}
     </Select>
   ),
-  checkbox: ({ field, value, onChange }) => (
+  checkbox: ({ field, value, onChange, disabled }) => (
     <label className="flex items-center gap-2 text-sm">
       <input
         id={field.key}
         type="checkbox"
         checked={value === true}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.checked)}
       />
       {field.label}

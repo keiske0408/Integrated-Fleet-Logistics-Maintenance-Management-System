@@ -22,7 +22,7 @@ Live TSRF pages use `PublishedTsrfForm`, which selects the newest published vers
 
 Rules must be declarative data evaluated by a shared client/server evaluator. Do not use `eval` or `new Function`. Workflow stages control field visibility and editability, and server-side validation must enforce those permissions for submissions.
 
-The client evaluator currently supports equality, inequality, membership, existence, visibility, requiredness, and enabled-state actions. Server-side parity and workflow-stage permissions remain the next hardening step.
+The client evaluator supports equality, inequality, membership, existence, visibility, requiredness, and enabled-state actions. The field Properties panel can create conditions against another top-level field and set visibility, requiredness, and editability. Publish validation rejects duplicate keys, unknown rule targets, invalid LOV references, and required fields hidden by a rule without a default; nested repeater rules can reference sibling row fields. These are client-side safeguards only: server-side parity, stage permissions, and transition authorization remain outstanding Phase 4 work.
 
 ## Validation
 

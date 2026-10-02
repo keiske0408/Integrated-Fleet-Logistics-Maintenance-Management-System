@@ -28,3 +28,4 @@
 ## 5. Feature Context
 
 - Form-builder and LOV architecture notes: `src/features/form-builder/AI_CONTEXT.md`.
+- Form-builder rules currently support client-side visibility, requiredness, and editability with publish validation; server-side submission enforcement and workflow-stage permissions remain pending.
