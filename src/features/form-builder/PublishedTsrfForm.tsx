@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from 'react';
+import { Printer } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { FormRenderer } from './FormRenderer';
+import { FormPrintView } from './FormPrintView';
 import { serializeTsrfValues, TSRF_V1 } from './seed';
 import type { FormDefinition, FormValues } from './types';
 import type { TSRFFormData } from '@/features/logistics/TSRFForm';
@@ -32,6 +35,11 @@ export function choosePublishedDefinition(
 export function PublishedTsrfForm({ onSubmit }: PublishedTsrfFormProps) {
   const [definition, setDefinition] = useState<FormDefinition>(TSRF_V1);
   const [hasPublishedDefinition, setHasPublishedDefinition] = useState(false);
+  const [printReceipt, setPrintReceipt] = useState<{
+    number: string;
+    values: FormValues;
+    labelSnapshots: Record<string, { code: string; label: string }>;
+  } | null>(null);
   const { currentUser } = useAuth();
   const apiRole = toBackendRole(currentUser?.role);
 
@@ -68,8 +76,33 @@ export function PublishedTsrfForm({ onSubmit }: PublishedTsrfFormProps) {
       const detail = Array.isArray(result.details) ? result.details.join(' ') : result.error;
       throw new Error(detail ?? 'Unable to submit TSRF request.');
     }
+    setPrintReceipt({
+      number: result.submissionNumber ?? result.requestNumber ?? 'Pending number',
+      values,
+      labelSnapshots: result.labelSnapshots ?? {},
+    });
     onSubmit(data);
   };
 
-  return <FormRenderer definition={definition} onSubmit={submit} />;
+  return (
+    <div className="space-y-4">
+      <FormRenderer definition={definition} onSubmit={submit} />
+      {printReceipt && (
+        <>
+          <div className="flex justify-end print:hidden">
+            <Button type="button" variant="outline" onClick={() => window.print()}>
+              <Printer className="mr-2 h-4 w-4" />
+              Print Request
+            </Button>
+          </div>
+          <FormPrintView
+            definition={definition}
+            values={printReceipt.values}
+            submissionNumber={printReceipt.number}
+            labelSnapshots={printReceipt.labelSnapshots}
+          />
+        </>
+      )}
+    </div>
+  );
 }
