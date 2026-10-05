@@ -9,3 +9,5 @@ export * from './select';
 export * from './separator';
 export * from './table';
 export * from './toast';
+export * from './modal';
+export * from './pagination';

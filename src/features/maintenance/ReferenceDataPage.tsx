@@ -34,6 +34,8 @@ import {
   Columns,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
+import { Dialog } from '@/components/ui/dialog';
+import { Pagination } from '@/components/ui/pagination';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -411,6 +413,15 @@ export function ReferenceDataPage() {
   const [sortField, setSortField] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>(null);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  // Reset page on tab, search, or sort change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTabCode, search, sortField, sortDir]);
+
   // Item form state
   const [itemForm, setItemForm] = useState<LovItemFormData>({
     code: '',
@@ -474,6 +485,15 @@ export function ReferenceDataPage() {
     }
     return result;
   }, [activeItems, search, sortField, sortDir]);
+
+  const totalItems = filteredItems.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIndex = (safeCurrentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
+  const paginatedItems = useMemo(() => {
+    return filteredItems.slice(startIndex, endIndex);
+  }, [filteredItems, startIndex, endIndex]);
 
   const handleSort = (field: string) => {
     if (sortField === field) {
@@ -900,7 +920,7 @@ export function ReferenceDataPage() {
                     </td>
                   </tr>
                 )}
-                {filteredItems.map((item, i) => (
+                {paginatedItems.map((item, i) => (
                   <tr
                     key={item.id}
                     className={`border-b border-border last:border-0 ${rowClass(i)}`}
@@ -938,18 +958,32 @@ export function ReferenceDataPage() {
                 ))}
               </tbody>
             </table>
+            <div className="border-t border-border px-3 py-1 bg-card/60">
+              <Pagination
+                currentPage={safeCurrentPage}
+                totalItems={totalItems}
+                itemsPerPage={itemsPerPage}
+                onPageChange={setCurrentPage}
+                onItemsPerPageChange={(size) => {
+                  setItemsPerPage(size);
+                  setCurrentPage(1);
+                }}
+                itemsPerPageOptions={[10, 25, 50, 100]}
+              />
+            </div>
           </div>
 
-          {/* Row count */}
-          <p className="text-xs text-muted-foreground">
-            {filteredItems.length} of {activeItems.length}{' '}
-            {activeList?.name?.toLowerCase() || 'items'}
-            {sortField && (
-              <span className="ml-2 text-primary">
-                • Sorted by {sortField} ({sortDir})
-              </span>
-            )}
-          </p>
+          {/* Row count summary */}
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>
+              {totalItems} total {activeList?.name?.toLowerCase() || 'items'}
+              {sortField && (
+                <span className="ml-2 text-primary">
+                  • Sorted by {sortField} ({sortDir})
+                </span>
+              )}
+            </span>
+          </div>
         </div>
 
         {/* Tweak Panel */}
@@ -966,392 +1000,381 @@ export function ReferenceDataPage() {
       </div>
 
       {/* ── Item Form Modal ── */}
-      {modalMode === 'item' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={resetItemForm} />
-          <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-md p-6 animate-fade-in">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-lg font-bold text-foreground">
-                {editingId ? 'Edit' : 'Add'} {activeList?.name?.replace(/s$/, '') || 'Item'}
-              </h3>
-              <button
-                onClick={resetItemForm}
-                className="text-muted-foreground hover:text-foreground p-1"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleItemSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="lov-item-code">Code</Label>
-                  <Input
-                    id="lov-item-code"
-                    value={itemForm.code}
-                    onChange={(e) =>
-                      setItemForm({ ...itemForm, code: e.target.value.toUpperCase() })
-                    }
-                    placeholder="UNIQUE_CODE"
-                    required
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="lov-item-label">Name / Label</Label>
-                  <Input
-                    id="lov-item-label"
-                    value={itemForm.label}
-                    onChange={(e) => setItemForm({ ...itemForm, label: e.target.value })}
-                    placeholder="Display name"
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Dynamic attribute fields */}
-              {activeAttrs.map((attr) => (
-                <div key={attr.key} className="space-y-1.5">
-                  <Label htmlFor={`lov-attr-${attr.key}`}>{attr.label}</Label>
-                  {attr.type === 'text' && (
-                    <Input
-                      id={`lov-attr-${attr.key}`}
-                      value={String(itemForm.attrs[attr.key] ?? '')}
-                      onChange={(e) =>
-                        setItemForm({
-                          ...itemForm,
-                          attrs: { ...itemForm.attrs, [attr.key]: e.target.value },
-                        })
-                      }
-                      required={attr.required}
-                    />
-                  )}
-                  {attr.type === 'number' && (
-                    <Input
-                      id={`lov-attr-${attr.key}`}
-                      type="number"
-                      value={Number(itemForm.attrs[attr.key] ?? 0)}
-                      onChange={(e) =>
-                        setItemForm({
-                          ...itemForm,
-                          attrs: { ...itemForm.attrs, [attr.key]: Number(e.target.value) },
-                        })
-                      }
-                      required={attr.required}
-                    />
-                  )}
-                  {attr.type === 'boolean' && (
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        id={`lov-attr-${attr.key}`}
-                        type="checkbox"
-                        checked={!!itemForm.attrs[attr.key]}
-                        onChange={(e) =>
-                          setItemForm({
-                            ...itemForm,
-                            attrs: { ...itemForm.attrs, [attr.key]: e.target.checked },
-                          })
-                        }
-                        className="rounded"
-                      />
-                      <span className="text-sm text-muted-foreground">Enabled</span>
-                    </label>
-                  )}
-                  {attr.type === 'select' && (
-                    <Select
-                      id={`lov-attr-${attr.key}`}
-                      value={String(itemForm.attrs[attr.key] ?? '')}
-                      onChange={(e) =>
-                        setItemForm({
-                          ...itemForm,
-                          attrs: { ...itemForm.attrs, [attr.key]: e.target.value },
-                        })
-                      }
-                    >
-                      <option value="">Select...</option>
-                      {attr.options.map((opt) => (
-                        <option key={opt} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                    </Select>
-                  )}
-                </div>
-              ))}
-
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  id="lov-item-active"
-                  type="checkbox"
-                  checked={itemForm.status === 'active'}
-                  onChange={(e) =>
-                    setItemForm({ ...itemForm, status: e.target.checked ? 'active' : 'inactive' })
-                  }
-                  className="rounded"
-                />
-                <Label htmlFor="lov-item-active" className="cursor-pointer">
-                  Active
-                </Label>
-              </label>
-
-              <div className="flex gap-3 pt-2">
-                <Button type="button" variant="outline" onClick={resetItemForm} className="flex-1">
-                  Cancel
-                </Button>
-                <Button type="submit" className="flex-1">
-                  {editingId ? 'Save Changes' : 'Add Entry'}
-                </Button>
-              </div>
-            </form>
-          </div>
+      <Dialog
+        open={modalMode === 'item'}
+        onOpenChange={(isOpen) => !isOpen && resetItemForm()}
+        className="max-w-md"
+        showCloseButton={false}
+      >
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="text-lg font-bold text-foreground">
+            {editingId ? 'Edit' : 'Add'} {activeList?.name?.replace(/s$/, '') || 'Item'}
+          </h3>
+          <button
+            type="button"
+            onClick={resetItemForm}
+            className="text-muted-foreground hover:text-foreground p-1 rounded-lg hover:bg-muted transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
-      )}
+
+        <form onSubmit={handleItemSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="lov-item-code">Code</Label>
+              <Input
+                id="lov-item-code"
+                value={itemForm.code}
+                onChange={(e) => setItemForm({ ...itemForm, code: e.target.value.toUpperCase() })}
+                placeholder="UNIQUE_CODE"
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="lov-item-label">Name / Label</Label>
+              <Input
+                id="lov-item-label"
+                value={itemForm.label}
+                onChange={(e) => setItemForm({ ...itemForm, label: e.target.value })}
+                placeholder="Display name"
+                required
+              />
+            </div>
+          </div>
+
+          {/* Dynamic attribute fields */}
+          {activeAttrs.map((attr) => (
+            <div key={attr.key} className="space-y-1.5">
+              <Label htmlFor={`lov-attr-${attr.key}`}>{attr.label}</Label>
+              {attr.type === 'text' && (
+                <Input
+                  id={`lov-attr-${attr.key}`}
+                  value={String(itemForm.attrs[attr.key] ?? '')}
+                  onChange={(e) =>
+                    setItemForm({
+                      ...itemForm,
+                      attrs: { ...itemForm.attrs, [attr.key]: e.target.value },
+                    })
+                  }
+                  required={attr.required}
+                />
+              )}
+              {attr.type === 'number' && (
+                <Input
+                  id={`lov-attr-${attr.key}`}
+                  type="number"
+                  value={Number(itemForm.attrs[attr.key] ?? 0)}
+                  onChange={(e) =>
+                    setItemForm({
+                      ...itemForm,
+                      attrs: { ...itemForm.attrs, [attr.key]: Number(e.target.value) },
+                    })
+                  }
+                  required={attr.required}
+                />
+              )}
+              {attr.type === 'boolean' && (
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    id={`lov-attr-${attr.key}`}
+                    type="checkbox"
+                    checked={!!itemForm.attrs[attr.key]}
+                    onChange={(e) =>
+                      setItemForm({
+                        ...itemForm,
+                        attrs: { ...itemForm.attrs, [attr.key]: e.target.checked },
+                      })
+                    }
+                    className="rounded"
+                  />
+                  <span className="text-sm text-muted-foreground">Enabled</span>
+                </label>
+              )}
+              {attr.type === 'select' && (
+                <Select
+                  id={`lov-attr-${attr.key}`}
+                  value={String(itemForm.attrs[attr.key] ?? '')}
+                  onChange={(e) =>
+                    setItemForm({
+                      ...itemForm,
+                      attrs: { ...itemForm.attrs, [attr.key]: e.target.value },
+                    })
+                  }
+                >
+                  <option value="">Select...</option>
+                  {attr.options.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </div>
+          ))}
+
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              id="lov-item-active"
+              type="checkbox"
+              checked={itemForm.status === 'active'}
+              onChange={(e) =>
+                setItemForm({ ...itemForm, status: e.target.checked ? 'active' : 'inactive' })
+              }
+              className="rounded"
+            />
+            <Label htmlFor="lov-item-active" className="cursor-pointer">
+              Active
+            </Label>
+          </label>
+
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="outline" onClick={resetItemForm} className="flex-1">
+              Cancel
+            </Button>
+            <Button type="submit" className="flex-1">
+              {editingId ? 'Save Changes' : 'Add Entry'}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
 
       {/* ── New List Modal ── */}
-      {modalMode === 'list' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+      <Dialog
+        open={modalMode === 'list'}
+        onOpenChange={(isOpen) => !isOpen && setModalMode(null)}
+        className="max-w-md"
+        showCloseButton={false}
+      >
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="text-lg font-bold text-foreground">Create New List</h3>
+          <button
+            type="button"
             onClick={() => setModalMode(null)}
-          />
-          <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-md p-6 animate-fade-in">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-lg font-bold text-foreground">Create New List</h3>
-              <button
-                onClick={() => setModalMode(null)}
-                className="text-muted-foreground hover:text-foreground p-1"
+            className="text-muted-foreground hover:text-foreground p-1 rounded-lg hover:bg-muted transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <form onSubmit={handleListSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="lov-list-name">List Name</Label>
+            <Input
+              id="lov-list-name"
+              value={listForm.name}
+              onChange={(e) => setListForm({ ...listForm, name: e.target.value })}
+              placeholder="e.g. Nature of Request"
+              required
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="lov-list-code">Code (auto-generated if blank)</Label>
+            <Input
+              id="lov-list-code"
+              value={listForm.code}
+              onChange={(e) =>
+                setListForm({
+                  ...listForm,
+                  code: e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ''),
+                })
+              }
+              placeholder="NATURE_OF_REQUEST"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="lov-list-desc">Description</Label>
+            <Input
+              id="lov-list-desc"
+              value={listForm.description}
+              onChange={(e) => setListForm({ ...listForm, description: e.target.value })}
+              placeholder="Short description"
+            />
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={listForm.supportsHierarchy}
+              onChange={(e) => setListForm({ ...listForm, supportsHierarchy: e.target.checked })}
+              className="rounded"
+            />
+            <span className="text-sm text-foreground">Supports hierarchy (parent/child items)</span>
+          </label>
+          <div className="flex gap-3 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setModalMode(null)}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button type="submit" className="flex-1">
+              Create List
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+
+      {/* ── Manage Attributes Modal ── */}
+      <Dialog
+        open={modalMode === 'attributes'}
+        onOpenChange={(isOpen) => !isOpen && setModalMode(null)}
+        className="max-w-lg max-h-[85vh] overflow-y-auto"
+        showCloseButton={false}
+      >
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="text-lg font-bold text-foreground">Attributes — {activeList?.name}</h3>
+          <button
+            type="button"
+            onClick={() => setModalMode(null)}
+            className="text-muted-foreground hover:text-foreground p-1 rounded-lg hover:bg-muted transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Existing attributes */}
+        {activeAttrs.length > 0 && (
+          <div className="space-y-2 mb-5">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Current Attributes
+            </p>
+            {activeAttrs.map((attr) => (
+              <div
+                key={attr.id}
+                className="flex items-center justify-between p-2.5 rounded-md bg-muted/30 border border-border text-sm"
               >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <form onSubmit={handleListSubmit} className="space-y-4">
+                <div>
+                  <span className="font-medium text-foreground">{attr.label}</span>
+                  <span className="text-muted-foreground ml-2 text-xs font-mono">{attr.key}</span>
+                  <Badge variant="outline" className="ml-2 text-[10px]">
+                    {attr.type}
+                  </Badge>
+                  {attr.required && (
+                    <Badge variant="secondary" className="ml-1 text-[10px]">
+                      required
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => openEditAttribute(attr)}
+                    className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  {!activeList?.isSystem && (
+                    <button
+                      onClick={() => handleDeleteAttribute(attr)}
+                      className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Add / edit attribute form */}
+        <div className="border-t border-border pt-4">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+            {editingAttrId ? 'Edit Attribute' : 'Add Attribute'}
+          </p>
+          <form onSubmit={handleAttrSubmit} className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="lov-list-name">List Name</Label>
+                <Label htmlFor="attr-label">Label</Label>
                 <Input
-                  id="lov-list-name"
-                  value={listForm.name}
-                  onChange={(e) => setListForm({ ...listForm, name: e.target.value })}
-                  placeholder="e.g. Nature of Request"
+                  id="attr-label"
+                  value={attrForm.label}
+                  onChange={(e) => setAttrForm({ ...attrForm, label: e.target.value })}
+                  placeholder="Display Name"
                   required
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="lov-list-code">Code (auto-generated if blank)</Label>
-                <Input
-                  id="lov-list-code"
-                  value={listForm.code}
+                <Label htmlFor="attr-type">Type</Label>
+                <Select
+                  id="attr-type"
+                  value={attrForm.type}
                   onChange={(e) =>
-                    setListForm({
-                      ...listForm,
-                      code: e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ''),
-                    })
+                    setAttrForm({ ...attrForm, type: e.target.value as LovAttributeType })
                   }
-                  placeholder="NATURE_OF_REQUEST"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="lov-list-desc">Description</Label>
-                <Input
-                  id="lov-list-desc"
-                  value={listForm.description}
-                  onChange={(e) => setListForm({ ...listForm, description: e.target.value })}
-                  placeholder="Short description"
-                />
-              </div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={listForm.supportsHierarchy}
-                  onChange={(e) =>
-                    setListForm({ ...listForm, supportsHierarchy: e.target.checked })
-                  }
-                  className="rounded"
-                />
-                <span className="text-sm text-foreground">
-                  Supports hierarchy (parent/child items)
-                </span>
-              </label>
-              <div className="flex gap-3 pt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setModalMode(null)}
-                  className="flex-1"
                 >
-                  Cancel
-                </Button>
-                <Button type="submit" className="flex-1">
-                  Create List
-                </Button>
+                  <option value="text">Text</option>
+                  <option value="number">Number</option>
+                  <option value="boolean">Boolean</option>
+                  <option value="select">Select (dropdown)</option>
+                </Select>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ── Manage Attributes Modal ── */}
-      {modalMode === 'attributes' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => setModalMode(null)}
-          />
-          <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-lg p-6 animate-fade-in max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-lg font-bold text-foreground">Attributes — {activeList?.name}</h3>
-              <button
-                onClick={() => setModalMode(null)}
-                className="text-muted-foreground hover:text-foreground p-1"
-              >
-                <X className="h-5 w-5" />
-              </button>
             </div>
 
-            {/* Existing attributes */}
-            {activeAttrs.length > 0 && (
-              <div className="space-y-2 mb-5">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Current Attributes
-                </p>
-                {activeAttrs.map((attr) => (
-                  <div
-                    key={attr.id}
-                    className="flex items-center justify-between p-2.5 rounded-md bg-muted/30 border border-border text-sm"
-                  >
-                    <div>
-                      <span className="font-medium text-foreground">{attr.label}</span>
-                      <span className="text-muted-foreground ml-2 text-xs font-mono">
-                        {attr.key}
-                      </span>
-                      <Badge variant="outline" className="ml-2 text-[10px]">
-                        {attr.type}
-                      </Badge>
-                      {attr.required && (
-                        <Badge variant="secondary" className="ml-1 text-[10px]">
-                          required
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => openEditAttribute(attr)}
-                        className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                      {!activeList?.isSystem && (
-                        <button
-                          onClick={() => handleDeleteAttribute(attr)}
-                          className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
+            {attrForm.type === 'select' && (
+              <div className="space-y-1.5">
+                <Label htmlFor="attr-options">Options (comma-separated)</Label>
+                <Input
+                  id="attr-options"
+                  value={attrOptionsText}
+                  onChange={(e) => setAttrOptionsText(e.target.value)}
+                  placeholder="light, medium, heavy, special"
+                  required
+                />
               </div>
             )}
 
-            {/* Add / edit attribute form */}
-            <div className="border-t border-border pt-4">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                {editingAttrId ? 'Edit Attribute' : 'Add Attribute'}
-              </p>
-              <form onSubmit={handleAttrSubmit} className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="attr-label">Label</Label>
-                    <Input
-                      id="attr-label"
-                      value={attrForm.label}
-                      onChange={(e) => setAttrForm({ ...attrForm, label: e.target.value })}
-                      placeholder="Display Name"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="attr-type">Type</Label>
-                    <Select
-                      id="attr-type"
-                      value={attrForm.type}
-                      onChange={(e) =>
-                        setAttrForm({ ...attrForm, type: e.target.value as LovAttributeType })
-                      }
-                    >
-                      <option value="text">Text</option>
-                      <option value="number">Number</option>
-                      <option value="boolean">Boolean</option>
-                      <option value="select">Select (dropdown)</option>
-                    </Select>
-                  </div>
-                </div>
-
-                {attrForm.type === 'select' && (
-                  <div className="space-y-1.5">
-                    <Label htmlFor="attr-options">Options (comma-separated)</Label>
-                    <Input
-                      id="attr-options"
-                      value={attrOptionsText}
-                      onChange={(e) => setAttrOptionsText(e.target.value)}
-                      placeholder="light, medium, heavy, special"
-                      required
-                    />
-                  </div>
-                )}
-
-                <div className="flex items-center gap-4">
-                  <label className="flex items-center gap-2 cursor-pointer text-sm">
-                    <input
-                      type="checkbox"
-                      checked={attrForm.required}
-                      onChange={(e) => setAttrForm({ ...attrForm, required: e.target.checked })}
-                      className="rounded"
-                    />
-                    Required
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer text-sm">
-                    <input
-                      type="checkbox"
-                      checked={attrForm.showInGrid}
-                      onChange={(e) => setAttrForm({ ...attrForm, showInGrid: e.target.checked })}
-                      className="rounded"
-                    />
-                    Show in table
-                  </label>
-                </div>
-
-                <div className="flex gap-3">
-                  {editingAttrId && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        setEditingAttrId(null);
-                        setAttrForm({
-                          key: '',
-                          label: '',
-                          type: 'text',
-                          required: false,
-                          showInGrid: true,
-                          sortOrder: activeAttrs.length,
-                          options: [],
-                        });
-                        setAttrOptionsText('');
-                      }}
-                      className="flex-1"
-                    >
-                      Cancel Edit
-                    </Button>
-                  )}
-                  <Button type="submit" className="flex-1">
-                    {editingAttrId ? 'Update Attribute' : 'Add Attribute'}
-                  </Button>
-                </div>
-              </form>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 cursor-pointer text-sm">
+                <input
+                  type="checkbox"
+                  checked={attrForm.required}
+                  onChange={(e) => setAttrForm({ ...attrForm, required: e.target.checked })}
+                  className="rounded"
+                />
+                Required
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer text-sm">
+                <input
+                  type="checkbox"
+                  checked={attrForm.showInGrid}
+                  onChange={(e) => setAttrForm({ ...attrForm, showInGrid: e.target.checked })}
+                  className="rounded"
+                />
+                Show in table
+              </label>
             </div>
-          </div>
+
+            <div className="flex gap-3">
+              {editingAttrId && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setEditingAttrId(null);
+                    setAttrForm({
+                      key: '',
+                      label: '',
+                      type: 'text',
+                      required: false,
+                      showInGrid: true,
+                      sortOrder: activeAttrs.length,
+                      options: [],
+                    });
+                    setAttrOptionsText('');
+                  }}
+                  className="flex-1"
+                >
+                  Cancel Edit
+                </Button>
+              )}
+              <Button type="submit" className="flex-1">
+                {editingAttrId ? 'Update Attribute' : 'Add Attribute'}
+              </Button>
+            </div>
+          </form>
         </div>
-      )}
+      </Dialog>
 
       {/* (toast rendered globally) */}
     </div>

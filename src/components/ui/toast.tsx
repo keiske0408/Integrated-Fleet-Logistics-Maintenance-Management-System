@@ -140,7 +140,7 @@ function ToastContainer() {
     <div
       aria-live="polite"
       aria-label="Notifications"
-      className="fixed top-5 right-5 z-[9999] flex flex-col gap-2.5 pointer-events-none"
+      className="fixed top-5 right-5 z-[10000] flex flex-col gap-2.5 pointer-events-none"
       style={{ maxWidth: '26rem', width: 'calc(100vw - 2.5rem)' }}
     >
       {toasts.map((toast) => (
