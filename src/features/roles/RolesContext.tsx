@@ -201,6 +201,16 @@ export const DEFAULT_ROLES: RoleDefinition[] = [
     isSystem: true,
     createdAt: '2026-01-01',
   },
+  {
+    id: 'role-8',
+    key: 'approver',
+    label: 'Department Approver',
+    description: 'Reviews requests assigned to the approver for their department.',
+    color: 'bg-teal-500/20 text-teal-400 border-teal-500/30',
+    permissions: ['view:dashboard', 'view:tsrf', 'approve:tsrf'],
+    isSystem: true,
+    createdAt: '2026-10-05',
+  },
 ];
 
 // ─── Context ───────────────────────────────────────────────────────────────────

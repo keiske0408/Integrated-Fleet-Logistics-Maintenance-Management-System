@@ -432,6 +432,7 @@ const SEED_ITEMS: LovItem[] = [
 interface LovContextValue {
   lists: LovList[];
   syncError: string | null;
+  apiAvailable: boolean;
   getList: (code: string) => LovList | undefined;
   getAttributes: (listCode: string) => LovAttribute[];
   getItems: (listCode: string) => LovItem[];
@@ -680,6 +681,7 @@ export function LovProvider({ children }: { children: React.ReactNode }) {
         sortOrder: 0,
         status: data.status,
         attrs: data.attrs,
+        approvalUserId: data.approvalUserId ?? null,
       };
       setItems((prev) => [...prev, newItem]);
     },
@@ -713,6 +715,7 @@ export function LovProvider({ children }: { children: React.ReactNode }) {
             ...(updates.label !== undefined && { label: updates.label }),
             ...(updates.status !== undefined && { status: updates.status }),
             ...(updates.attrs !== undefined && { attrs: updates.attrs }),
+            ...(updates.approvalUserId !== undefined && { approvalUserId: updates.approvalUserId }),
           };
         }),
       );
@@ -763,6 +766,7 @@ export function LovProvider({ children }: { children: React.ReactNode }) {
       value={{
         lists,
         syncError,
+        apiAvailable,
         getList,
         getAttributes,
         getItems,

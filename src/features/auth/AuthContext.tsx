@@ -133,7 +133,13 @@ interface AuthContextValue {
   roleDefinitions: RoleDefinition[];
   setRoleDefinitions: (roles: RoleDefinition[]) => void;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  signup: (data: { name: string; email: string; department: string; password: string }) => Promise<{ success: boolean; message?: string; verificationUrl?: string; error?: string }>;
+  signup: (data: {
+    name: string;
+    email: string;
+    departmentCode: string;
+    requestedRole: string;
+    password: string;
+  }) => Promise<{ success: boolean; message?: string; verificationUrl?: string; error?: string }>;
   verifySignupEmail: (token: string) => Promise<string>;
   loginWithEntra: () => Promise<{ success: boolean; error?: string }>;
   requestPasswordReset: (email: string) => Promise<void>;
@@ -203,7 +209,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signup = async (data: { name: string; email: string; department: string; password: string }) => {
+  const signup = async (data: {
+    name: string;
+    email: string;
+    departmentCode: string;
+    requestedRole: string;
+    password: string;
+  }) => {
     try {
       const response = await apiFetch('/api/auth/local/signup', {
         method: 'POST',
@@ -211,11 +223,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify(data),
       });
       const result = await response.json();
-      if (!response.ok) return { success: false, error: result.error ?? 'Unable to submit signup request.' };
+      if (!response.ok)
+        return { success: false, error: result.error ?? 'Unable to submit signup request.' };
       return {
         success: true,
         message: result.message as string,
-        verificationUrl: typeof result.verificationUrl === 'string' ? result.verificationUrl : undefined,
+        verificationUrl:
+          typeof result.verificationUrl === 'string' ? result.verificationUrl : undefined,
       };
     } catch {
       return { success: false, error: 'Unable to reach the signup service.' };

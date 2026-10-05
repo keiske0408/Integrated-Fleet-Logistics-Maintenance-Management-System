@@ -10,7 +10,7 @@ Both sign-in methods resolve to the same active Fleet user in `users`. That user
 - Fleet-local credentials are Argon2id hashes associated with an active Fleet user. Successful login creates an opaque, expiring server-side session; only HMAC hashes of the session and CSRF tokens are stored.
 - Identity linking is explicit and administrative. The system does not automatically link accounts by matching email addresses.
 - Inactive users and unlinked identities are denied. Production does not trust `x-user-id`, `x-user-role`, or other simulated identity headers.
-- Non-Microsoft users can request local accounts. Signup requires email verification and then remains pending until an administrator assigns a non-admin role; signup never creates a session or accepts a role from the requester.
+- Non-Microsoft users can request local accounts. Signup options load active Department LOV items and supported roles from the backend Role catalog. The applicant's role is a preference only; an administrator selects the final supported non-admin role after email verification. Signup never creates a session or grants access.
 
 ## Local Session And Reset
 
@@ -22,22 +22,32 @@ Logout revokes the server-side session. Password reset responds generically whet
 
 All routes are mounted under `/api/auth`:
 
-| Route                                | Access                                 | Behavior                                                                                       |
-| ------------------------------------ | -------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `POST /local/login`                  | Public, rate-limited                   | Verifies local credentials and creates session/CSRF cookies.                                   |
-| `POST /local/signup`                 | Public, rate-limited                   | Stores a pending request and mails a 24-hour verification link; creates no Fleet user/session. In development/test without SMTP, returns the verification URL in the response instead. |
-| `POST /local/signup/verify`          | Public, rate-limited                   | Verifies email and moves the request to the administrator queue.                               |
-| `GET /signup/requests`               | Fleet administrator                    | Lists only verified requests; omits password and verification-token hashes.                   |
-| `POST /signup/requests/:id/approve`  | Fleet administrator                    | Assigns an allowed non-admin role and atomically creates the active user/local identity.       |
-| `DELETE /signup/requests/:id`        | Fleet administrator                    | Rejects and removes a verified signup request.                                                |
-| `GET /me`                            | Authenticated                          | Returns the current linked Fleet user.                                                         |
-| `POST /local/logout`                 | Authenticated; CSRF for local sessions | Revokes the current local session and clears cookies.                                          |
-| `POST /local/password-reset/request` | Public, rate-limited                   | Returns a generic response and sends reset mail when eligible and SMTP is available.           |
-| `POST /local/password-reset/consume` | Public, rate-limited                   | Validates a reset token and changes the password.                                              |
-| `POST /local/provision`              | Fleet administrator                    | Creates or updates an active user’s local credential; password must be at least 12 characters. |
-| `POST /entra/link`                   | Fleet administrator                    | Links an active Fleet user to the configured Entra tenant’s issuer and `tid:oid` subject.      |
+| Route                                                        | Access                                 | Behavior                                                                                                                                                                               |
+| ------------------------------------------------------------ | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /local/login`                                          | Public, rate-limited                   | Verifies local credentials and creates session/CSRF cookies.                                                                                                                           |
+| `GET /signup/options`                                        | Public, read-only                      | Returns active Department LOV codes/labels and role-catalog entries supported by backend CASL.                                                                                         |
+| `POST /local/signup`                                         | Public, rate-limited                   | Stores a pending request and mails a 24-hour verification link; creates no Fleet user/session. In development/test without SMTP, returns the verification URL in the response instead. |
+| `POST /local/signup/verify`                                  | Public, rate-limited                   | Verifies email and moves the request to the administrator queue.                                                                                                                       |
+| `GET /signup/requests?status=pending`                        | Fleet administrator                    | Lists verified requests awaiting review; omits password and verification-token hashes.                                                                                                 |
+| `GET /signup/requests?status=approved` or `?status=rejected` | Fleet administrator                    | Lists decision history with assigned role/review time; omits password and verification-token hashes.                                                                                   |
+| `POST /signup/requests/:id/approve`                          | Fleet administrator                    | Assigns an allowed non-admin role and atomically creates the active user/local identity.                                                                                               |
+| `DELETE /signup/requests/:id`                                | Fleet administrator                    | Rejects a verified request and retains a sanitized decision-history record.                                                                                                            |
+| `GET /me`                                                    | Authenticated                          | Returns the current linked Fleet user.                                                                                                                                                 |
+| `POST /local/logout`                                         | Authenticated; CSRF for local sessions | Revokes the current local session and clears cookies.                                                                                                                                  |
+| `POST /local/password-reset/request`                         | Public, rate-limited                   | Returns a generic response and sends reset mail when eligible and SMTP is available.                                                                                                   |
+| `POST /local/password-reset/consume`                         | Public, rate-limited                   | Validates a reset token and changes the password.                                                                                                                                      |
+| `POST /local/provision`                                      | Fleet administrator                    | Creates or updates an active user’s local credential; password must be at least 12 characters.                                                                                         |
+| `POST /entra/link`                                           | Fleet administrator                    | Links an active Fleet user to the configured Entra tenant’s issuer and `tid:oid` subject.                                                                                              |
 
-Signup requests are stored separately from `users`; they cannot authenticate while pending verification or approval. The public form does not offer a role selector. Administrators review verified requests in User Management and choose from supported non-admin roles. User list/create/update/delete APIs are also guarded by backend `manage all` authorization.
+Signup requests are stored separately from `users`; they cannot authenticate while pending verification or approval. Each request stores the selected Department LOV code and requested-role preference. Approved accounts are created in `users` with that department code and the administrator's final role, then appear in the backend-backed Users view. Administrators review verified requests in the Signup Requests view, filter Pending/Approved/Disapproved history, and choose from supported non-admin roles. Signup options are limited to backend Role catalog entries with server-side CASL mappings; catalog presence alone does not grant access. User list/create/update/delete APIs are also guarded by backend `manage all` authorization.
+
+## Department Head And TSRF Routing
+
+Each active Department LOV item can be linked to an active Fleet user with the `approver` or `admin` role. Configure this link in Reference Data before accepting TSRFs for that department. Signup saves the Department LOV code to the Fleet user; each TSRF still selects its own department. The API resolves that item's linked approver at submission time, snapshots the user ID on the submission, and only that user (or an administrator override) may perform the initial department-head approval transition. Unassigned or ineligible department heads block TSRF submission until corrected.
+
+## Activity History
+
+Successful authenticated API mutations are written to the persistent `activity_logs` table with the authenticated actor, module, route/action, status, and non-sensitive metadata. Request bodies, passwords, access/reset/verification tokens, and form payloads are not captured by the general audit middleware. Authentication events use the dedicated auth audit helper. The old UI-only demo actions remain session-local and are labeled `Local UI`; they are not persisted transactions. Versioned form workflow transitions also retain detailed per-submission events in `form_submission_events`.
 
 The provision, link, review, and user-management routes require an authenticated principal with `manage all`. Migration-seeded users have no auth identity or local credential, so they cannot initially authenticate as administrators. Bootstrap the first admin once, from the backend package directory, using a secure terminal/session environment:
 
@@ -73,7 +83,7 @@ Set values through the hosting environment or an untracked local environment fil
 | `ARCJET_KEY`                                                                       | Backend   | Arcjet auth rate-limit service key. The fallback limiter is process-local; configure Arcjet for production, especially when running multiple API instances.                                                     |
 | `ALLOW_DEV_AUTH_HEADERS`                                                           | Backend   | Set to `true` only for local development. It has no effect in production.                                                                                                                                       |
 | `NODE_ENV`                                                                         | Backend   | Use `production` for deployment; test mode explicitly permits simulated headers for integration tests.                                                                                                          |
-| `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_NAME`, `BOOTSTRAP_ADMIN_PASSWORD`         | Backend   | One-time CLI inputs for first-admin bootstrap only. Supply at invocation time, use a unique 16+ character password, then remove them; never commit them.                                                         |
+| `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_NAME`, `BOOTSTRAP_ADMIN_PASSWORD`        | Backend   | One-time CLI inputs for first-admin bootstrap only. Supply at invocation time, use a unique 16+ character password, then remove them; never commit them.                                                        |
 
 Frontend environment variables are embedded at build time. Restart Vite after changing them and rebuild after changing production values. Backend variables are read at process startup; restart the API after changes.
 
@@ -95,8 +105,7 @@ To exercise the demo UI, run Vite in development mode with `VITE_ENABLE_DEV_AUTH
 
 In `NODE_ENV=development` or `test`, signup does not attempt SMTP and returns a one-time verification URL for local testing. The URL is exposed only outside production. Production signup requires configured SMTP and returns an error if verification mail cannot be sent.
 
-Verification snapshot for 2026-10-05: backend TypeScript build and 28 tests passed; frontend TypeScript check and 28 tests passed. The API integration suite covers denied spoofed headers, local signup without SMTP, pending-login denial, signup token verification, admin role assignment, and post-approval local login. Focused coverage is still needed for real SMTP delivery, reset/CSRF behavior, Entra JWKS/role/link verification, frontend signup/approval UX, and the bootstrap command's repeat-run behavior. Entra and SMTP round trips require deployment configuration and have not been exercised.
-
+Verification snapshot for 2026-10-05: backend TypeScript build and 33 tests passed; frontend typecheck, 28 tests, targeted lint, and production build passed. Integration coverage includes dynamic signup options, pending-login denial, approval/rejection history, Department LOV head assignment and identity enforcement in legacy/versioned TSRF, and persistent audit writes. Focused coverage remains needed for real SMTP delivery, reset/CSRF behavior, Entra JWKS/role/link verification, and bootstrap repeat-run behavior; real Entra/SMTP round trips have not been exercised.
 Before production enablement:
 
 1. Run the one-time bootstrap securely and remove its environment inputs after confirming admin login.

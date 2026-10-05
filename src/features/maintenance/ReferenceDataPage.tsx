@@ -8,6 +8,7 @@ import type {
   LovAttributeType,
 } from '@/features/lov';
 import { useActivityLog } from '@/features/activity';
+import { apiFetch } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -387,6 +388,7 @@ export function ReferenceDataPage() {
     getAttributes,
     getItems,
     syncError,
+    apiAvailable,
     addList,
     addItem,
     updateItem,
@@ -396,7 +398,10 @@ export function ReferenceDataPage() {
     deleteAttribute,
   } = useLov();
   const { addLog } = useActivityLog();
-  const { success: toastSuccess } = useToast();
+  const logLocalAction = (event: Parameters<typeof addLog>[0]) => {
+    if (!apiAvailable) addLog(event);
+  };
+  const { success: toastSuccess, error: toastError } = useToast();
 
   const activeLists = lists.filter((l) => l.status === 'active');
   const [activeTabCode, setActiveTabCode] = useState<string>(activeLists[0]?.code || '');
@@ -428,7 +433,11 @@ export function ReferenceDataPage() {
     label: '',
     status: 'active',
     attrs: {},
+    approvalUserId: null,
   });
+  const [departmentApprovers, setDepartmentApprovers] = useState<
+    Array<{ id: string; name: string; email: string }>
+  >([]);
   // List form state
   const [listForm, setListForm] = useState<LovListFormData>({
     code: '',
@@ -448,6 +457,34 @@ export function ReferenceDataPage() {
   });
   const [editingAttrId, setEditingAttrId] = useState<string | null>(null);
   const [attrOptionsText, setAttrOptionsText] = useState('');
+
+  React.useEffect(() => {
+    if (activeTabCode !== 'DEPARTMENTS' || modalMode !== 'item') return;
+    let cancelled = false;
+    void apiFetch('/api/users')
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? 'Unable to load approver accounts.');
+        const eligible = (
+          result as Array<{ id: string; name: string; email: string; role: string; status: string }>
+        )
+          .filter(
+            (user) =>
+              user.status === 'active' &&
+              ['approver', 'admin', 'superadmin', 'system_admin'].includes(user.role),
+          )
+          .map(({ id, name, email }) => ({ id, name, email }));
+        if (!cancelled) setDepartmentApprovers(eligible);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setDepartmentApprovers([]);
+        if (!cancelled)
+          toastError(error instanceof Error ? error.message : 'Unable to load approver accounts.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTabCode, modalMode, toastError]);
 
   const tweak = tweakMap[activeTabCode] || defaultTweakForAttrs(activeAttrs);
   const setTweak = (s: TweakSettings) => setTweakMap((prev) => ({ ...prev, [activeTabCode]: s }));
@@ -520,7 +557,7 @@ export function ReferenceDataPage() {
   // ── Item form handlers ──────────────────────────────────────────────────
 
   const resetItemForm = () => {
-    setItemForm({ code: '', label: '', status: 'active', attrs: {} });
+    setItemForm({ code: '', label: '', status: 'active', attrs: {}, approvalUserId: null });
     setEditingId(null);
     setModalMode(null);
   };
@@ -532,7 +569,13 @@ export function ReferenceDataPage() {
       else if (a.type === 'boolean') defaultAttrs[a.key] = false;
       else defaultAttrs[a.key] = '';
     });
-    setItemForm({ code: '', label: '', status: 'active', attrs: defaultAttrs });
+    setItemForm({
+      code: '',
+      label: '',
+      status: 'active',
+      attrs: defaultAttrs,
+      approvalUserId: null,
+    });
     setEditingId(null);
     setModalMode('item');
   };
@@ -543,6 +586,7 @@ export function ReferenceDataPage() {
       label: item.label,
       status: item.status,
       attrs: { ...item.attrs },
+      approvalUserId: item.approvalUserId ?? null,
     });
     setEditingId(item.id);
     setModalMode('item');
@@ -552,7 +596,7 @@ export function ReferenceDataPage() {
     e.preventDefault();
     if (editingId) {
       updateItem(editingId, itemForm);
-      addLog({
+      logLocalAction({
         module: 'Reference Data',
         action: 'Updated',
         subject: `${activeList?.name}: ${itemForm.label}`,
@@ -563,7 +607,7 @@ export function ReferenceDataPage() {
       showToast(`"${itemForm.label}" updated.`);
     } else {
       addItem(activeTabCode, itemForm);
-      addLog({
+      logLocalAction({
         module: 'Reference Data',
         action: 'Created',
         subject: `${activeList?.name}: ${itemForm.label}`,
@@ -579,7 +623,7 @@ export function ReferenceDataPage() {
   const handleDeleteItem = (item: LovItem) => {
     deleteItem(item.id);
     setDeleteConfirmId(null);
-    addLog({
+    logLocalAction({
       module: 'Reference Data',
       action: 'Deleted',
       subject: `${activeList?.name}: ${item.label}`,
@@ -606,7 +650,7 @@ export function ReferenceDataPage() {
         .replace(/[^A-Z0-9]+/g, '_')
         .replace(/(^_|_$)/g, '');
     addList({ ...listForm, code });
-    addLog({
+    logLocalAction({
       module: 'Reference Data',
       action: 'Created',
       subject: `List: ${listForm.name}`,
@@ -667,7 +711,7 @@ export function ReferenceDataPage() {
         .replace(/(^_|_$)/g, '');
     if (editingAttrId) {
       updateAttribute(editingAttrId, { ...attrForm, key, options: opts });
-      addLog({
+      logLocalAction({
         module: 'Reference Data',
         action: 'Updated',
         subject: `Attribute: ${attrForm.label}`,
@@ -678,7 +722,7 @@ export function ReferenceDataPage() {
       showToast(`Attribute "${attrForm.label}" updated.`);
     } else {
       addAttribute(activeTabCode, { ...attrForm, key, options: opts });
-      addLog({
+      logLocalAction({
         module: 'Reference Data',
         action: 'Created',
         subject: `Attribute: ${attrForm.label}`,
@@ -703,7 +747,7 @@ export function ReferenceDataPage() {
 
   const handleDeleteAttribute = (attr: LovAttribute) => {
     deleteAttribute(attr.id);
-    addLog({
+    logLocalAction({
       module: 'Reference Data',
       action: 'Deleted',
       subject: `Attribute: ${attr.label}`,
@@ -1043,75 +1087,107 @@ export function ReferenceDataPage() {
             </div>
           </div>
 
+          {activeTabCode === 'DEPARTMENTS' && (
+            <div className="space-y-1.5">
+              <Label htmlFor="department-approver">Department head approver</Label>
+              <Select
+                id="department-approver"
+                value={itemForm.approvalUserId ?? ''}
+                onChange={(event) => {
+                  const selected = departmentApprovers.find(
+                    (user) => user.id === event.target.value,
+                  );
+                  setItemForm({
+                    ...itemForm,
+                    approvalUserId: selected?.id ?? null,
+                    attrs: { ...itemForm.attrs, head: selected?.name ?? '' },
+                  });
+                }}
+              >
+                <option value="">No department head assigned</option>
+                {departmentApprovers.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.name} · {user.email}
+                  </option>
+                ))}
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                The user must be active and have the Approver or Administrator role.
+              </p>
+            </div>
+          )}
+
           {/* Dynamic attribute fields */}
-          {activeAttrs.map((attr) => (
-            <div key={attr.key} className="space-y-1.5">
-              <Label htmlFor={`lov-attr-${attr.key}`}>{attr.label}</Label>
-              {attr.type === 'text' && (
-                <Input
-                  id={`lov-attr-${attr.key}`}
-                  value={String(itemForm.attrs[attr.key] ?? '')}
-                  onChange={(e) =>
-                    setItemForm({
-                      ...itemForm,
-                      attrs: { ...itemForm.attrs, [attr.key]: e.target.value },
-                    })
-                  }
-                  required={attr.required}
-                />
-              )}
-              {attr.type === 'number' && (
-                <Input
-                  id={`lov-attr-${attr.key}`}
-                  type="number"
-                  value={Number(itemForm.attrs[attr.key] ?? 0)}
-                  onChange={(e) =>
-                    setItemForm({
-                      ...itemForm,
-                      attrs: { ...itemForm.attrs, [attr.key]: Number(e.target.value) },
-                    })
-                  }
-                  required={attr.required}
-                />
-              )}
-              {attr.type === 'boolean' && (
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
+          {activeAttrs
+            .filter((attr) => !(activeTabCode === 'DEPARTMENTS' && attr.key === 'head'))
+            .map((attr) => (
+              <div key={attr.key} className="space-y-1.5">
+                <Label htmlFor={`lov-attr-${attr.key}`}>{attr.label}</Label>
+                {attr.type === 'text' && (
+                  <Input
                     id={`lov-attr-${attr.key}`}
-                    type="checkbox"
-                    checked={!!itemForm.attrs[attr.key]}
+                    value={String(itemForm.attrs[attr.key] ?? '')}
                     onChange={(e) =>
                       setItemForm({
                         ...itemForm,
-                        attrs: { ...itemForm.attrs, [attr.key]: e.target.checked },
+                        attrs: { ...itemForm.attrs, [attr.key]: e.target.value },
                       })
                     }
-                    className="rounded"
+                    required={attr.required}
                   />
-                  <span className="text-sm text-muted-foreground">Enabled</span>
-                </label>
-              )}
-              {attr.type === 'select' && (
-                <Select
-                  id={`lov-attr-${attr.key}`}
-                  value={String(itemForm.attrs[attr.key] ?? '')}
-                  onChange={(e) =>
-                    setItemForm({
-                      ...itemForm,
-                      attrs: { ...itemForm.attrs, [attr.key]: e.target.value },
-                    })
-                  }
-                >
-                  <option value="">Select...</option>
-                  {attr.options.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </div>
-          ))}
+                )}
+                {attr.type === 'number' && (
+                  <Input
+                    id={`lov-attr-${attr.key}`}
+                    type="number"
+                    value={Number(itemForm.attrs[attr.key] ?? 0)}
+                    onChange={(e) =>
+                      setItemForm({
+                        ...itemForm,
+                        attrs: { ...itemForm.attrs, [attr.key]: Number(e.target.value) },
+                      })
+                    }
+                    required={attr.required}
+                  />
+                )}
+                {attr.type === 'boolean' && (
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      id={`lov-attr-${attr.key}`}
+                      type="checkbox"
+                      checked={!!itemForm.attrs[attr.key]}
+                      onChange={(e) =>
+                        setItemForm({
+                          ...itemForm,
+                          attrs: { ...itemForm.attrs, [attr.key]: e.target.checked },
+                        })
+                      }
+                      className="rounded"
+                    />
+                    <span className="text-sm text-muted-foreground">Enabled</span>
+                  </label>
+                )}
+                {attr.type === 'select' && (
+                  <Select
+                    id={`lov-attr-${attr.key}`}
+                    value={String(itemForm.attrs[attr.key] ?? '')}
+                    onChange={(e) =>
+                      setItemForm({
+                        ...itemForm,
+                        attrs: { ...itemForm.attrs, [attr.key]: e.target.value },
+                      })
+                    }
+                  >
+                    <option value="">Select...</option>
+                    {attr.options.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </div>
+            ))}
 
           <label className="flex items-center gap-2 cursor-pointer">
             <input

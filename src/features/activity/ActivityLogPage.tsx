@@ -1,11 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   useActivityLog,
   MODULE_COLORS,
   SEVERITY_STYLES,
   ACTION_ICONS,
   type LogModule,
-  type LogAction,
   type LogSeverity,
   type ActivityLogEntry,
 } from './ActivityLogContext';
@@ -13,15 +12,33 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import {
-  Search, Trash2, Download, RefreshCw, Filter, X,
-  AlertTriangle, CheckCircle2, Info, XCircle, Clock,
+  Search,
+  Download,
+  RefreshCw,
+  Filter,
+  X,
+  AlertTriangle,
+  CheckCircle2,
+  Info,
+  XCircle,
+  Clock,
 } from 'lucide-react';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const ALL_MODULES: LogModule[] = [
-  'Fleet', 'PMS', 'Work Order', 'Purchase Requisition', 'TSRF',
-  'Incident Report', 'User Management', 'Roles', 'Reference Data', 'System',
+  'Fleet',
+  'PMS',
+  'Work Order',
+  'Purchase Requisition',
+  'TSRF',
+  'Incident Report',
+  'User Management',
+  'Roles',
+  'Reference Data',
+  'Maintenance',
+  'Authentication',
+  'System',
 ];
 
 const ALL_SEVERITIES: LogSeverity[] = ['info', 'success', 'warning', 'error'];
@@ -78,10 +95,13 @@ function StatsBar({ logs }: { logs: ActivityLogEntry[] }) {
         <div
           key={s}
           className={`flex items-center gap-3 p-3 rounded-xl border ${
-            s === 'success' ? 'bg-emerald-500/8 border-emerald-500/20' :
-            s === 'warning' ? 'bg-amber-500/8 border-amber-500/20' :
-            s === 'error'   ? 'bg-rose-500/8 border-rose-500/20' :
-            'bg-blue-500/8 border-blue-500/20'
+            s === 'success'
+              ? 'bg-emerald-500/8 border-emerald-500/20'
+              : s === 'warning'
+                ? 'bg-amber-500/8 border-amber-500/20'
+                : s === 'error'
+                  ? 'bg-rose-500/8 border-rose-500/20'
+                  : 'bg-blue-500/8 border-blue-500/20'
           }`}
         >
           <SeverityIcon severity={s} />
@@ -98,14 +118,17 @@ function StatsBar({ logs }: { logs: ActivityLogEntry[] }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export function ActivityLogPage() {
-  const { logs, clearLogs } = useActivityLog();
+  const { logs, refreshLogs } = useActivityLog();
 
   const [search, setSearch] = useState('');
   const [filterModule, setFilterModule] = useState<string>('all');
   const [filterSeverity, setFilterSeverity] = useState<string>('all');
   const [filterAction, setFilterAction] = useState<string>('all');
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    void refreshLogs();
+  }, [refreshLogs]);
 
   // Unique actions from current logs
   const uniqueActions = useMemo(
@@ -136,20 +159,27 @@ export function ActivityLogPage() {
   // Export CSV
   const exportCSV = () => {
     const header = 'Timestamp,Module,Action,Subject,User,Severity,Description';
-    const rows = filtered.map((l) =>
-      `"${l.timestamp}","${l.module}","${l.action}","${l.subject}","${l.user}","${l.severity}","${l.description.replace(/"/g, '""')}"`
+    const rows = filtered.map(
+      (l) =>
+        `"${l.timestamp}","${l.module}","${l.action}","${l.subject}","${l.user}","${l.severity}","${l.description.replace(/"/g, '""')}"`,
     );
     const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `activity-log-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click(); URL.revokeObjectURL(url);
+    a.href = url;
+    a.download = `activity-log-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
-  const hasFilters = search || filterModule !== 'all' || filterSeverity !== 'all' || filterAction !== 'all';
+  const hasFilters =
+    search || filterModule !== 'all' || filterSeverity !== 'all' || filterAction !== 'all';
 
   const resetFilters = () => {
-    setSearch(''); setFilterModule('all'); setFilterSeverity('all'); setFilterAction('all');
+    setSearch('');
+    setFilterModule('all');
+    setFilterSeverity('all');
+    setFilterAction('all');
   };
 
   // Group by date
@@ -178,28 +208,10 @@ export function ActivityLogPage() {
             <Download className="h-4 w-4" />
             <span className="hidden sm:inline">Export CSV</span>
           </Button>
-          {showClearConfirm ? (
-            <div className="flex items-center gap-1.5 bg-destructive/10 border border-destructive/30 rounded-lg px-2 py-1">
-              <span className="text-xs text-destructive font-medium">Clear all logs?</span>
-              <button
-                onClick={() => { clearLogs(); setShowClearConfirm(false); }}
-                className="text-xs bg-destructive text-white px-2 py-0.5 rounded-md hover:bg-destructive/90"
-              >
-                Yes
-              </button>
-              <button
-                onClick={() => setShowClearConfirm(false)}
-                className="text-xs text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ) : (
-            <Button variant="outline" onClick={() => setShowClearConfirm(true)} className="gap-2 text-destructive hover:text-destructive">
-              <Trash2 className="h-4 w-4" />
-              <span className="hidden sm:inline">Clear</span>
-            </Button>
-          )}
+          <Button variant="outline" onClick={() => void refreshLogs()} className="gap-2">
+            <RefreshCw className="h-4 w-4" />
+            <span className="hidden sm:inline">Refresh</span>
+          </Button>
         </div>
       </div>
 
@@ -212,7 +224,10 @@ export function ActivityLogPage() {
           <Filter className="h-4 w-4 text-muted-foreground" />
           Filters
           {hasFilters && (
-            <button onClick={resetFilters} className="ml-auto text-xs text-primary hover:underline flex items-center gap-1">
+            <button
+              onClick={resetFilters}
+              className="ml-auto text-xs text-primary hover:underline flex items-center gap-1"
+            >
               <RefreshCw className="h-3 w-3" /> Reset
             </button>
           )}
@@ -228,7 +243,10 @@ export function ActivityLogPage() {
               className="pl-8 h-8 text-sm"
             />
             {search && (
-              <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
                 <X className="h-3.5 w-3.5" />
               </button>
             )}
@@ -241,7 +259,11 @@ export function ActivityLogPage() {
             className="h-8 text-sm"
           >
             <option value="all">All Modules</option>
-            {ALL_MODULES.map((m) => <option key={m} value={m}>{m}</option>)}
+            {ALL_MODULES.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
           </Select>
 
           <Select
@@ -251,7 +273,11 @@ export function ActivityLogPage() {
             className="h-8 text-sm"
           >
             <option value="all">All Severities</option>
-            {ALL_SEVERITIES.map((s) => <option key={s} value={s}>{SEVERITY_LABELS[s]}</option>)}
+            {ALL_SEVERITIES.map((s) => (
+              <option key={s} value={s}>
+                {SEVERITY_LABELS[s]}
+              </option>
+            ))}
           </Select>
 
           <Select
@@ -261,7 +287,11 @@ export function ActivityLogPage() {
             className="h-8 text-sm"
           >
             <option value="all">All Actions</option>
-            {uniqueActions.map((a) => <option key={a} value={a}>{a}</option>)}
+            {uniqueActions.map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
           </Select>
         </div>
       </div>
@@ -311,7 +341,9 @@ export function ActivityLogPage() {
                       >
                         {/* Timeline dot */}
                         <div className="relative z-10 flex flex-col items-center shrink-0 pt-3.5">
-                          <div className={`h-2.5 w-2.5 rounded-full ring-2 ring-background ${sev.dot}`} />
+                          <div
+                            className={`h-2.5 w-2.5 rounded-full ring-2 ring-background ${sev.dot}`}
+                          />
                         </div>
 
                         {/* Content */}
@@ -322,7 +354,9 @@ export function ActivityLogPage() {
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex items-center gap-2 flex-wrap">
                               {/* Module badge */}
-                              <span className={`inline-flex text-[10px] font-bold px-1.5 py-0.5 rounded-md border ${MODULE_COLORS[entry.module]}`}>
+                              <span
+                                className={`inline-flex text-[10px] font-bold px-1.5 py-0.5 rounded-md border ${MODULE_COLORS[entry.module]}`}
+                              >
                                 {entry.module}
                               </span>
                               {/* Action */}
@@ -333,6 +367,11 @@ export function ActivityLogPage() {
                               <span className="text-sm font-semibold text-foreground">
                                 {entry.subject}
                               </span>
+                              {entry.source === 'local' && (
+                                <span className="inline-flex rounded-md border border-border px-1.5 py-0.5 text-[9px] font-semibold uppercase text-muted-foreground">
+                                  Local UI
+                                </span>
+                              )}
                             </div>
 
                             {/* Timestamp */}
@@ -357,23 +396,35 @@ export function ActivityLogPage() {
                                 </div>
                                 <div>
                                   <span className="text-muted-foreground">Severity: </span>
-                                  <span className={`font-medium capitalize ${
-                                    entry.severity === 'error' ? 'text-rose-400' :
-                                    entry.severity === 'warning' ? 'text-amber-400' :
-                                    entry.severity === 'success' ? 'text-emerald-400' :
-                                    'text-blue-400'
-                                  }`}>{entry.severity}</span>
+                                  <span
+                                    className={`font-medium capitalize ${
+                                      entry.severity === 'error'
+                                        ? 'text-rose-400'
+                                        : entry.severity === 'warning'
+                                          ? 'text-amber-400'
+                                          : entry.severity === 'success'
+                                            ? 'text-emerald-400'
+                                            : 'text-blue-400'
+                                    }`}
+                                  >
+                                    {entry.severity}
+                                  </span>
                                 </div>
                                 <div className="col-span-2">
                                   <span className="text-muted-foreground">Timestamp: </span>
-                                  <span className="font-medium text-foreground font-mono">{entry.timestamp}</span>
+                                  <span className="font-medium text-foreground font-mono">
+                                    {entry.timestamp}
+                                  </span>
                                 </div>
-                                {entry.metadata && Object.entries(entry.metadata).map(([k, v]) => (
-                                  <div key={k}>
-                                    <span className="text-muted-foreground capitalize">{k.replace(/_/g, ' ')}: </span>
-                                    <span className="font-medium text-foreground">{v}</span>
-                                  </div>
-                                ))}
+                                {entry.metadata &&
+                                  Object.entries(entry.metadata).map(([k, v]) => (
+                                    <div key={k}>
+                                      <span className="text-muted-foreground capitalize">
+                                        {k.replace(/_/g, ' ')}:{' '}
+                                      </span>
+                                      <span className="font-medium text-foreground">{v}</span>
+                                    </div>
+                                  ))}
                               </div>
                             </div>
                           )}

@@ -35,6 +35,7 @@ export interface LovItem {
   sortOrder: number;
   status: LovItemStatus;
   attrs: Record<string, string | number | boolean>;
+  approvalUserId?: string | null;
 }
 
 export interface LovItemFormData {
@@ -42,6 +43,7 @@ export interface LovItemFormData {
   label: string;
   status: LovItemStatus;
   attrs: Record<string, string | number | boolean>;
+  approvalUserId?: string | null;
 }
 
 export interface LovListFormData {

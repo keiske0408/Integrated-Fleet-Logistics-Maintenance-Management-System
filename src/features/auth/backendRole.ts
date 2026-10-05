@@ -9,6 +9,10 @@ export function toBackendRole(role: string | undefined): string {
       return 'finance';
     case 'procurement_officer':
       return 'procurement';
+    case 'department_requester':
+    case 'driver':
+    case 'approver':
+      return role;
     default:
       return 'department_requester';
   }

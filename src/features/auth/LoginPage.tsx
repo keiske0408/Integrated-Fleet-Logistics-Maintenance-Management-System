@@ -1,18 +1,29 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { developmentDemoAuthEnabled, useAuth } from './AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
 import { Truck, Lock, Mail, Eye, EyeOff, AlertCircle, Building2 } from 'lucide-react';
 import { entraEnabled } from '@/lib/authClient';
+import { apiFetch } from '@/lib/api';
+
+interface SignupOptions {
+  departments: Array<{ code: string; label: string }>;
+  roles: Array<{ key: string; label: string }>;
+}
 
 export function LoginPage() {
-  const { login, signup, verifySignupEmail, loginWithEntra, requestPasswordReset, resetPassword } = useAuth();
+  const { login, signup, verifySignupEmail, loginWithEntra, requestPasswordReset, resetPassword } =
+    useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [signupName, setSignupName] = useState('');
-  const [signupDepartment, setSignupDepartment] = useState('');
+  const [signupDepartmentCode, setSignupDepartmentCode] = useState('');
+  const [requestedRole, setRequestedRole] = useState('');
+  const [signupOptions, setSignupOptions] = useState<SignupOptions>({ departments: [], roles: [] });
+  const [signupOptionsLoading, setSignupOptionsLoading] = useState(false);
   const [isSignup, setIsSignup] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -22,6 +33,32 @@ export function LoginPage() {
   const hashParams = new URLSearchParams(window.location.hash.slice(1));
   const resetToken = hashParams.get('token');
   const signupVerificationToken = hashParams.get('signupToken');
+
+  useEffect(() => {
+    if (!isSignup) return;
+    let cancelled = false;
+    setSignupOptionsLoading(true);
+    void apiFetch('/api/auth/signup/options')
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? 'Unable to load signup options.');
+        if (cancelled) return;
+        const options = result as SignupOptions;
+        setSignupOptions(options);
+        setSignupDepartmentCode((current) => current || options.departments[0]?.code || '');
+        setRequestedRole((current) => current || options.roles[0]?.key || '');
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled)
+          setError(cause instanceof Error ? cause.message : 'Unable to load signup options.');
+      })
+      .finally(() => {
+        if (!cancelled) setSignupOptionsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isSignup]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,7 +80,13 @@ export function LoginPage() {
         setNotice('Password updated. Sign in with your new password.');
       } else if (isSignup) {
         if (password !== confirmPassword) throw new Error('Passwords do not match.');
-        const result = await signup({ name: signupName, email, department: signupDepartment, password });
+        const result = await signup({
+          name: signupName,
+          email,
+          departmentCode: signupDepartmentCode,
+          requestedRole,
+          password,
+        });
         if (!result.success) {
           setError(result.error ?? 'Unable to submit signup request.');
           return;
@@ -178,7 +221,13 @@ export function LoginPage() {
           </div>
 
           <h3 className="text-xl font-bold text-foreground mb-1">
-            {signupVerificationToken ? 'Verify your email' : resetToken ? 'Reset your password' : isSignup ? 'Request a Fleet account' : 'Sign in to your account'}
+            {signupVerificationToken
+              ? 'Verify your email'
+              : resetToken
+                ? 'Reset your password'
+                : isSignup
+                  ? 'Request a Fleet account'
+                  : 'Sign in to your account'}
           </h3>
           <p className="text-muted-foreground text-sm mb-6">
             {signupVerificationToken
@@ -201,7 +250,10 @@ export function LoginPage() {
             <div className="mb-4 rounded-lg border border-border bg-muted px-3 py-2 text-sm text-muted-foreground">
               <p>{notice}</p>
               {verificationUrl && (
-                <a className="mt-2 inline-block font-medium text-primary underline" href={verificationUrl}>
+                <a
+                  className="mt-2 inline-block font-medium text-primary underline"
+                  href={verificationUrl}
+                >
                   Verify this email address
                 </a>
               )}
@@ -232,11 +284,50 @@ export function LoginPage() {
               <>
                 <div className="space-y-1.5">
                   <Label htmlFor="signup-name">Full name</Label>
-                  <Input id="signup-name" value={signupName} onChange={(event) => setSignupName(event.target.value)} autoComplete="name" minLength={2} maxLength={120} required />
+                  <Input
+                    id="signup-name"
+                    value={signupName}
+                    onChange={(event) => setSignupName(event.target.value)}
+                    autoComplete="name"
+                    minLength={2}
+                    maxLength={120}
+                    required
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="signup-department">Department</Label>
-                  <Input id="signup-department" value={signupDepartment} onChange={(event) => setSignupDepartment(event.target.value)} minLength={2} maxLength={120} required />
+                  <Select
+                    id="signup-department"
+                    value={signupDepartmentCode}
+                    onChange={(event) => setSignupDepartmentCode(event.target.value)}
+                    required
+                    disabled={signupOptionsLoading || signupOptions.departments.length === 0}
+                  >
+                    {signupOptions.departments.map((department) => (
+                      <option key={department.code} value={department.code}>
+                        {department.label}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="signup-role">Requested role</Label>
+                  <Select
+                    id="signup-role"
+                    value={requestedRole}
+                    onChange={(event) => setRequestedRole(event.target.value)}
+                    required
+                    disabled={signupOptionsLoading || signupOptions.roles.length === 0}
+                  >
+                    {signupOptions.roles.map((role) => (
+                      <option key={role.key} value={role.key}>
+                        {role.label}
+                      </option>
+                    ))}
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    An administrator makes the final role assignment.
+                  </p>
                 </div>
               </>
             )}
@@ -259,29 +350,35 @@ export function LoginPage() {
               </div>
             )}
 
-            {!signupVerificationToken && <div className="space-y-1.5">
-              <Label htmlFor="login-password">{resetToken ? 'New password' : isSignup ? 'Password' : 'Password'}</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="login-password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder={resetToken || isSignup ? 'At least 12 characters' : 'Enter your password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="pl-9 pr-9"
-                  required
-                  minLength={resetToken || isSignup ? 12 : undefined}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
+            {!signupVerificationToken && (
+              <div className="space-y-1.5">
+                <Label htmlFor="login-password">
+                  {resetToken ? 'New password' : isSignup ? 'Password' : 'Password'}
+                </Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="login-password"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder={
+                      resetToken || isSignup ? 'At least 12 characters' : 'Enter your password'
+                    }
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="pl-9 pr-9"
+                    required
+                    minLength={resetToken || isSignup ? 12 : undefined}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
-            </div>}
+            )}
 
             {(resetToken || isSignup) && (
               <div className="space-y-1.5">
@@ -297,8 +394,26 @@ export function LoginPage() {
               </div>
             )}
 
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Please wait...' : signupVerificationToken ? 'Verify Email' : resetToken ? 'Reset Password' : isSignup ? 'Submit Signup Request' : 'Sign In'}
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={
+                loading ||
+                (isSignup &&
+                  (signupOptionsLoading ||
+                    !signupOptions.departments.length ||
+                    !signupOptions.roles.length))
+              }
+            >
+              {loading
+                ? 'Please wait...'
+                : signupVerificationToken
+                  ? 'Verify Email'
+                  : resetToken
+                    ? 'Reset Password'
+                    : isSignup
+                      ? 'Submit Signup Request'
+                      : 'Sign In'}
             </Button>
           </form>
 
@@ -317,10 +432,17 @@ export function LoginPage() {
             <button
               type="button"
               className="mt-3 w-full text-center text-sm text-muted-foreground hover:text-foreground"
-              onClick={() => { setError(''); setNotice(''); setVerificationUrl(''); setIsSignup((value) => !value); }}
+              onClick={() => {
+                setError('');
+                setNotice('');
+                setVerificationUrl('');
+                setIsSignup((value) => !value);
+              }}
               disabled={loading}
             >
-              {isSignup ? 'Already have an account? Sign in' : 'Need a Fleet account? Request access'}
+              {isSignup
+                ? 'Already have an account? Sign in'
+                : 'Need a Fleet account? Request access'}
             </button>
           )}
 

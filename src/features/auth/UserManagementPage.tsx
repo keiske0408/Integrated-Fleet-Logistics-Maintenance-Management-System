@@ -260,21 +260,20 @@ export function UserManagementPage() {
         )}
       </div>
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">User Management</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">
-            Manage system users and their role-based access permissions.
-          </p>
-        </div>
-        {activeView === 'users' && (
+      {activeView === 'users' && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">User Management</h1>
+            <p className="text-muted-foreground text-sm mt-0.5">
+              Manage system users and their role-based access permissions.
+            </p>
+          </div>
           <Button id="btn-add-user" onClick={openAddForm} className="gap-2 shrink-0">
             <UserPlus className="h-4 w-4" />
             Add New User
           </Button>
-        )}
-      </div>
+        </div>
+      )}
 
       {activeView === 'requests' ? (
         <SignupApprovalQueue />
