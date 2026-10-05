@@ -17,6 +17,7 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [verificationUrl, setVerificationUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const hashParams = new URLSearchParams(window.location.hash.slice(1));
   const resetToken = hashParams.get('token');
@@ -26,6 +27,7 @@ export function LoginPage() {
     e.preventDefault();
     setError('');
     setNotice('');
+    setVerificationUrl('');
     setLoading(true);
     try {
       if (signupVerificationToken) {
@@ -50,6 +52,7 @@ export function LoginPage() {
         setPassword('');
         setConfirmPassword('');
         setNotice(result.message ?? 'Check your email to verify your account request.');
+        setVerificationUrl(result.verificationUrl ?? '');
       } else {
         const result = await login(email, password);
         if (!result.success) setError(result.error || 'Login failed.');
@@ -195,9 +198,14 @@ export function LoginPage() {
           )}
 
           {notice && (
-            <p className="mb-4 rounded-lg border border-border bg-muted px-3 py-2 text-sm text-muted-foreground">
-              {notice}
-            </p>
+            <div className="mb-4 rounded-lg border border-border bg-muted px-3 py-2 text-sm text-muted-foreground">
+              <p>{notice}</p>
+              {verificationUrl && (
+                <a className="mt-2 inline-block font-medium text-primary underline" href={verificationUrl}>
+                  Verify this email address
+                </a>
+              )}
+            </div>
           )}
 
           {!resetToken && !signupVerificationToken && !isSignup && entraEnabled && (
@@ -309,7 +317,7 @@ export function LoginPage() {
             <button
               type="button"
               className="mt-3 w-full text-center text-sm text-muted-foreground hover:text-foreground"
-              onClick={() => { setError(''); setNotice(''); setIsSignup((value) => !value); }}
+              onClick={() => { setError(''); setNotice(''); setVerificationUrl(''); setIsSignup((value) => !value); }}
               disabled={loading}
             >
               {isSignup ? 'Already have an account? Sign in' : 'Need a Fleet account? Request access'}

@@ -461,6 +461,11 @@ export function LovProvider({ children }: { children: React.ReactNode }) {
   const [syncError, setSyncError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!currentUser) {
+      setApiAvailable(false);
+      setSyncError(null);
+      return;
+    }
     let cancelled = false;
     const load = async () => {
       try {

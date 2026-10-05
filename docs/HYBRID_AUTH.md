@@ -25,7 +25,7 @@ All routes are mounted under `/api/auth`:
 | Route                                | Access                                 | Behavior                                                                                       |
 | ------------------------------------ | -------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | `POST /local/login`                  | Public, rate-limited                   | Verifies local credentials and creates session/CSRF cookies.                                   |
-| `POST /local/signup`                 | Public, rate-limited                   | Stores a pending request and mails a 24-hour verification link; creates no Fleet user/session. |
+| `POST /local/signup`                 | Public, rate-limited                   | Stores a pending request and mails a 24-hour verification link; creates no Fleet user/session. In development/test without SMTP, returns the verification URL in the response instead. |
 | `POST /local/signup/verify`          | Public, rate-limited                   | Verifies email and moves the request to the administrator queue.                               |
 | `GET /signup/requests`               | Fleet administrator                    | Lists only verified requests; omits password and verification-token hashes.                   |
 | `POST /signup/requests/:id/approve`  | Fleet administrator                    | Assigns an allowed non-admin role and atomically creates the active user/local identity.       |
@@ -93,7 +93,9 @@ To exercise the demo UI, run Vite in development mode with `VITE_ENABLE_DEV_AUTH
 
 ## Verification And Remaining Work
 
-Verification snapshot for 2026-10-05: backend TypeScript build and 27 tests passed; frontend TypeScript check and 28 tests passed. The API integration suite covers denied spoofed headers, pending-login denial, signup email-token verification, admin role assignment, and post-approval local login. Focused coverage is still needed for real SMTP delivery, reset/CSRF behavior, Entra JWKS/role/link verification, frontend signup/approval UX, and the bootstrap command's repeat-run behavior. Entra and SMTP round trips require deployment configuration and have not been exercised.
+In `NODE_ENV=development` or `test`, signup does not attempt SMTP and returns a one-time verification URL for local testing. The URL is exposed only outside production. Production signup requires configured SMTP and returns an error if verification mail cannot be sent.
+
+Verification snapshot for 2026-10-05: backend TypeScript build and 28 tests passed; frontend TypeScript check and 28 tests passed. The API integration suite covers denied spoofed headers, local signup without SMTP, pending-login denial, signup token verification, admin role assignment, and post-approval local login. Focused coverage is still needed for real SMTP delivery, reset/CSRF behavior, Entra JWKS/role/link verification, frontend signup/approval UX, and the bootstrap command's repeat-run behavior. Entra and SMTP round trips require deployment configuration and have not been exercised.
 
 Before production enablement:
 
