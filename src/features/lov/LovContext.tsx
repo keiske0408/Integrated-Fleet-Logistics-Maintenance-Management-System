@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { useAuth } from '@/features/auth/AuthContext';
-import { toBackendRole } from '@/features/auth/backendRole';
+import { apiFetch } from '@/lib/api';
 import type {
   LovList,
   LovAttribute,
@@ -10,10 +10,10 @@ import type {
   LovItemStatus,
 } from './types';
 
-async function lovRequest<T>(path: string, role: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`/api/lov${path}`, {
+async function lovRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await apiFetch(`/api/lov${path}`, {
     ...init,
-    headers: { 'Content-Type': 'application/json', 'x-user-role': role, ...init?.headers },
+    headers: { 'Content-Type': 'application/json', ...init?.headers },
   });
   const result = await response.json();
   if (!response.ok) throw new Error(result.error ?? 'Reference data request failed.');
@@ -454,7 +454,6 @@ const LovContext = createContext<LovContextValue | null>(null);
 
 export function LovProvider({ children }: { children: React.ReactNode }) {
   const { currentUser } = useAuth();
-  const apiRole = toBackendRole(currentUser?.role);
   const [lists, setLists] = useState<LovList[]>(SEED_LISTS);
   const [attributes, setAttributes] = useState<LovAttribute[]>(SEED_ATTRIBUTES);
   const [items, setItems] = useState<LovItem[]>(SEED_ITEMS);
@@ -465,7 +464,7 @@ export function LovProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     const load = async () => {
       try {
-        const serverLists = await lovRequest<Array<LovList>>('/lists', apiRole);
+        const serverLists = await lovRequest<Array<LovList>>('/lists');
         const collections = await Promise.all(
           serverLists.map(async (list) => {
             const [metadata, serverItems] = await Promise.all([
@@ -473,10 +472,9 @@ export function LovProvider({ children }: { children: React.ReactNode }) {
                 LovList & {
                   attributes: Array<Omit<LovAttribute, 'listCode'> & { options: string[] }>;
                 }
-              >(`/lists/${encodeURIComponent(list.code)}`, apiRole),
+              >(`/lists/${encodeURIComponent(list.code)}`),
               lovRequest<Array<Omit<LovItem, 'listCode'> & { attrs: LovItem['attrs'] }>>(
                 `/lists/${encodeURIComponent(list.code)}/items`,
-                apiRole,
               ),
             ]);
             return {
@@ -520,7 +518,7 @@ export function LovProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [apiRole]);
+  }, [currentUser?.id]);
 
   const getList = useCallback((code: string) => lists.find((l) => l.code === code), [lists]);
 
@@ -544,7 +542,7 @@ export function LovProvider({ children }: { children: React.ReactNode }) {
   const request = useCallback(
     async <T,>(path: string, method: string, body?: unknown): Promise<T | null> => {
       try {
-        return await lovRequest<T>(path, apiRole, {
+        return await lovRequest<T>(path, {
           method,
           ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         });
@@ -554,7 +552,7 @@ export function LovProvider({ children }: { children: React.ReactNode }) {
         return null;
       }
     },
-    [apiRole],
+    [],
   );
 
   // ── List CRUD ─────────────────────────────────────────────────────────────

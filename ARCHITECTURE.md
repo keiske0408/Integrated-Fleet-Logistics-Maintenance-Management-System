@@ -27,7 +27,7 @@ src/
 │   │
 │   ├── auth/             # Authentication & User Management
 │   │   ├── AuthContext.tsx         # User session, login/logout, dynamic permissions
-│   │   ├── LoginPage.tsx           # Quick credential & one-click role demo switcher
+│   │   ├── LoginPage.tsx           # Entra/local sign-in, verified signup, and dev-only demos
 │   │   ├── UserManagementPage.tsx  # User CRUD, role assignment, status toggles
 │   │   └── index.ts
 │   │
@@ -72,6 +72,8 @@ src/
 ├── styles/ or index.css  # Tailwind CSS base and theme variable definitions
 └── main.tsx              # React DOM bootstrap entry point
 ```
+
+Authentication is server-backed: Microsoft Entra identities and Fleet-local credentials resolve to the same internal Fleet user and backend authorization policy. Local signup requires verified email and administrator role approval before account activation. Development demo identities require explicit frontend and backend flags; they are not production or database credentials. See [`docs/HYBRID_AUTH.md`](docs/HYBRID_AUTH.md) for setup, signup, approval, and provisioning details.
 
 ---
 

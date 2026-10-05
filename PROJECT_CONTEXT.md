@@ -32,3 +32,13 @@
 - Workflow configuration is stored per form version; the builder edits stages/transitions/field access/cutoff, and the API enforces role transitions and stage-based data edits. Reports expose only configured reportable fields and exclude PII. Response masking, returned-edit/resubmit UI, approval stamps, and complete Activity History integration remain pending.
 - TSRF Fleet Asset allocation can resolve an active vehicle by ID with a label snapshot; third-party allocation is conditional. Driver entity lookup remains unavailable until a backend driver entity is modeled.
 - Form print output is generated from the versioned schema and saved label snapshots; signature/finance blocks and full paper-form parity remain pending.
+
+## 6. Current Phase: Hybrid Authentication
+
+- **Status:** Entra and Fleet-local auth paths are implemented in the frontend and backend. Production readiness is still pending deployment configuration, a secure first-admin bootstrap, focused auth lifecycle tests, and real Entra/SMTP verification.
+- Both providers resolve to the same active Fleet user and internal backend role. Entra linking is explicit; local passwords use Argon2id, and local sessions/reset tokens are hashed, expiring, and revocable. Production rejects simulated identity headers. Non-Microsoft signup now requires email verification followed by administrator role assignment; pending requests cannot log in and cannot choose their own role.
+- First-admin setup is provided by the one-time backend `npm run auth:bootstrap-admin` command. It uses environment-supplied credentials, adopts the matching seed admin when available, and refuses repeat bootstrap after an admin identity exists. No password is seeded in migrations.
+- Migration-seeded Fleet users do not have local credentials or linked identities. The frontend demo accounts are in-memory development demos only, not database-seeded login credentials.
+- **Verification snapshot (2026-10-05):** backend build and 27 tests pass; frontend typecheck and 28 tests pass. Auth integration coverage includes pending-login denial, email token verification, admin role assignment, and post-approval local login. Real SMTP and Entra integration remain unverified.
+- **Next product phase:** owner-scoped returned-TSRF inbox, edit, and resubmission after auth deployment prerequisites are resolved.
+- See [`docs/HYBRID_AUTH.md`](docs/HYBRID_AUTH.md) for configuration, signup/approval, bootstrap, account provisioning/linking, current blockers, and rollout guidance.

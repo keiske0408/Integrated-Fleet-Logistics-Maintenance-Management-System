@@ -8,7 +8,7 @@ import { FormRenderer } from './FormRenderer';
 import { TSRF_V1, TSRF_WORKFLOW } from './seed';
 import { useLov } from '@/features/lov';
 import { useAuth } from '@/features/auth/AuthContext';
-import { toBackendRole } from '@/features/auth/backendRole';
+import { apiFetch } from '@/lib/api';
 import { validateFormDefinition, validateFormWorkflow } from './validation';
 import type {
   FieldType,
@@ -79,7 +79,6 @@ export function FormBuilderPage() {
   const [permissionStageId, setPermissionStageId] = useState('dispatch_assignment');
   const { lists } = useLov();
   const { currentUser } = useAuth();
-  const apiRole = toBackendRole(currentUser?.role);
   const fields = definition.sections.flatMap((section) => section.fields);
   const selectedField = fields.find((field) => field.id === selectedId);
   const permissionFields = flattenPermissionFields(fields);
@@ -88,9 +87,7 @@ export function FormBuilderPage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/forms/${encodeURIComponent(definition.key)}`, {
-      headers: { 'x-user-role': apiRole },
-    })
+    apiFetch(`/api/forms/${encodeURIComponent(definition.key)}`)
       .then(async (response) => {
         if (response.status === 404) return null;
         if (!response.ok) throw new Error('Unable to load saved form versions.');
@@ -118,7 +115,7 @@ export function FormBuilderPage() {
     return () => {
       cancelled = true;
     };
-  }, [apiRole, definition.key]);
+  }, [currentUser?.id, definition.key]);
 
   const saveDraft = async () => {
     setSaving(true);
@@ -127,21 +124,21 @@ export function FormBuilderPage() {
       const draft = { ...definition, status: 'draft' as const };
       let response: Response;
       if (!definitionId) {
-        response = await fetch('/api/forms', {
+        response = await apiFetch('/api/forms', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-user-role': apiRole },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ key: draft.key, name: draft.name, schema: draft, workflow }),
         });
       } else if (draftVersionId) {
-        response = await fetch(`/api/forms/versions/${encodeURIComponent(draftVersionId)}`, {
+        response = await apiFetch(`/api/forms/versions/${encodeURIComponent(draftVersionId)}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'x-user-role': apiRole },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ schema: draft, workflow }),
         });
       } else {
-        response = await fetch(`/api/forms/${encodeURIComponent(definitionId)}/versions`, {
+        response = await apiFetch(`/api/forms/${encodeURIComponent(definitionId)}/versions`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-user-role': apiRole },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ schema: draft, workflow }),
         });
       }
@@ -175,9 +172,9 @@ export function FormBuilderPage() {
     setSaving(true);
     setMessage(null);
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `/api/forms/versions/${encodeURIComponent(draftVersionId)}/publish`,
-        { method: 'POST', headers: { 'x-user-role': apiRole } },
+        { method: 'POST' },
       );
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? 'Unable to publish form.');

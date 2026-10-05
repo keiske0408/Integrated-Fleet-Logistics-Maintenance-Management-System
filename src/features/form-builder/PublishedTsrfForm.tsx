@@ -6,8 +6,7 @@ import { FormPrintView } from './FormPrintView';
 import { serializeTsrfValues, TSRF_V1 } from './seed';
 import type { FormDefinition, FormValues } from './types';
 import type { TSRFFormData } from '@/features/logistics/TSRFForm';
-import { useAuth } from '@/features/auth/AuthContext';
-import { toBackendRole } from '@/features/auth/backendRole';
+import { apiFetch } from '@/lib/api';
 
 interface PublishedTsrfFormProps {
   onSubmit: (data: TSRFFormData) => void;
@@ -40,12 +39,10 @@ export function PublishedTsrfForm({ onSubmit }: PublishedTsrfFormProps) {
     values: FormValues;
     labelSnapshots: Record<string, { code: string; label: string }>;
   } | null>(null);
-  const { currentUser } = useAuth();
-  const apiRole = toBackendRole(currentUser?.role);
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/forms/published/tsrf')
+    apiFetch('/api/forms/published/tsrf')
       .then(async (response) => (response.ok ? response.json() : null))
       .then((saved) => {
         if (cancelled || !saved || !Array.isArray(saved.versions)) return;
@@ -63,11 +60,11 @@ export function PublishedTsrfForm({ onSubmit }: PublishedTsrfFormProps) {
 
   const submit = async (values: FormValues) => {
     const data = serializeTsrfValues(values);
-    const response = await fetch(
+    const response = await apiFetch(
       hasPublishedDefinition ? '/api/forms/tsrf/submissions' : '/api/tsrf',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-user-role': apiRole },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(hasPublishedDefinition ? { data } : data),
       },
     );

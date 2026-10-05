@@ -13,6 +13,7 @@ import {
 import {
   UserPlus, Pencil, Trash2, X, Check, ShieldCheck, ShieldOff, Search,
 } from 'lucide-react';
+import { SignupApprovalQueue } from './SignupApprovalQueue';
 
 // Roles now come dynamically from RolesContext
 
@@ -122,6 +123,8 @@ export function UserManagementPage() {
           Add New User
         </Button>
       </div>
+
+      {currentUser?.role === 'system_admin' && <SignupApprovalQueue />}
 
       {/* Stats bar */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

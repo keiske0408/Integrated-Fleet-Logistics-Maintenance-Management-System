@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useLov } from '@/features/lov';
 import { useAuth } from '@/features/auth/AuthContext';
-import { toBackendRole } from '@/features/auth/backendRole';
+import { apiFetch } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { fieldRegistry } from './registry';
@@ -130,7 +130,6 @@ export function FormRenderer({
 }: FormRendererProps) {
   const { getActiveItems } = useLov();
   const { currentUser } = useAuth();
-  const apiRole = toBackendRole(currentUser?.role);
   const [vehicleOptions, setVehicleOptions] = useState<Array<{ value: string; label: string }>>([]);
   const [values, setValues] = useState<FormValues>(() =>
     getInitialValues(definition, initialValues),
@@ -145,7 +144,7 @@ export function FormRenderer({
     );
     if (!hasVehicleLookup) return;
     let cancelled = false;
-    fetch('/api/vehicles', { headers: { 'x-user-role': apiRole } })
+    apiFetch('/api/vehicles')
       .then(async (response) => {
         if (!response.ok) throw new Error('Unable to load fleet vehicles.');
         return response.json();
@@ -172,7 +171,7 @@ export function FormRenderer({
     return () => {
       cancelled = true;
     };
-  }, [apiRole, definition]);
+  }, [currentUser?.id, definition]);
   const updateValue = (key: string, value: FormValues[string]) =>
     setValues((current) => ({ ...current, [key]: value }));
   const resolvedDefinition: FormDefinition = {
