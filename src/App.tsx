@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth, LoginPage, UserManagementPage } from '@/features/auth';
-import { RolesProvider, useRoles, RolesManagementPage } from '@/features/roles';
+import { RolesProvider, useRoles, RolesManagementPage, type Permission } from '@/features/roles';
 import { ThemeProvider, ThemeEditorPage } from '@/features/theme';
 import { ReferenceDataProvider, ReferenceDataPage } from '@/features/maintenance';
 import { ActivityLogProvider, useActivityLog, ActivityLogPage } from '@/features/activity';
@@ -14,6 +14,7 @@ import {
 } from '@/features/procurement';
 import type { TSRFFormData } from '@/features/logistics';
 import { FormBuilderPage, PublishedTsrfForm } from '@/features/form-builder';
+import { ToastProvider, useToast } from '@/components/ui/toast';
 
 // ─── Role Sync Bridge ─────────────────────────────────────────────────────────
 
@@ -29,8 +30,9 @@ function RoleSyncBridge({ children }: { children: React.ReactNode }) {
 // ─── Inner App ────────────────────────────────────────────────────────────────
 
 function InnerApp() {
-  const { isAuthenticated, hasPermission, currentUser } = useAuth();
+  const { isAuthenticated, isLoading, hasPermission, currentUser } = useAuth();
   const { addLog } = useActivityLog();
+  const { success: toastSuccess, warning: toastWarning } = useToast();
   const [activePage, setActivePage] = useState<AppPage>('dashboard');
 
   // ── Fleet state ───────────────────────────────────────────────────────────
@@ -107,14 +109,11 @@ function InnerApp() {
   ]);
   const [incidentModalOpen, setIncidentModalOpen] = useState(false);
   const [selectedIncidentVehicle, setSelectedIncidentVehicle] = useState<VehicleItem | null>(null);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const userName = currentUser?.name || 'System';
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 4000);
-  };
+  const showToast = (msg: string) => toastSuccess(msg);
+  const showWarningToast = (msg: string) => toastWarning(msg);
 
   const handleLogMileage = (vehicleId: string, newKm: number) => {
     setVehicles(
@@ -242,7 +241,7 @@ function InnerApp() {
   const handleUnlockWorkOrder = (workOrderId: string, prId: string) => {
     const pr = prs.find((p) => p.id === prId);
     if (!pr || pr.status !== 'approved') {
-      showToast('Blocked: PR not yet approved.');
+      showWarningToast('Blocked: PR not yet approved.');
       addLog({
         module: 'Work Order',
         action: 'Rejected',
@@ -343,6 +342,7 @@ function InnerApp() {
     showToast(`TSRF created for "${data.projectName}" with ${data.stops.length} stops.`);
   };
 
+  if (isLoading) return <div className="min-h-screen bg-background" />;
   if (!isAuthenticated) return <LoginPage />;
 
   const notifications =
@@ -351,14 +351,6 @@ function InnerApp() {
 
   return (
     <SidebarLayout activePage={activePage} onNavigate={setActivePage} notifications={notifications}>
-      {/* Global toast */}
-      {toastMessage && (
-        <div className="fixed top-6 right-6 z-[100] px-4 py-3 bg-card border border-border text-foreground text-sm rounded-xl shadow-2xl animate-slide-in-right flex items-center gap-2 max-w-sm">
-          <span className="text-primary shrink-0">🔔</span>
-          <span>{toastMessage}</span>
-        </div>
-      )}
-
       {/* ── Dashboard ── */}
       {activePage === 'dashboard' && hasPermission('view:dashboard') && <DashboardOverview />}
 
@@ -475,7 +467,7 @@ function InnerApp() {
           'form_builder',
         ] as AppPage[]
       ).includes(activePage) &&
-        !hasPermission(`view:${activePage}` as any) && (
+        !hasPermission(`view:${activePage}` as Permission) && (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
               <p className="text-4xl mb-3">🚫</p>
@@ -495,17 +487,19 @@ function InnerApp() {
 export function App() {
   return (
     <ThemeProvider>
-      <RolesProvider>
-        <AuthProvider>
-          <ActivityLogProvider>
-            <ReferenceDataProvider>
-              <RoleSyncBridge>
-                <InnerApp />
-              </RoleSyncBridge>
-            </ReferenceDataProvider>
-          </ActivityLogProvider>
-        </AuthProvider>
-      </RolesProvider>
+      <ToastProvider>
+        <RolesProvider>
+          <AuthProvider>
+            <ActivityLogProvider>
+              <ReferenceDataProvider>
+                <RoleSyncBridge>
+                  <InnerApp />
+                </RoleSyncBridge>
+              </ReferenceDataProvider>
+            </ActivityLogProvider>
+          </AuthProvider>
+        </RolesProvider>
+      </ToastProvider>
     </ThemeProvider>
   );
 }

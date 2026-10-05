@@ -9,7 +9,8 @@ import {
 } from '@/features/procurement/PRGatingDashboard';
 import { IncidentReportModal } from '@/features/fleet/IncidentReportModal';
 import { Badge } from '@/components/ui/badge';
-import { Truck, Shield, Calendar, Wrench, Bell, UserCheck } from 'lucide-react';
+import { useToast } from '@/components/ui/toast';
+import { Truck, Shield, Calendar, Wrench, UserCheck } from 'lucide-react';
 
 export function FleetHubDashboard() {
   const [activeTab, setActiveTab] = useState<'vehicles' | 'procurement' | 'tsrf'>('vehicles');
@@ -98,12 +99,7 @@ export function FleetHubDashboard() {
   const [incidentModalOpen, setIncidentModalOpen] = useState(false);
   const [selectedIncidentVehicle, setSelectedIncidentVehicle] = useState<VehicleItem | null>(null);
 
-  // Notification message toast
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 4000);
-  };
+  const { success: showToast } = useToast();
 
   // Handlers
   const handleLogMileage = (vehicleId: string, newKm: number) => {
@@ -296,13 +292,7 @@ export function FleetHubDashboard() {
         </div>
       </header>
 
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 p-4 bg-popover text-popover-foreground text-xs rounded-xl shadow-2xl flex items-center space-x-2.5 border border-border animate-slide-up">
-          <Bell className="h-4 w-4 text-primary" />
-          <span className="font-medium">{toastMessage}</span>
-        </div>
-      )}
+      {/* (toast rendered globally) */}
 
       {/* Navigation Tabs */}
       <div className="max-w-5xl mx-auto mb-6 flex space-x-2 border-b border-border">

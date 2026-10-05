@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { useToast } from '@/components/ui/toast';
 import {
   Plus,
   Pencil,
@@ -69,12 +70,12 @@ export function RolesManagementPage() {
     updateSystemPermission,
     deleteSystemPermission,
   } = useRoles();
+  const { success: toastSuccess } = useToast();
 
   const [view, setView] = useState<View>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<RoleFormState>(EMPTY_FORM);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
 
   // New permission form state
   const [newPermKey, setNewPermKey] = useState('');
@@ -82,10 +83,7 @@ export function RolesManagementPage() {
   const [newPermGroup, setNewPermGroup] = useState('');
   const [editingPermKey, setEditingPermKey] = useState<string | null>(null);
 
-  const showToast = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3500);
-  };
+  const showToast = (msg: string) => toastSuccess(msg);
 
   const openAdd = () => {
     setForm(EMPTY_FORM);
@@ -334,13 +332,7 @@ export function RolesManagementPage() {
           </TableBody>
         </Table>
 
-        {/* Toast */}
-        {toast && (
-          <div className="fixed top-6 right-6 z-50 px-4 py-3 bg-card border border-border text-foreground text-sm rounded-xl shadow-2xl animate-slide-in-right flex items-center gap-2">
-            <Check className="h-4 w-4 text-emerald-400 shrink-0" />
-            {toast}
-          </div>
-        )}
+        {/* (toast rendered globally) */}
       </div>
     );
   }
@@ -503,12 +495,7 @@ export function RolesManagementPage() {
           </div>
         </div>
 
-        {toast && (
-          <div className="fixed top-6 right-6 z-50 px-4 py-3 bg-card border border-border text-foreground text-sm rounded-xl shadow-2xl animate-slide-in-right flex items-center gap-2">
-            <Check className="h-4 w-4 text-emerald-400 shrink-0" />
-            {toast}
-          </div>
-        )}
+        {/* (toast rendered globally) */}
       </div>
     );
   }

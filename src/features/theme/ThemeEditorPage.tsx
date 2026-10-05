@@ -1,9 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from './ThemeContext';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
-import { RotateCcw, Sun, Moon, Download, Upload, Check, Palette, Type, Layers, Sliders } from 'lucide-react';
+import { useToast } from '@/components/ui/toast';
+import {
+  RotateCcw,
+  Sun,
+  Moon,
+  Download,
+  Upload,
+  Check,
+  Palette,
+  Type,
+  Layers,
+  Sliders,
+} from 'lucide-react';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -45,33 +55,33 @@ interface AppThemeState {
 // ─── Defaults ──────────────────────────────────────────────────────────────────
 
 const DEFAULT_DARK: ThemeVars = {
-  background:      { h: 222, s: 28, l: 8 },
-  foreground:      { h: 210, s: 40, l: 96 },
-  card:            { h: 222, s: 24, l: 11 },
-  cardForeground:  { h: 210, s: 40, l: 96 },
-  primary:         { h: 217, s: 91, l: 60 },
+  background: { h: 222, s: 28, l: 8 },
+  foreground: { h: 210, s: 40, l: 96 },
+  card: { h: 222, s: 24, l: 11 },
+  cardForeground: { h: 210, s: 40, l: 96 },
+  primary: { h: 217, s: 91, l: 60 },
   primaryForeground: { h: 222, s: 47, l: 11 },
-  secondary:       { h: 217, s: 33, l: 17 },
-  muted:           { h: 217, s: 28, l: 16 },
+  secondary: { h: 217, s: 33, l: 17 },
+  muted: { h: 217, s: 28, l: 16 },
   mutedForeground: { h: 215, s: 20, l: 55 },
-  border:          { h: 217, s: 24, l: 20 },
-  accent:          { h: 217, s: 28, l: 16 },
+  border: { h: 217, s: 24, l: 20 },
+  accent: { h: 217, s: 28, l: 16 },
   radius: 8,
   fontSans: 'Inter',
 };
 
 const DEFAULT_LIGHT: ThemeVars = {
-  background:      { h: 220, s: 20, l: 97 },
-  foreground:      { h: 222, s: 47, l: 11 },
-  card:            { h: 0, s: 0, l: 100 },
-  cardForeground:  { h: 222, s: 47, l: 11 },
-  primary:         { h: 221, s: 83, l: 53 },
+  background: { h: 220, s: 20, l: 97 },
+  foreground: { h: 222, s: 47, l: 11 },
+  card: { h: 0, s: 0, l: 100 },
+  cardForeground: { h: 222, s: 47, l: 11 },
+  primary: { h: 221, s: 83, l: 53 },
   primaryForeground: { h: 210, s: 40, l: 98 },
-  secondary:       { h: 215, s: 28, l: 93 },
-  muted:           { h: 215, s: 25, l: 93 },
+  secondary: { h: 215, s: 28, l: 93 },
+  muted: { h: 215, s: 25, l: 93 },
   mutedForeground: { h: 215, s: 20, l: 46 },
-  border:          { h: 216, s: 20, l: 88 },
-  accent:          { h: 215, s: 25, l: 93 },
+  border: { h: 216, s: 20, l: 88 },
+  accent: { h: 215, s: 25, l: 93 },
   radius: 8,
   fontSans: 'Inter',
 };
@@ -136,22 +146,37 @@ const PRESETS: Preset[] = [
   },
 ];
 
-const FONTS = ['Inter', 'Outfit', 'Plus Jakarta Sans', 'DM Sans', 'Geist', 'Roboto', 'Poppins', 'Nunito'];
+const FONTS = [
+  'Inter',
+  'Outfit',
+  'Plus Jakarta Sans',
+  'DM Sans',
+  'Geist',
+  'Roboto',
+  'Poppins',
+  'Nunito',
+];
 
 const FONT_IMPORTS: Record<string, string> = {
-  'Inter': 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap',
-  'Outfit': 'https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap',
-  'Plus Jakarta Sans': 'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap',
-  'DM Sans': 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap',
-  'Geist': 'https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&display=swap',
-  'Roboto': 'https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap',
-  'Poppins': 'https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap',
-  'Nunito': 'https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&display=swap',
+  Inter: 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap',
+  Outfit:
+    'https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap',
+  'Plus Jakarta Sans':
+    'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap',
+  'DM Sans':
+    'https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap',
+  Geist: 'https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&display=swap',
+  Roboto: 'https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap',
+  Poppins: 'https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap',
+  Nunito:
+    'https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&display=swap',
 };
 
 // ─── Apply theme to DOM ────────────────────────────────────────────────────────
 
-function hsl({ h, s, l }: HSLColor) { return `${h} ${s}% ${l}%`; }
+function hsl({ h, s, l }: HSLColor) {
+  return `${h} ${s}% ${l}%`;
+}
 
 function applyThemeVars(vars: ThemeVars, mode: 'dark' | 'light') {
   const root = document.documentElement;
@@ -194,7 +219,9 @@ function applyThemeVars(vars: ThemeVars, mode: 'dark' | 'light') {
     const linkId = `fleet-font-${vars.fontSans.replace(/\s+/g, '-')}`;
     if (!document.getElementById(linkId)) {
       const link = document.createElement('link');
-      link.id = linkId; link.rel = 'stylesheet'; link.href = fontUrl;
+      link.id = linkId;
+      link.rel = 'stylesheet';
+      link.href = fontUrl;
       document.head.appendChild(link);
     }
   }
@@ -203,9 +230,17 @@ function applyThemeVars(vars: ThemeVars, mode: 'dark' | 'light') {
 // ─── Color Slider ──────────────────────────────────────────────────────────────
 
 function ColorSlider({
-  label, value, min, max, onChange, gradient,
+  label,
+  value,
+  min,
+  max,
+  onChange,
+  gradient,
 }: {
-  label: string; value: number; min: number; max: number;
+  label: string;
+  value: number;
+  min: number;
+  max: number;
   onChange: (v: number) => void;
   gradient?: string;
 }) {
@@ -213,11 +248,17 @@ function ColorSlider({
     <div className="space-y-1">
       <div className="flex justify-between items-center">
         <span className="text-xs text-muted-foreground">{label}</span>
-        <span className="text-xs font-mono font-semibold text-foreground w-10 text-right">{value}{label === 'H' ? '°' : '%'}</span>
+        <span className="text-xs font-mono font-semibold text-foreground w-10 text-right">
+          {value}
+          {label === 'H' ? '°' : '%'}
+        </span>
       </div>
       <div className="relative h-3 rounded-full overflow-hidden" style={{ background: gradient }}>
         <input
-          type="range" min={min} max={max} value={value}
+          type="range"
+          min={min}
+          max={max}
+          value={value}
           onChange={(e) => onChange(Number(e.target.value))}
           className="absolute inset-0 w-full opacity-0 cursor-pointer h-full"
         />
@@ -234,9 +275,13 @@ function ColorSlider({
 // ─── HSL Color Control ────────────────────────────────────────────────────────
 
 function HSLControl({
-  label, value, onChange,
+  label,
+  value,
+  onChange,
 }: {
-  label: string; value: HSLColor; onChange: (c: HSLColor) => void;
+  label: string;
+  value: HSLColor;
+  onChange: (c: HSLColor) => void;
 }) {
   const preview = `hsl(${value.h}, ${value.s}%, ${value.l}%)`;
   return (
@@ -252,17 +297,26 @@ function HSLControl({
         </span>
       </div>
       <ColorSlider
-        label="H" value={value.h} min={0} max={360}
+        label="H"
+        value={value.h}
+        min={0}
+        max={360}
         onChange={(v) => onChange({ ...value, h: v })}
         gradient="linear-gradient(to right,hsl(0,90%,50%),hsl(60,90%,50%),hsl(120,90%,50%),hsl(180,90%,50%),hsl(240,90%,50%),hsl(300,90%,50%),hsl(360,90%,50%))"
       />
       <ColorSlider
-        label="S" value={value.s} min={0} max={100}
+        label="S"
+        value={value.s}
+        min={0}
+        max={100}
         onChange={(v) => onChange({ ...value, s: v })}
         gradient={`linear-gradient(to right, hsl(${value.h},0%,${value.l}%), hsl(${value.h},100%,${value.l}%))`}
       />
       <ColorSlider
-        label="L" value={value.l} min={0} max={100}
+        label="L"
+        value={value.l}
+        min={0}
+        max={100}
         onChange={(v) => onChange({ ...value, l: v })}
         gradient={`linear-gradient(to right, hsl(${value.h},${value.s}%,0%), hsl(${value.h},${value.s}%,50%), hsl(${value.h},${value.s}%,100%))`}
       />
@@ -277,7 +331,10 @@ type Section = 'presets' | 'colors' | 'typography' | 'layout';
 export function ThemeEditorPage() {
   const { theme: currentThemeMode, setTheme } = useTheme();
 
-  const [themeState, setThemeState] = useState<AppThemeState>(() => {
+  // ─── Saved (committed) theme state ────────────────────────────────────────
+  // This is the ONLY state that writes to the real DOM / CSS variables.
+  // It is updated exclusively when the user clicks "Apply Theme".
+  const [savedThemeState, setSavedThemeState] = useState<AppThemeState>(() => {
     try {
       const savedDark = localStorage.getItem('fleet_theme_vars_dark');
       const savedLight = localStorage.getItem('fleet_theme_vars_light');
@@ -290,43 +347,77 @@ export function ThemeEditorPage() {
     }
   });
 
+  // ─── Local preview state ───────────────────────────────────────────────────
+  // Drives ONLY the "Live Preview" panel. Never written to the DOM directly.
+  const [themeState, setThemeState] = useState<AppThemeState>(() => ({
+    dark: { ...savedThemeState.dark },
+    light: { ...savedThemeState.light },
+  }));
+
+  // Derive the initially-selected preset from what is actually saved
+  const [appliedPreset, setAppliedPreset] = useState<string | null>(() => {
+    try {
+      const savedDark = localStorage.getItem('fleet_theme_vars_dark');
+      if (!savedDark) return 'Ocean Blue (Default)';
+      const parsed = JSON.parse(savedDark) as Partial<ThemeVars>;
+      // Match by primary hue — a good enough fingerprint for the built-in presets
+      const match = PRESETS.find(
+        (p) =>
+          p.dark?.primary &&
+          (p.dark.primary as HSLColor).h === (parsed.primary as HSLColor | undefined)?.h,
+      );
+      return match ? match.name : null;
+    } catch {
+      return 'Ocean Blue (Default)';
+    }
+  });
+
   const [editMode, setEditMode] = useState<'dark' | 'light'>(currentThemeMode);
   const [section, setSection] = useState<Section>('presets');
-  const [savedToast, setSavedToast] = useState(false);
-  const [appliedPreset, setAppliedPreset] = useState<string | null>('Ocean Blue (Default)');
+  const { success: toastSuccess } = useToast();
 
   // Synchronize editMode when theme changes from sidebar or elsewhere
   useEffect(() => {
     setEditMode(currentThemeMode);
   }, [currentThemeMode]);
 
-  // When switching modes via tab, update editMode AND set the app theme so the whole UI switches live!
+  // When switching modes via tab, update editMode AND set the app theme so the whole UI switches
   const handleModeChange = (mode: 'dark' | 'light') => {
     setEditMode(mode);
     setTheme(mode);
   };
 
+  // Preview vars – used only in the Live Preview panel
   const vars = themeState[editMode];
 
-  // Apply to DOM whenever vars change
+  // Apply saved theme to the real DOM (only reacts to COMMITTED state)
   useEffect(() => {
-    applyThemeVars(themeState.dark, 'dark');
-    applyThemeVars(themeState.light, 'light');
-  }, [themeState]);
+    applyThemeVars(savedThemeState.dark, 'dark');
+    applyThemeVars(savedThemeState.light, 'light');
+  }, [savedThemeState]);
 
-  const updateVars = useCallback((updates: Partial<ThemeVars>) => {
-    setThemeState((prev) => ({
-      ...prev,
-      [editMode]: { ...prev[editMode], ...updates },
-    }));
-    setAppliedPreset(null);
-  }, [editMode]);
+  // ── Preview-only mutations (do NOT touch global DOM) ──────────────────────
 
-  const updateColor = useCallback((key: keyof ThemeVars, value: HSLColor) => {
-    updateVars({ [key]: value });
-  }, [updateVars]);
+  const updateVars = useCallback(
+    (updates: Partial<ThemeVars>) => {
+      setThemeState((prev) => ({
+        ...prev,
+        [editMode]: { ...prev[editMode], ...updates },
+      }));
+      setAppliedPreset(null);
+    },
+    [editMode],
+  );
+
+  const updateColor = useCallback(
+    (key: keyof ThemeVars, value: HSLColor) => {
+      updateVars({ [key]: value });
+    },
+    [updateVars],
+  );
 
   const applyPreset = (preset: Preset) => {
+    // Only updates the LOCAL preview state — does NOT affect the global UI
     setThemeState((prev) => ({
       dark: { ...prev.dark, ...preset.dark },
       light: { ...prev.light, ...preset.light },
@@ -335,23 +426,26 @@ export function ThemeEditorPage() {
   };
 
   const resetToDefault = () => {
-    setThemeState({ dark: { ...DEFAULT_DARK }, light: { ...DEFAULT_LIGHT } });
+    // Reset preview back to saved state (discard unsaved edits)
+    setThemeState({ dark: { ...savedThemeState.dark }, light: { ...savedThemeState.light } });
     setAppliedPreset('Ocean Blue (Default)');
   };
 
   const handleSave = () => {
-    // Persist to localStorage
+    // Commit the preview state → saved state, update DOM, and persist
+    setSavedThemeState({ dark: { ...themeState.dark }, light: { ...themeState.light } });
     localStorage.setItem('fleet_theme_vars_dark', JSON.stringify(themeState.dark));
     localStorage.setItem('fleet_theme_vars_light', JSON.stringify(themeState.light));
-    setSavedToast(true);
-    setTimeout(() => setSavedToast(false), 2500);
+    toastSuccess('Theme applied and saved!');
   };
 
   const exportTheme = () => {
     const blob = new Blob([JSON.stringify(themeState, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = 'fleet-theme.json'; a.click();
+    a.href = url;
+    a.download = 'fleet-theme.json';
+    a.click();
     URL.revokeObjectURL(url);
   };
 
@@ -366,13 +460,18 @@ export function ThemeEditorPage() {
           setThemeState(parsed);
           setAppliedPreset(null);
         }
+        /* eslint-disable-next-line no-empty */
       } catch {}
     };
     reader.readAsText(file);
     e.target.value = '';
   };
 
-  const SECTIONS: { id: Section; label: string; icon: React.ComponentType<any> }[] = [
+  const SECTIONS: {
+    id: Section;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+  }[] = [
     { id: 'presets', label: 'Presets', icon: Palette },
     { id: 'colors', label: 'Colors', icon: Layers },
     { id: 'typography', label: 'Typography', icon: Type },
@@ -423,8 +522,7 @@ export function ThemeEditorPage() {
           </Button>
 
           <Button onClick={handleSave} className="gap-2">
-            {savedToast ? <Check className="h-4 w-4" /> : null}
-            {savedToast ? 'Saved!' : 'Apply Theme'}
+            Apply Theme
           </Button>
         </div>
       </div>
@@ -441,7 +539,9 @@ export function ThemeEditorPage() {
                   key={m}
                   onClick={() => handleModeChange(m)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                    editMode === m ? 'bg-card text-foreground shadow-sm border border-border' : 'text-muted-foreground hover:text-foreground'
+                    editMode === m
+                      ? 'bg-card text-foreground shadow-sm border border-border'
+                      : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   {m === 'dark' ? <Moon className="h-3 w-3" /> : <Sun className="h-3 w-3" />}
@@ -459,7 +559,9 @@ export function ThemeEditorPage() {
                     key={s.id}
                     onClick={() => setSection(s.id)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                      section === s.id ? 'bg-card text-foreground shadow-sm border border-border' : 'text-muted-foreground hover:text-foreground'
+                      section === s.id
+                        ? 'bg-card text-foreground shadow-sm border border-border'
+                        : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     <Icon className="h-3 w-3" />
@@ -503,7 +605,9 @@ export function ThemeEditorPage() {
                       <div
                         className="absolute bottom-0 left-0 right-0 h-4 rounded-b-lg"
                         style={{
-                          background: pColor ? `hsl(${pColor.h}, ${pColor.s}%, ${pColor.l}%)` : '#3b82f6',
+                          background: pColor
+                            ? `hsl(${pColor.h}, ${pColor.s}%, ${pColor.l}%)`
+                            : '#3b82f6',
                         }}
                       />
                       {/* Accent dots */}
@@ -521,7 +625,9 @@ export function ThemeEditorPage() {
                         ))}
                       </div>
                     </div>
-                    <p className="text-xs font-semibold text-foreground">{preset.emoji} {preset.name}</p>
+                    <p className="text-xs font-semibold text-foreground">
+                      {preset.emoji} {preset.name}
+                    </p>
                   </button>
                 );
               })}
@@ -532,7 +638,10 @@ export function ThemeEditorPage() {
           {section === 'colors' && (
             <div className="space-y-3">
               <p className="text-xs text-muted-foreground">
-                Editing: <span className="font-semibold text-foreground capitalize">{editMode} mode</span> — changes apply instantly to the live app.
+                Editing:{' '}
+                <span className="font-semibold text-foreground capitalize">{editMode} mode</span> —
+                changes are previewed on the right. Click{' '}
+                <span className="font-semibold text-foreground">Apply Theme</span> to save globally.
               </p>
               <div className="grid sm:grid-cols-2 gap-3">
                 {COLOR_FIELDS.map(({ key, label }) => {
@@ -554,7 +663,9 @@ export function ThemeEditorPage() {
           {/* ── Typography Section ── */}
           {section === 'typography' && (
             <div className="space-y-4">
-              <p className="text-xs text-muted-foreground">Select a font to apply across the entire app.</p>
+              <p className="text-xs text-muted-foreground">
+                Select a font to apply across the entire app.
+              </p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {FONTS.map((font) => {
                   const isActive = vars.fontSans === font;
@@ -563,11 +674,16 @@ export function ThemeEditorPage() {
                       key={font}
                       onClick={() => updateVars({ fontSans: font })}
                       className={`p-3 rounded-xl border text-left transition-all hover:scale-[1.02] ${
-                        isActive ? 'border-primary ring-2 ring-primary/30 bg-primary/5' : 'border-border bg-card hover:border-primary/40'
+                        isActive
+                          ? 'border-primary ring-2 ring-primary/30 bg-primary/5'
+                          : 'border-border bg-card hover:border-primary/40'
                       }`}
                     >
                       {isActive && <Check className="h-3 w-3 text-primary mb-1" />}
-                      <p className="text-base font-semibold text-foreground" style={{ fontFamily: font }}>
+                      <p
+                        className="text-base font-semibold text-foreground"
+                        style={{ fontFamily: font }}
+                      >
                         Aa
                       </p>
                       <p className="text-xs text-muted-foreground mt-0.5">{font}</p>
@@ -577,7 +693,10 @@ export function ThemeEditorPage() {
               </div>
 
               {/* Font preview */}
-              <div className="bg-card border border-border rounded-xl p-5 space-y-2" style={{ fontFamily: vars.fontSans }}>
+              <div
+                className="bg-card border border-border rounded-xl p-5 space-y-2"
+                style={{ fontFamily: vars.fontSans }}
+              >
                 <p className="text-sm text-muted-foreground">Live Preview — {vars.fontSans}</p>
                 <h2 className="text-2xl font-bold text-foreground">Hulma Fleet Management</h2>
                 <p className="text-base text-foreground">
@@ -607,13 +726,21 @@ export function ThemeEditorPage() {
                   <span className="text-sm font-mono text-primary">{vars.radius}px</span>
                 </div>
                 <input
-                  type="range" min={0} max={24} step={1} value={vars.radius}
+                  type="range"
+                  min={0}
+                  max={24}
+                  step={1}
+                  value={vars.radius}
                   onChange={(e) => updateVars({ radius: Number(e.target.value) })}
                   className="w-full accent-primary"
                 />
                 {/* Radius preview */}
                 <div className="flex gap-3 flex-wrap">
-                  {['bg-primary/20 border border-primary/30', 'bg-secondary border border-border', 'bg-muted border border-border'].map((cls, i) => (
+                  {[
+                    'bg-primary/20 border border-primary/30',
+                    'bg-secondary border border-border',
+                    'bg-muted border border-border',
+                  ].map((cls, i) => (
                     <div
                       key={i}
                       className={`h-14 w-20 flex items-center justify-center text-xs font-medium ${cls}`}
@@ -630,7 +757,9 @@ export function ThemeEditorPage() {
                       key={r}
                       onClick={() => updateVars({ radius: r })}
                       className={`px-2.5 py-1 text-xs border transition-colors ${
-                        vars.radius === r ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground'
+                        vars.radius === r
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground'
                       }`}
                       style={{ borderRadius: `${r}px` }}
                     >
@@ -682,9 +811,10 @@ export function ThemeEditorPage() {
                     key={i}
                     className="h-1.5 w-6 rounded-full"
                     style={{
-                      background: i === 0
-                        ? `hsl(${vars.primary.h}, ${vars.primary.s}%, ${vars.primary.l}%)`
-                        : `hsl(${vars.mutedForeground.h}, ${vars.mutedForeground.s}%, ${vars.mutedForeground.l}%,0.4)`,
+                      background:
+                        i === 0
+                          ? `hsl(${vars.primary.h}, ${vars.primary.s}%, ${vars.primary.l}%)`
+                          : `hsl(${vars.mutedForeground.h}, ${vars.mutedForeground.s}%, ${vars.mutedForeground.l}%,0.4)`,
                     }}
                   />
                 ))}
@@ -694,10 +824,17 @@ export function ThemeEditorPage() {
               <div className="flex-1 p-3 space-y-2">
                 {/* Header */}
                 <div className="flex items-center justify-between">
-                  <div className="h-2 w-20 rounded-full" style={{ background: `hsl(${vars.foreground.h}, ${vars.foreground.s}%, ${vars.foreground.l}%)` }} />
+                  <div
+                    className="h-2 w-20 rounded-full"
+                    style={{
+                      background: `hsl(${vars.foreground.h}, ${vars.foreground.s}%, ${vars.foreground.l}%)`,
+                    }}
+                  />
                   <div
                     className="h-4 w-4 rounded-full"
-                    style={{ background: `hsl(${vars.primary.h}, ${vars.primary.s}%, ${vars.primary.l}%)` }}
+                    style={{
+                      background: `hsl(${vars.primary.h}, ${vars.primary.s}%, ${vars.primary.l}%)`,
+                    }}
                   />
                 </div>
                 {/* Cards row */}
@@ -712,8 +849,18 @@ export function ThemeEditorPage() {
                         borderRadius: `${vars.radius / 2}px`,
                       }}
                     >
-                      <div className="h-1.5 w-6 rounded-full" style={{ background: `hsl(${vars.primary.h}, ${vars.primary.s}%, ${vars.primary.l}%)` }} />
-                      <div className="h-1 w-10 rounded-full" style={{ background: `hsl(${vars.mutedForeground.h}, ${vars.mutedForeground.s}%, ${vars.mutedForeground.l}%, 0.5)` }} />
+                      <div
+                        className="h-1.5 w-6 rounded-full"
+                        style={{
+                          background: `hsl(${vars.primary.h}, ${vars.primary.s}%, ${vars.primary.l}%)`,
+                        }}
+                      />
+                      <div
+                        className="h-1 w-10 rounded-full"
+                        style={{
+                          background: `hsl(${vars.mutedForeground.h}, ${vars.mutedForeground.s}%, ${vars.mutedForeground.l}%, 0.5)`,
+                        }}
+                      />
                     </div>
                   ))}
                 </div>
@@ -728,8 +875,18 @@ export function ThemeEditorPage() {
                 >
                   {[...Array(2)].map((_, i) => (
                     <div key={i} className="flex gap-1.5 py-0.5">
-                      <div className="h-1.5 w-8 rounded-full" style={{ background: `hsl(${vars.foreground.h}, ${vars.foreground.s}%, ${vars.foreground.l}%, 0.6)` }} />
-                      <div className="h-1.5 w-12 rounded-full" style={{ background: `hsl(${vars.mutedForeground.h}, ${vars.mutedForeground.s}%, ${vars.mutedForeground.l}%, 0.4)` }} />
+                      <div
+                        className="h-1.5 w-8 rounded-full"
+                        style={{
+                          background: `hsl(${vars.foreground.h}, ${vars.foreground.s}%, ${vars.foreground.l}%, 0.6)`,
+                        }}
+                      />
+                      <div
+                        className="h-1.5 w-12 rounded-full"
+                        style={{
+                          background: `hsl(${vars.mutedForeground.h}, ${vars.mutedForeground.s}%, ${vars.mutedForeground.l}%, 0.4)`,
+                        }}
+                      />
                     </div>
                   ))}
                 </div>
@@ -749,7 +906,9 @@ export function ThemeEditorPage() {
 
           {/* Color palette swatch row */}
           <div className="bg-card border border-border rounded-xl p-3">
-            <p className="text-[10px] text-muted-foreground mb-2 uppercase tracking-wider font-semibold">Palette</p>
+            <p className="text-[10px] text-muted-foreground mb-2 uppercase tracking-wider font-semibold">
+              Palette
+            </p>
             <div className="flex gap-1.5 flex-wrap">
               {COLOR_FIELDS.map(({ key, label }) => {
                 const val = vars[key] as HSLColor;
@@ -768,7 +927,9 @@ export function ThemeEditorPage() {
 
           {/* Current values */}
           <div className="bg-card border border-border rounded-xl p-3 space-y-1.5">
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Current Settings</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
+              Current Settings
+            </p>
             <div className="space-y-1 text-xs">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Font</span>
@@ -780,7 +941,9 @@ export function ThemeEditorPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Primary</span>
-                <span className="font-mono text-primary">hsl({vars.primary.h}, {vars.primary.s}%, {vars.primary.l}%)</span>
+                <span className="font-mono text-primary">
+                  hsl({vars.primary.h}, {vars.primary.s}%, {vars.primary.l}%)
+                </span>
               </div>
               {appliedPreset && (
                 <div className="flex justify-between">
@@ -793,13 +956,7 @@ export function ThemeEditorPage() {
         </div>
       </div>
 
-      {/* Save toast */}
-      {savedToast && (
-        <div className="fixed bottom-6 right-6 z-50 px-4 py-3 bg-card border border-border text-foreground text-sm rounded-xl shadow-2xl animate-slide-up flex items-center gap-2">
-          <Check className="h-4 w-4 text-emerald-400 shrink-0" />
-          Theme applied and saved!
-        </div>
-      )}
+      {/* (toast rendered globally) */}
     </div>
   );
 }

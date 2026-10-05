@@ -33,6 +33,7 @@ import {
   ListPlus,
   Columns,
 } from 'lucide-react';
+import { useToast } from '@/components/ui/toast';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -393,6 +394,7 @@ export function ReferenceDataPage() {
     deleteAttribute,
   } = useLov();
   const { addLog } = useActivityLog();
+  const { success: toastSuccess } = useToast();
 
   const activeLists = lists.filter((l) => l.status === 'active');
   const [activeTabCode, setActiveTabCode] = useState<string>(activeLists[0]?.code || '');
@@ -403,7 +405,6 @@ export function ReferenceDataPage() {
   const [modalMode, setModalMode] = useState<ModalMode>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [showTweak, setShowTweak] = useState(false);
   const [tweakMap, setTweakMap] = useState<Record<string, TweakSettings>>({});
@@ -440,10 +441,7 @@ export function ReferenceDataPage() {
   const tweak = tweakMap[activeTabCode] || defaultTweakForAttrs(activeAttrs);
   const setTweak = (s: TweakSettings) => setTweakMap((prev) => ({ ...prev, [activeTabCode]: s }));
 
-  const showToast = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3500);
-  };
+  const showToast = (msg: string) => toastSuccess(msg);
 
   // ── Filtering & Sorting ─────────────────────────────────────────────────
 
@@ -1355,13 +1353,7 @@ export function ReferenceDataPage() {
         </div>
       )}
 
-      {/* Toast */}
-      {toast && (
-        <div className="fixed bottom-6 right-6 z-50 px-4 py-3 bg-card border border-border text-foreground text-sm rounded-xl shadow-2xl animate-slide-up flex items-center gap-2">
-          <Check className="h-4 w-4 text-emerald-400 shrink-0" />
-          {toast}
-        </div>
-      )}
+      {/* (toast rendered globally) */}
     </div>
   );
 }

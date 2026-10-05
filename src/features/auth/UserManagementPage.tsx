@@ -8,18 +8,28 @@ import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
-  Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
 } from '@/components/ui/table';
-import {
-  UserPlus, Pencil, Trash2, X, Check, ShieldCheck, ShieldOff, Search,
-} from 'lucide-react';
-import { SignupApprovalQueue } from './SignupApprovalQueue';
+import { useToast } from '@/components/ui/toast';
+import { UserPlus, Pencil, Trash2, X, Check, ShieldCheck, ShieldOff, Search } from 'lucide-react';
 
 // Roles now come dynamically from RolesContext
 
+import { SignupApprovalQueue } from './SignupApprovalQueue';
 const DEPARTMENTS = [
-  'Fleet Operations', 'Logistics & Dispatch', 'Finance & Accounting',
-  'Procurement', 'Human Resources', 'Information Technology', 'Administration', 'Field Operations',
+  'Fleet Operations',
+  'Logistics & Dispatch',
+  'Finance & Accounting',
+  'Procurement',
+  'Human Resources',
+  'Information Technology',
+  'Administration',
+  'Field Operations',
 ];
 
 interface UserFormData {
@@ -32,24 +42,23 @@ interface UserFormData {
 }
 
 const EMPTY_FORM: UserFormData = {
-  name: '', email: '', role: '', department: 'Fleet Operations',
-  password: '', isActive: true,
+  name: '',
+  email: '',
+  role: '',
+  department: 'Fleet Operations',
+  password: '',
+  isActive: true,
 };
 
 export function UserManagementPage() {
   const { allUsers, currentUser, addUser, updateUser, deleteUser } = useAuth();
   const { roles } = useRoles();
+  const { success: toastSuccess } = useToast();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<UserFormData>(EMPTY_FORM);
   const [search, setSearch] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
-
-  const showToast = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3500);
-  };
 
   const filtered = allUsers.filter((u) =>
     [u.name, u.email, u.role, u.department].some((v) =>
@@ -86,11 +95,11 @@ export function UserManagementPage() {
         isActive: form.isActive,
       };
       updateUser(editingId, updates);
-      showToast(`User "${form.name}" updated successfully.`);
+      toastSuccess(`User "${form.name}" updated successfully.`);
     } else {
       if (!form.password) return;
       addUser({ ...form });
-      showToast(`User "${form.name}" created successfully.`);
+      toastSuccess(`User "${form.name}" created successfully.`);
     }
     setShowForm(false);
     setEditingId(null);
@@ -100,12 +109,12 @@ export function UserManagementPage() {
     const user = allUsers.find((u) => u.id === id);
     deleteUser(id);
     setDeleteConfirmId(null);
-    showToast(`User "${user?.name}" removed.`);
+    toastSuccess(`User "${user?.name}" removed.`);
   };
 
   const toggleActive = (user: User) => {
     updateUser(user.id, { isActive: !user.isActive });
-    showToast(`User "${user.name}" ${user.isActive ? 'deactivated' : 'activated'}.`);
+    toastSuccess(`User "${user.name}" ${user.isActive ? 'deactivated' : 'activated'}.`);
   };
 
   return (
@@ -130,9 +139,21 @@ export function UserManagementPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: 'Total Users', value: allUsers.length, color: 'text-foreground' },
-          { label: 'Active', value: allUsers.filter((u) => u.isActive).length, color: 'text-emerald-400' },
-          { label: 'Inactive', value: allUsers.filter((u) => !u.isActive).length, color: 'text-muted-foreground' },
-          { label: 'Roles in Use', value: new Set(allUsers.map((u) => u.role)).size, color: 'text-primary' },
+          {
+            label: 'Active',
+            value: allUsers.filter((u) => u.isActive).length,
+            color: 'text-emerald-400',
+          },
+          {
+            label: 'Inactive',
+            value: allUsers.filter((u) => !u.isActive).length,
+            color: 'text-muted-foreground',
+          },
+          {
+            label: 'Roles in Use',
+            value: new Set(allUsers.map((u) => u.role)).size,
+            color: 'text-primary',
+          },
         ].map((stat) => (
           <div key={stat.label} className="bg-card border border-border rounded-xl p-4">
             <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
@@ -195,7 +216,9 @@ export function UserManagementPage() {
                 {(() => {
                   const roleDef = roles.find((r) => r.key === user.role);
                   return (
-                    <span className={`inline-flex text-[11px] font-semibold px-2.5 py-1 rounded-full border ${roleDef?.color || 'bg-muted text-muted-foreground border-border'}`}>
+                    <span
+                      className={`inline-flex text-[11px] font-semibold px-2.5 py-1 rounded-full border ${roleDef?.color || 'bg-muted text-muted-foreground border-border'}`}
+                    >
                       {roleDef?.label || user.role}
                     </span>
                   );
@@ -208,7 +231,14 @@ export function UserManagementPage() {
                 {user.createdAt}
               </TableCell>
               <TableCell>
-                <Badge variant={user.isActive ? 'default' : 'secondary'} className={user.isActive ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 border' : ''}>
+                <Badge
+                  variant={user.isActive ? 'default' : 'secondary'}
+                  className={
+                    user.isActive
+                      ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 border'
+                      : ''
+                  }
+                >
                   {user.isActive ? 'Active' : 'Inactive'}
                 </Badge>
               </TableCell>
@@ -220,7 +250,11 @@ export function UserManagementPage() {
                     disabled={user.id === currentUser?.id}
                     className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                   >
-                    {user.isActive ? <ShieldOff className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}
+                    {user.isActive ? (
+                      <ShieldOff className="h-4 w-4" />
+                    ) : (
+                      <ShieldCheck className="h-4 w-4" />
+                    )}
                   </button>
                   <button
                     title="Edit"
@@ -266,13 +300,19 @@ export function UserManagementPage() {
       {/* Form Modal */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowForm(false)} />
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowForm(false)}
+          />
           <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-md p-6 animate-fade-in">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-lg font-bold text-foreground">
                 {editingId ? 'Edit User' : 'Add New User'}
               </h3>
-              <button onClick={() => setShowForm(false)} className="text-muted-foreground hover:text-foreground transition-colors">
+              <button
+                onClick={() => setShowForm(false)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -280,36 +320,74 @@ export function UserManagementPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="user-name">Full Name</Label>
-                <Input id="user-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Juan Dela Cruz" required />
+                <Input
+                  id="user-name"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  placeholder="Juan Dela Cruz"
+                  required
+                />
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="user-email">Email Address</Label>
-                <Input id="user-email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="juan@hulma.com" required disabled={!!editingId} />
-                {editingId && <p className="text-xs text-muted-foreground">Email cannot be changed after creation.</p>}
+                <Input
+                  id="user-email"
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  placeholder="juan@hulma.com"
+                  required
+                  disabled={!!editingId}
+                />
+                {editingId && (
+                  <p className="text-xs text-muted-foreground">
+                    Email cannot be changed after creation.
+                  </p>
+                )}
               </div>
 
               {!editingId && (
                 <div className="space-y-1.5">
                   <Label htmlFor="user-password">Temporary Password</Label>
-                  <Input id="user-password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="At least 8 characters" required minLength={6} />
+                  <Input
+                    id="user-password"
+                    type="password"
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                    placeholder="At least 8 characters"
+                    required
+                    minLength={6}
+                  />
                 </div>
               )}
 
               <div className="space-y-1.5">
                 <Label htmlFor="user-role">Role</Label>
-                <Select id="user-role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+                <Select
+                  id="user-role"
+                  value={form.role}
+                  onChange={(e) => setForm({ ...form, role: e.target.value })}
+                >
                   {roles.map((r) => (
-                    <option key={r.key} value={r.key}>{r.label}</option>
+                    <option key={r.key} value={r.key}>
+                      {r.label}
+                    </option>
                   ))}
                 </Select>
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="user-department">Department</Label>
-                <Select id="user-department" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })}>
+                <Select
+                  id="user-department"
+                  value={form.department}
+                  onChange={(e) => setForm({ ...form, department: e.target.value })}
+                >
                   {DEPARTMENTS.map((d) => (
-                    <option key={d} value={d}>{d}</option>
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
                   ))}
                 </Select>
               </div>
@@ -326,7 +404,12 @@ export function UserManagementPage() {
               </div>
 
               <div className="flex gap-3 pt-2">
-                <Button type="button" variant="outline" onClick={() => setShowForm(false)} className="flex-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowForm(false)}
+                  className="flex-1"
+                >
                   Cancel
                 </Button>
                 <Button type="submit" className="flex-1">
@@ -335,14 +418,6 @@ export function UserManagementPage() {
               </div>
             </form>
           </div>
-        </div>
-      )}
-
-      {/* Toast */}
-      {toast && (
-        <div className="fixed bottom-6 right-6 z-50 px-4 py-3 bg-card border border-border text-foreground text-sm rounded-xl shadow-2xl animate-slide-up flex items-center gap-2">
-          <Check className="h-4 w-4 text-emerald-400 shrink-0" />
-          {toast}
         </div>
       )}
     </div>
