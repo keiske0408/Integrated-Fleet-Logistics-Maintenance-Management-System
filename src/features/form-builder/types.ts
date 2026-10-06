@@ -23,7 +23,8 @@ export interface FormField {
   options?: Array<{ value: string; label: string }>;
   dataSource?:
     | { kind: 'lov'; listCode: string }
-    | { kind: 'entity'; entity: 'vehicles'; valueField: 'id'; labelField: 'plateNumber' };
+    | { kind: 'entity'; entity: 'vehicles'; valueField: 'id'; labelField: 'plateNumber' }
+    | { kind: 'entity'; entity: 'drivers'; valueField: 'id'; labelField: 'name' };
   content?: string;
   width?: 'full' | 'half';
   rules?: import('./rules').FieldRule[];

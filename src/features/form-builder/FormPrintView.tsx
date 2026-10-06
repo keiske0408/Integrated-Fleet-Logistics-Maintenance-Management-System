@@ -12,6 +12,46 @@ interface FormPrintViewProps {
   createdAt?: string;
   currentAssignee?: { name: string; role: string } | null;
   currentResponsibleRoles?: string[];
+  workflowEvents?: FormPrintWorkflowEvent[];
+}
+
+export interface FormPrintWorkflowEvent {
+  fromStage: string | null;
+  toStage: string;
+  actorName: string;
+  actorRole: string;
+  createdAt: string;
+}
+
+interface WorkflowStamp {
+  actorName: string;
+  actorRole: string;
+  createdAt: string;
+}
+
+export function getWorkflowApprovalStamps(events: FormPrintWorkflowEvent[]): {
+  finance: WorkflowStamp | null;
+  approval: WorkflowStamp | null;
+} {
+  const latestEvent = (predicate: (event: FormPrintWorkflowEvent) => boolean) =>
+    [...events]
+      .sort(
+        (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+      )
+      .find(predicate);
+  const toStamp = (event: FormPrintWorkflowEvent | undefined): WorkflowStamp | null =>
+    event
+      ? {
+          actorName: event.actorName,
+          actorRole: event.actorRole,
+          createdAt: event.createdAt,
+        }
+      : null;
+
+  return {
+    finance: toStamp(latestEvent((event) => event.fromStage === 'finance_verification')),
+    approval: toStamp(latestEvent((event) => event.toStage === 'approval')),
+  };
 }
 
 function displayStatus(value: string | undefined): string {
@@ -111,12 +151,14 @@ export function FormPrintView({
   createdAt,
   currentAssignee,
   currentResponsibleRoles = [],
+  workflowEvents = [],
 }: FormPrintViewProps) {
   const responsibility = currentAssignee
     ? `${currentAssignee.name} (${displayStatus(currentAssignee.role)})`
     : currentResponsibleRoles.length
       ? `${currentResponsibleRoles.map(displayStatus).join(', ')} queue`
       : 'No active assignee';
+  const approvalStamps = getWorkflowApprovalStamps(workflowEvents);
   return (
     <main className="form-print-sheet" aria-label="Printable form">
       <header className="form-print-header">
@@ -168,6 +210,37 @@ export function FormPrintView({
           </div>
         </section>
       ))}
+      <section className="form-print-approvals" aria-label="Finance and approval stamps">
+        <h2>Finance and Approval Stamps</h2>
+        <div className="form-print-approval-grid">
+          <div>
+            <h3>Finance Verification</h3>
+            <span>Verified by</span>
+            <strong>{approvalStamps.finance?.actorName ?? ' '}</strong>
+            <span>Role</span>
+            <strong>{approvalStamps.finance?.actorRole ?? ' '}</strong>
+            <span>Date</span>
+            <strong>
+              {approvalStamps.finance
+                ? new Date(approvalStamps.finance.createdAt).toLocaleString()
+                : ' '}
+            </strong>
+          </div>
+          <div>
+            <h3>Approval</h3>
+            <span>Approved by</span>
+            <strong>{approvalStamps.approval?.actorName ?? ' '}</strong>
+            <span>Role</span>
+            <strong>{approvalStamps.approval?.actorRole ?? ' '}</strong>
+            <span>Date</span>
+            <strong>
+              {approvalStamps.approval
+                ? new Date(approvalStamps.approval.createdAt).toLocaleString()
+                : ' '}
+            </strong>
+          </div>
+        </div>
+      </section>
       <footer className="form-print-footer">
         Generated from {definition.name} v{definition.version}
       </footer>

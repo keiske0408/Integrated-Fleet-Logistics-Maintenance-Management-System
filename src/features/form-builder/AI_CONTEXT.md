@@ -30,9 +30,13 @@ The seeded request includes Fleet Asset versus 3rd Party Trucker selection: Flee
 
 Role catalog writes are intentionally disabled: the backend continues to authorize through fixed CASL policies, and the Roles page displays the local catalog read-only until a server-backed policy source is implemented. Production writes require configured Arcjet protection; development/test behavior differs and is covered in `docs/PHASE_1_IMPLEMENTATION_AND_DEMO.md`.
 
-Still pending: finance/approval stamp fields, end-to-end Activity History linkage for builder/workflow edits, driver entity lookup, dynamic server-backed role policies, and the remaining paper-form fields. Owner detail masking is enforced on the detail endpoint; report projection continues to use its reportable-field and PII rules.
+Still pending: driver entity lookup, dynamic server-backed role policies, and the remaining paper-form fields. Owner detail masking is enforced on the detail endpoint; report projection continues to use its reportable-field and PII rules.
 
 Requestors can filter Returned submissions in the owner-scoped register and open their own returned request directly in edit mode. Edits use the pinned schema and expose only fields explicitly marked `read` or `edit` for the current stage; only changed editable paths are sent. Repeater child patches preserve unchanged stored fields. The API permits owner edits only while returned and resubmission only through a configured transition to the version's initial in-review stage.
+
+Printable TSRFs include Finance Verification and Approval stamp blocks. The actor, role, and timestamp are derived from the latest matching persisted workflow events; pending steps remain blank for physical sign-off. No separate approval fields are stored outside the event history.
+
+Form Builder Activity History records definition creation, draft creation, actual schema/workflow draft changes, and publication as distinct events. Entries include the form identity, version, operation, and changed area without storing schema or workflow payloads; the Activity History view labels these entries by form name, key, and version.
 
 ## Validation
 

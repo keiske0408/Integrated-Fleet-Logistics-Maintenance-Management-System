@@ -623,6 +623,7 @@ export function TSRFDetailView({ id: propId }: { id?: string }) {
           createdAt={detail.createdAt}
           currentAssignee={detail.currentAssignee}
           currentResponsibleRoles={detail.currentResponsibleRoles}
+          workflowEvents={events}
         />
       </div>
     </>

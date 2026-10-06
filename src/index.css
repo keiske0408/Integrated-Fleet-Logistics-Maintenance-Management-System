@@ -269,7 +269,8 @@
   }
 
   .form-print-section h2,
-  .form-print-repeater h3 {
+  .form-print-repeater h3,
+  .form-print-approvals h2 {
     margin: 0 0 8px;
     padding: 5px 7px;
     background: #eee;
@@ -327,6 +328,42 @@
     grid-column: 1 / -1;
     border: 1px solid #777;
     padding: 8px;
+  }
+
+  .form-print-approvals {
+    break-inside: avoid;
+    margin-top: 16px;
+  }
+
+  .form-print-approval-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .form-print-approval-grid > div {
+    display: grid;
+    grid-template-columns: 92px minmax(0, 1fr);
+    gap: 6px 8px;
+    border: 1px solid #777;
+    padding: 10px;
+  }
+
+  .form-print-approval-grid h3 {
+    grid-column: 1 / -1;
+    margin: 0 0 4px;
+    font: 700 10pt Arial, sans-serif;
+  }
+
+  .form-print-approval-grid span {
+    color: #333;
+    font: 700 8pt Arial, sans-serif;
+  }
+
+  .form-print-approval-grid strong {
+    min-height: 18px;
+    border-bottom: 1px solid #999;
+    font: 10pt Georgia, serif;
   }
 
   .form-print-footer {

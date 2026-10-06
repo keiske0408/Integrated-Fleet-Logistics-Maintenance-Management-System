@@ -31,6 +31,7 @@ const ALL_MODULES: LogModule[] = [
   'PMS',
   'Work Order',
   'Purchase Requisition',
+  'Form Builder',
   'TSRF',
   'Incident Report',
   'User Management',

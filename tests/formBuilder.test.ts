@@ -14,6 +14,7 @@ import {
 } from '@/features/form-builder';
 import { choosePublishedDefinition, formatPrintableFieldValue } from '@/features/form-builder';
 import { fieldRegistry } from '@/features/form-builder';
+import { getWorkflowApprovalStamps } from '@/features/form-builder';
 
 describe('TSRF form definition', () => {
   it('contains published intake fields bound to the expected LOVs', () => {
@@ -56,6 +57,27 @@ describe('TSRF form definition', () => {
         values,
       ),
     ).toEqual({ visible: true, required: true, enabled: true });
+  });
+
+  it('accepts active driver entity lookup sources', () => {
+    const definition = structuredClone(TSRF_V1);
+    definition.sections[1].fields.push({
+      id: 'assigned-driver',
+      key: 'driverId',
+      type: 'entity_lookup',
+      label: 'Assigned Driver',
+      section: 'trip-details',
+      dataSource: {
+        kind: 'entity',
+        entity: 'drivers',
+        valueField: 'id',
+        labelField: 'name',
+      },
+    });
+
+    expect(validateFormDefinition(definition, new Set(['DEPARTMENTS', 'VEHICLE_TYPES']))).toEqual(
+      [],
+    );
   });
 
   it('validates workflow stages, transition roles, and cutoff configuration', () => {
@@ -177,6 +199,51 @@ describe('TSRF form definition', () => {
         department: { code: 'IT', label: 'Information Technology' },
       }),
     ).toBe('Information Technology');
+  });
+
+  it('projects the latest finance verification and approval events for printing', () => {
+    const stamps = getWorkflowApprovalStamps([
+      {
+        fromStage: null,
+        toStage: 'submitted',
+        actorName: 'Requester',
+        actorRole: 'department_requester',
+        createdAt: '2026-10-01T08:00:00.000Z',
+      },
+      {
+        fromStage: 'endorsement',
+        toStage: 'finance_verification',
+        actorName: 'Finance Reviewer',
+        actorRole: 'finance',
+        createdAt: '2026-10-01T09:00:00.000Z',
+      },
+      {
+        fromStage: 'finance_verification',
+        toStage: 'approval',
+        actorName: 'Finance Reviewer',
+        actorRole: 'finance',
+        createdAt: '2026-10-01T10:00:00.000Z',
+      },
+      {
+        fromStage: 'endorsement',
+        toStage: 'approval',
+        actorName: 'Approver',
+        actorRole: 'approver',
+        createdAt: '2026-10-01T11:00:00.000Z',
+      },
+    ]);
+
+    expect(stamps.finance).toMatchObject({
+      actorName: 'Finance Reviewer',
+      actorRole: 'finance',
+      createdAt: '2026-10-01T10:00:00.000Z',
+    });
+    expect(stamps.approval).toMatchObject({
+      actorName: 'Approver',
+      actorRole: 'approver',
+      createdAt: '2026-10-01T11:00:00.000Z',
+    });
+    expect(getWorkflowApprovalStamps([])).toEqual({ finance: null, approval: null });
   });
 
   it('accepts seeded nested keys and rejects duplicate root keys and missing LOVs', () => {

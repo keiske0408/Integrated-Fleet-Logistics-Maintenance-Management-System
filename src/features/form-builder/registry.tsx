@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Calendar, Clock } from 'lucide-react';
+import { Calendar, Clock, Info } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import type { FieldType, FormField, FormValues } from './types';
@@ -196,8 +196,11 @@ export const fieldRegistry: Record<FieldType, FieldRenderer> = {
     </label>
   ),
   notice: ({ field }) => (
-    <div className="rounded-md border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground">
-      {field.content}
+    <div className="rounded-xl border border-primary/25 bg-primary/5 p-4 text-xs sm:text-sm text-foreground flex items-start gap-3">
+      <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0 mt-0.5">
+        <Info className="h-4 w-4" />
+      </div>
+      <div className="flex-1 text-muted-foreground leading-relaxed">{field.content}</div>
     </div>
   ),
   repeater: () => null,

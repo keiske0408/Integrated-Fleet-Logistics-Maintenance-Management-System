@@ -9,6 +9,7 @@ export type LogModule =
   | 'PMS'
   | 'Work Order'
   | 'Purchase Requisition'
+  | 'Form Builder'
   | 'TSRF'
   | 'Incident Report'
   | 'User Management'
@@ -31,7 +32,8 @@ export type LogAction =
   | 'Completed'
   | 'Login'
   | 'Logout'
-  | 'Permission Changed';
+  | 'Permission Changed'
+  | 'Published';
 
 export type LogSeverity = 'info' | 'success' | 'warning' | 'error';
 
@@ -90,6 +92,7 @@ function fromBackendLog(log: BackendActivityLog): ActivityLogEntry {
     'Login',
     'Logout',
     'Permission Changed',
+    'Published',
   ];
   const actionAliases: Record<string, LogAction> = {
     local_login_succeeded: 'Login',
@@ -108,6 +111,7 @@ function fromBackendLog(log: BackendActivityLog): ActivityLogEntry {
     'PMS',
     'Work Order',
     'Purchase Requisition',
+    'Form Builder',
     'TSRF',
     'Incident Report',
     'User Management',
@@ -121,12 +125,19 @@ function fromBackendLog(log: BackendActivityLog): ActivityLogEntry {
     ? (log.module as LogModule)
     : 'System';
   const path = typeof metadata.path === 'string' ? metadata.path : '';
+  const formName = typeof metadata.formName === 'string' ? metadata.formName : '';
+  const formKey = typeof metadata.formKey === 'string' ? metadata.formKey : '';
+  const formVersion = typeof metadata.formVersion === 'number' ? metadata.formVersion : null;
+  const subject =
+    metadata.area === 'form_builder' && formName && formKey
+      ? `${formName} (${formKey})${formVersion === null ? '' : ` v${formVersion}`}`
+      : path || `${action} ${module}`;
   return {
     id: log.id,
     timestamp: log.createdAt,
     module,
     action,
-    subject: path || `${action} ${module}`,
+    subject,
     description: log.description,
     severity,
     user: log.userName,
@@ -202,6 +213,7 @@ export const MODULE_COLORS: Record<LogModule, string> = {
   PMS: 'bg-amber-500/15 text-amber-400 border-amber-500/25',
   'Work Order': 'bg-violet-500/15 text-violet-400 border-violet-500/25',
   'Purchase Requisition': 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25',
+  'Form Builder': 'bg-sky-500/15 text-sky-400 border-sky-500/25',
   TSRF: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/25',
   'Incident Report': 'bg-rose-500/15 text-rose-400 border-rose-500/25',
   'User Management': 'bg-indigo-500/15 text-indigo-400 border-indigo-500/25',
@@ -233,4 +245,5 @@ export const ACTION_ICONS: Partial<Record<LogAction, string>> = {
   Login: '⬤',
   Logout: '⬡',
   'Permission Changed': '⚙',
+  Published: '✓',
 };

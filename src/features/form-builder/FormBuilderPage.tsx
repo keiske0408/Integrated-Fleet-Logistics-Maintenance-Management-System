@@ -491,9 +491,46 @@ export function FormBuilderPage() {
                   </div>
                 )}
                 {selectedField.type === 'entity_lookup' && (
-                  <p className="text-xs text-muted-foreground">
-                    Bound to active fleet vehicles. The submitted value is the vehicle ID.
-                  </p>
+                  <div>
+                    <label
+                      htmlFor="field-entity-source"
+                      className="mb-1 block text-xs font-semibold"
+                    >
+                      Entity source
+                    </label>
+                    <Select
+                      id="field-entity-source"
+                      value={
+                        selectedField.dataSource?.kind === 'entity'
+                          ? selectedField.dataSource.entity
+                          : 'vehicles'
+                      }
+                      onChange={(event) =>
+                        updateField({
+                          dataSource:
+                            event.target.value === 'drivers'
+                              ? {
+                                  kind: 'entity',
+                                  entity: 'drivers',
+                                  valueField: 'id',
+                                  labelField: 'name',
+                                }
+                              : {
+                                  kind: 'entity',
+                                  entity: 'vehicles',
+                                  valueField: 'id',
+                                  labelField: 'plateNumber',
+                                },
+                        })
+                      }
+                    >
+                      <option value="vehicles">Active fleet vehicles</option>
+                      <option value="drivers">Active drivers</option>
+                    </Select>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      The submitted value is the selected record ID.
+                    </p>
+                  </div>
                 )}
                 <label className="flex items-center gap-2 text-sm">
                   <input

@@ -52,7 +52,11 @@ export function validateFormDefinition(
         `Field "${field.label}" references unknown LOV list "${field.dataSource.listCode}".`,
       );
     }
-    if (field.dataSource?.kind === 'entity' && field.dataSource.entity !== 'vehicles') {
+    if (
+      field.dataSource?.kind === 'entity' &&
+      field.dataSource.entity !== 'vehicles' &&
+      field.dataSource.entity !== 'drivers'
+    ) {
       errors.push(`Field "${field.label}" references an unsupported entity.`);
     }
     field.rules?.forEach((rule) => {
