@@ -52,6 +52,10 @@ function getInitialValues(definition: FormDefinition, initialValues: FormValues)
     );
 }
 
+function flattenFields(fields: FormField[]): FormField[] {
+  return fields.flatMap((field) => [field, ...flattenFields(field.rowFields ?? [])]);
+}
+
 function valuesEqual(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
@@ -243,15 +247,12 @@ export function FormRenderer({
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    const hasVehicleLookup = definition.sections.some((section) =>
-      section.fields.some(
-        (field) => field.dataSource?.kind === 'entity' && field.dataSource.entity === 'vehicles',
-      ),
+    const fields = flattenFields(definition.sections.flatMap((section) => section.fields));
+    const hasVehicleLookup = fields.some(
+      (field) => field.dataSource?.kind === 'entity' && field.dataSource.entity === 'vehicles',
     );
-    const hasDriverLookup = definition.sections.some((section) =>
-      section.fields.some(
-        (field) => field.dataSource?.kind === 'entity' && field.dataSource.entity === 'drivers',
-      ),
+    const hasDriverLookup = fields.some(
+      (field) => field.dataSource?.kind === 'entity' && field.dataSource.entity === 'drivers',
     );
     if (!hasVehicleLookup && !hasDriverLookup) return;
     let cancelled = false;
@@ -305,6 +306,27 @@ export function FormRenderer({
     };
   }, [currentUser?.id, definition, toastWarning]);
 
+  const resolveFieldOptions = (field: FormField): FormField => {
+    let resolvedField = field;
+    if (field.dataSource?.kind === 'entity') {
+      resolvedField = {
+        ...field,
+        options: field.dataSource.entity === 'drivers' ? driverOptions : vehicleOptions,
+      };
+    } else if (field.dataSource?.kind === 'lov' && field.type === 'lookup') {
+      const options = getActiveItems(field.dataSource.listCode).map((item) => ({
+        value: item.code,
+        label: item.label,
+      }));
+      resolvedField = { ...field, options: options.length > 0 ? options : field.options };
+    }
+    if (field.rowFields)
+      resolvedField = {
+        ...resolvedField,
+        rowFields: field.rowFields.map(resolveFieldOptions),
+      };
+    return resolvedField;
+  };
   const updateValue = (key: string, value: FormValues[string]) =>
     setValues((current) => ({ ...current, [key]: value }));
 
@@ -312,21 +334,7 @@ export function FormRenderer({
     ...definition,
     sections: definition.sections.map((section) => ({
       ...section,
-      fields: section.fields.map((field) => {
-        if (field.dataSource?.kind === 'entity') {
-          return {
-            ...field,
-            options: field.dataSource.entity === 'drivers' ? driverOptions : vehicleOptions,
-          };
-        }
-        if (!field.dataSource || field.dataSource.kind !== 'lov' || field.type !== 'lookup')
-          return field;
-        const options = getActiveItems(field.dataSource.listCode).map((item) => ({
-          value: item.code,
-          label: item.label,
-        }));
-        return { ...field, options: options.length > 0 ? options : field.options };
-      }),
+      fields: section.fields.map(resolveFieldOptions),
     })),
   };
 

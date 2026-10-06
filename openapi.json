@@ -2541,6 +2541,36 @@
         }
       }
     },
+    "/api/users/drivers": {
+      "get": {
+        "summary": "List active drivers for form entity lookups",
+        "responses": {
+          "200": {
+            "description": "Active driver IDs and names",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["id", "name"]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/vehicles": {
       "get": {
         "summary": "List all vehicles in fleet",

@@ -394,6 +394,22 @@ registerJsonEndpoint({
 // Register routes
 registry.registerPath({
   method: 'get',
+  path: '/api/users/drivers',
+  summary: 'List active drivers for form entity lookups',
+  responses: {
+    200: {
+      description: 'Active driver IDs and names',
+      content: {
+        'application/json': {
+          schema: z.array(z.object({ id: z.string().uuid(), name: z.string() })),
+        },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
   path: '/api/vehicles',
   summary: 'List all vehicles in fleet',
   responses: {
