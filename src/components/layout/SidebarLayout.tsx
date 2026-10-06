@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth, type Permission } from '@/features/auth/AuthContext';
 import { useRoles } from '@/features/roles/RolesContext';
 import { useTheme } from '@/features/theme/ThemeContext';
@@ -26,6 +27,8 @@ import {
   Paintbrush,
 } from 'lucide-react';
 
+// ─── Route config ─────────────────────────────────────────────────────────────
+
 export type AppPage =
   | 'dashboard'
   | 'fleet'
@@ -38,6 +41,28 @@ export type AppPage =
   | 'theme_editor'
   | 'form_builder'
   | 'reports';
+
+/** Maps each AppPage key to its URL path. */
+export const PAGE_ROUTES: Record<AppPage, string> = {
+  dashboard: '/dashboard',
+  fleet: '/fleet',
+  tsrf: '/tsrf',
+  procurement: '/procurement',
+  reports: '/reports',
+  users: '/users',
+  roles: '/roles',
+  maintenance_ref: '/reference-data',
+  history: '/history',
+  theme_editor: '/theme-editor',
+  form_builder: '/form-builder',
+};
+
+/** Reverse lookup: URL path → AppPage. */
+export const PATH_TO_PAGE: Record<string, AppPage> = Object.fromEntries(
+  Object.entries(PAGE_ROUTES).map(([page, path]) => [path, page as AppPage]),
+) as Record<string, AppPage>;
+
+// ─── Nav item definitions ─────────────────────────────────────────────────────
 
 interface NavItem {
   id: AppPage;
@@ -68,52 +93,68 @@ const SETTINGS_ITEMS: NavItem[] = [
   { id: 'form_builder', label: 'Form Builder', icon: Copy, permission: 'manage:reference_data' },
 ];
 
+// ─── Component ────────────────────────────────────────────────────────────────
+
 interface SidebarLayoutProps {
-  activePage: AppPage;
-  onNavigate: (page: AppPage) => void;
-  children: React.ReactNode;
   notifications?: number;
 }
 
-export function SidebarLayout({
-  activePage,
-  onNavigate,
-  children,
-  notifications = 0,
-}: SidebarLayoutProps) {
+export function SidebarLayout({ notifications = 0 }: SidebarLayoutProps) {
   const { currentUser, logout, hasPermission } = useAuth();
   const { roles } = useRoles();
   const { theme, toggleTheme } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const location = useLocation();
 
-  const visibleNav = NAV_ITEMS.filter((item) => hasPermission(item.permission));
-  const visibleSettings = SETTINGS_ITEMS.filter((item) => hasPermission(item.permission));
+  const visibleNav = useMemo(
+    () => NAV_ITEMS.filter((item) => hasPermission(item.permission)),
+    [hasPermission],
+  );
+  const visibleSettings = useMemo(
+    () => SETTINGS_ITEMS.filter((item) => hasPermission(item.permission)),
+    [hasPermission],
+  );
 
-  const NavButton = ({ item, onClick }: { item: NavItem; onClick: () => void }) => {
+  // Derive current page label from URL for the breadcrumb
+  const activeLabel = useMemo(() => {
+    const activePage = PATH_TO_PAGE[location.pathname] || 'dashboard';
+    return [...NAV_ITEMS, ...SETTINGS_ITEMS].find((i) => i.id === activePage)?.label || 'Dashboard';
+  }, [location.pathname]);
+
+  const closeMobile = useCallback(() => setMobileOpen(false), []);
+
+  const SidebarNavLink = ({ item }: { item: NavItem }) => {
     const Icon = item.icon;
-    const isActive = activePage === item.id;
+    const to = PAGE_ROUTES[item.id];
     return (
-      <button
+      <NavLink
         id={`nav-${item.id}`}
-        onClick={onClick}
+        to={to}
+        onClick={closeMobile}
         title={collapsed ? item.label : undefined}
-        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group ${
-          isActive
-            ? 'bg-primary text-primary-foreground shadow-sm'
-            : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-        } ${collapsed ? 'justify-center' : ''}`}
+        className={({ isActive }) =>
+          `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group ${
+            isActive
+              ? 'bg-primary text-primary-foreground shadow-sm'
+              : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+          } ${collapsed ? 'justify-center' : ''}`
+        }
       >
-        <Icon
-          className={`h-4 w-4 shrink-0 transition-transform group-hover:scale-110 ${
-            isActive ? 'text-primary-foreground' : ''
-          }`}
-        />
-        {!collapsed && <span className="truncate">{item.label}</span>}
-        {isActive && !collapsed && (
-          <span className="ml-auto h-1.5 w-1.5 rounded-full bg-primary-foreground/60" />
+        {({ isActive }) => (
+          <>
+            <Icon
+              className={`h-4 w-4 shrink-0 transition-transform group-hover:scale-110 ${
+                isActive ? 'text-primary-foreground' : ''
+              }`}
+            />
+            {!collapsed && <span className="truncate">{item.label}</span>}
+            {isActive && !collapsed && (
+              <span className="ml-auto h-1.5 w-1.5 rounded-full bg-primary-foreground/60" />
+            )}
+          </>
         )}
-      </button>
+      </NavLink>
     );
   };
 
@@ -144,14 +185,7 @@ export function SidebarLayout({
         {collapsed && <div className="py-1" />}
 
         {visibleNav.map((item) => (
-          <NavButton
-            key={item.id}
-            item={item}
-            onClick={() => {
-              onNavigate(item.id);
-              setMobileOpen(false);
-            }}
-          />
+          <SidebarNavLink key={item.id} item={item} />
         ))}
 
         {/* Administration section */}
@@ -166,14 +200,7 @@ export function SidebarLayout({
               {collapsed && <Separator className="my-2" />}
             </div>
             {visibleSettings.map((item) => (
-              <NavButton
-                key={item.id}
-                item={item}
-                onClick={() => {
-                  onNavigate(item.id);
-                  setMobileOpen(false);
-                }}
-              />
+              <SidebarNavLink key={item.id} item={item} />
             ))}
           </>
         )}
@@ -288,10 +315,7 @@ export function SidebarLayout({
           <div className="hidden md:flex items-center gap-2 text-sm">
             <span className="text-muted-foreground">Fleet Hub</span>
             <ChevronRight className="h-3 w-3 text-muted-foreground" />
-            <span className="font-semibold text-foreground">
-              {[...NAV_ITEMS, ...SETTINGS_ITEMS].find((i) => i.id === activePage)?.label ||
-                'Dashboard'}
-            </span>
+            <span className="font-semibold text-foreground">{activeLabel}</span>
           </div>
 
           {/* Right side */}
@@ -335,8 +359,10 @@ export function SidebarLayout({
           </div>
         </header>
 
-        {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-background">{children}</main>
+        {/* Page Content — rendered by React Router's <Outlet> */}
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-background">
+          <Outlet />
+        </main>
       </div>
     </div>
   );
