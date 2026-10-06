@@ -1,13 +1,18 @@
 import React from 'react';
 import { describe, expect, it } from 'vitest';
-import { serializeTsrfValues, TSRF_V1, TSRF_WORKFLOW } from '@/features/form-builder';
+import {
+  projectFormValuesToDefinition,
+  serializeTsrfValues,
+  TSRF_V1,
+  TSRF_WORKFLOW,
+} from '@/features/form-builder';
 import { evaluateCondition, getFieldState } from '@/features/form-builder';
 import {
   validateFormDefinition,
   validateFormValues,
   validateFormWorkflow,
 } from '@/features/form-builder';
-import { choosePublishedDefinition } from '@/features/form-builder';
+import { choosePublishedDefinition, formatPrintableFieldValue } from '@/features/form-builder';
 import { fieldRegistry } from '@/features/form-builder';
 
 describe('TSRF form definition', () => {
@@ -110,6 +115,51 @@ describe('TSRF form definition', () => {
       passengers: [{ name: 'Passenger', department: 'IT', role: 'Tech' }],
       cargo: [{ description: 'Tools', quantity: 2, isFragile: false }],
     });
+  });
+
+  it('projects published submissions to the loaded schema including repeater row fields', () => {
+    const staleDefinition = structuredClone(TSRF_V1);
+    staleDefinition.sections[1].fields = staleDefinition.sections[1].fields.filter(
+      (field) => field.key !== 'allocationType',
+    );
+    const stopRepeater = staleDefinition.sections
+      .find((section) => section.id === 'route')
+      ?.fields.find((field) => field.key === 'stops');
+    stopRepeater!.rowFields = stopRepeater!.rowFields!.filter((field) => field.key !== 'stopOrder');
+
+    const projected = projectFormValuesToDefinition(staleDefinition, {
+      projectName: 'Project',
+      allocationType: 'fleet_asset',
+      stops: [
+        {
+          stopOrder: 1,
+          locationName: 'Origin',
+          address: 'Address',
+          waitingTimeMinutes: 10,
+        },
+      ],
+    });
+
+    expect(projected).not.toHaveProperty('allocationType');
+    expect(projected.projectName).toBe('Project');
+    expect(projected.stops).toEqual([
+      { locationName: 'Origin', address: 'Address', waitingTimeMinutes: 10 },
+    ]);
+  });
+
+  it('prints option labels and saved LOV labels instead of internal codes', () => {
+    const fields = TSRF_V1.sections.flatMap((section) => section.fields);
+    const allocationType = fields.find((field) => field.key === 'allocationType')!;
+    const department = fields.find((field) => field.key === 'department')!;
+
+    expect(formatPrintableFieldValue(allocationType, 'fleet_asset', 'allocationType', {})).toBe(
+      'Fleet Asset',
+    );
+    expect(
+      formatPrintableFieldValue(department, 'IT', 'department', {
+        department: { code: 'IT', label: 'Information Technology' },
+      }),
+    ).toBe('Information Technology');
   });
 
   it('accepts seeded nested keys and rejects duplicate root keys and missing LOVs', () => {

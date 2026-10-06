@@ -61,6 +61,10 @@ function flattenPermissionFields(
   });
 }
 
+function collectFieldIds(fields: FormField[]): string[] {
+  return fields.flatMap((field) => [field.id, ...collectFieldIds(field.rowFields ?? [])]);
+}
+
 function cloneDefinition(): FormDefinition {
   return structuredClone(TSRF_V1);
 }
@@ -73,6 +77,7 @@ export function FormBuilderPage() {
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [definitionId, setDefinitionId] = useState<string | null>(null);
   const [draftVersionId, setDraftVersionId] = useState<string | null>(null);
+  const [publishedFieldIds, setPublishedFieldIds] = useState<Set<string>>(() => new Set());
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [permissionRole, setPermissionRole] = useState('department_requester');
@@ -97,6 +102,18 @@ export function FormBuilderPage() {
         if (cancelled || !saved) return;
         setDefinitionId(saved.id);
         const versions = [...saved.versions].sort((a, b) => b.version - a.version);
+        const published = versions.find((version) => version.status === 'published');
+        setPublishedFieldIds(
+          published?.schema
+            ? new Set(
+                collectFieldIds(
+                  published.schema.sections.flatMap(
+                    (section: { fields?: FormField[] }) => section.fields ?? [],
+                  ),
+                ),
+              )
+            : new Set(),
+        );
         const activeDraft = versions.find((version) => version.status === 'draft');
         const selected = activeDraft ?? versions.find((version) => version.status === 'published');
         if (selected?.schema) {
@@ -179,6 +196,7 @@ export function FormBuilderPage() {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? 'Unable to publish form.');
       setDefinition({ ...definition, version: result.version, status: 'published' });
+      setPublishedFieldIds(new Set(collectFieldIds(fields)));
       setDraftVersionId(null);
       setMessage(`Form v${result.version} published.`);
     } catch (error) {
@@ -409,6 +427,7 @@ export function FormBuilderPage() {
                   <label className="mb-1 block text-xs font-semibold">Field Key</label>
                   <Input
                     value={selectedField.key}
+                    disabled={publishedFieldIds.has(selectedField.id)}
                     onChange={(event) => updateField({ key: event.target.value })}
                   />
                 </div>

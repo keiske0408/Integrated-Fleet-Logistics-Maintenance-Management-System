@@ -71,6 +71,7 @@ export function RolesManagementPage() {
     deleteSystemPermission,
   } = useRoles();
   const { success: toastSuccess } = useToast();
+  const roleCatalogReadOnly = true;
 
   const [view, setView] = useState<View>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -205,13 +206,29 @@ export function RolesManagementPage() {
           <div>
             <h1 className="text-2xl font-bold text-foreground">Roles Management</h1>
             <p className="text-muted-foreground text-sm mt-0.5">
-              Define roles and customize which pages and actions each role can access.
+              View the application role and permission defaults.
             </p>
           </div>
-          <Button id="btn-add-role" onClick={openAdd} className="gap-2 shrink-0">
+          <Button
+            id="btn-add-role"
+            onClick={openAdd}
+            className="gap-2 shrink-0"
+            disabled={roleCatalogReadOnly}
+          >
             <Plus className="h-4 w-4" />
             Create Role
           </Button>
+        </div>
+
+        <div
+          role="status"
+          className="flex items-start gap-2 border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
+        >
+          <Lock className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>
+            Role changes are temporarily disabled. Server access uses fixed policies and is not
+            changed by this local catalog.
+          </p>
         </div>
 
         {/* Stats */}
@@ -297,6 +314,7 @@ export function RolesManagementPage() {
                     <button
                       title="Edit Permissions"
                       onClick={() => openEdit(role)}
+                      disabled={roleCatalogReadOnly}
                       className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
                     >
                       <Pencil className="h-4 w-4" />
@@ -306,6 +324,7 @@ export function RolesManagementPage() {
                         <>
                           <button
                             onClick={() => handleDelete(role.id, role.label)}
+                            disabled={roleCatalogReadOnly}
                             className="p-1.5 rounded-lg text-destructive hover:bg-destructive/10 transition-colors"
                           >
                             <Check className="h-4 w-4" />
@@ -320,6 +339,7 @@ export function RolesManagementPage() {
                       ) : (
                         <button
                           onClick={() => setDeleteConfirmId(role.id)}
+                          disabled={roleCatalogReadOnly}
                           className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -373,7 +393,7 @@ export function RolesManagementPage() {
                 {editingPermKey ? 'Edit Permission' : 'Add New Permission'}
               </h3>
               <p className="text-xs text-muted-foreground">
-                Only SuperAdmins should manage custom permissions.
+                Permission editing is disabled until server policy integration is available.
               </p>
 
               <div className="space-y-1.5">
@@ -385,7 +405,7 @@ export function RolesManagementPage() {
                   placeholder="e.g. view:custom_reports"
                   className="font-mono text-xs"
                   required
-                  disabled={!!editingPermKey}
+                  disabled={roleCatalogReadOnly || !!editingPermKey}
                 />
               </div>
               <div className="space-y-1.5">
@@ -396,6 +416,7 @@ export function RolesManagementPage() {
                   onChange={(e) => setNewPermLabel(e.target.value)}
                   placeholder="e.g. View Custom Reports"
                   required
+                  disabled={roleCatalogReadOnly}
                 />
               </div>
               <div className="space-y-1.5">
@@ -406,13 +427,14 @@ export function RolesManagementPage() {
                   onChange={(e) => setNewPermGroup(e.target.value)}
                   placeholder="e.g. Reports & Analytics"
                   required
+                  disabled={roleCatalogReadOnly}
                 />
               </div>
 
               <div className="flex gap-2">
                 <Button
                   onClick={handleCreatePermission}
-                  disabled={!newPermKey || !newPermLabel || !newPermGroup}
+                  disabled={roleCatalogReadOnly || !newPermKey || !newPermLabel || !newPermGroup}
                   className="w-full"
                 >
                   {editingPermKey ? 'Save Changes' : 'Add Permission'}
@@ -463,6 +485,7 @@ export function RolesManagementPage() {
                           <div className="flex items-center justify-end gap-1">
                             <button
                               onClick={() => handleEditPermission(key, label, group)}
+                              disabled={roleCatalogReadOnly}
                               className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
                               title="Edit Permission"
                             >
@@ -473,6 +496,7 @@ export function RolesManagementPage() {
                                 deleteSystemPermission(key);
                                 showToast(`Permission "${key}" deleted.`);
                               }}
+                              disabled={roleCatalogReadOnly}
                               className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                               title="Delete Permission"
                             >

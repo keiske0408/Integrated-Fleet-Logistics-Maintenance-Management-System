@@ -358,6 +358,36 @@ function rowsFor(values: FormValues, key: string): FormValues[] {
   return Array.isArray(values[key]) ? (values[key] as FormValues[]) : [];
 }
 
+function isFormValues(value: unknown): value is FormValues {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function projectFieldValues(fields: FormField[], values: FormValues): FormValues {
+  const projected: FormValues = {};
+  fields.forEach((field) => {
+    if (field.type === 'notice' || !Object.prototype.hasOwnProperty.call(values, field.key)) return;
+
+    const value = values[field.key];
+    projected[field.key] =
+      field.type === 'repeater' && Array.isArray(value)
+        ? value.map((row) =>
+            isFormValues(row) ? projectFieldValues(field.rowFields ?? [], row) : row,
+          )
+        : value;
+  });
+  return projected;
+}
+
+export function projectFormValuesToDefinition(
+  definition: FormDefinition,
+  values: FormValues,
+): FormValues {
+  return projectFieldValues(
+    definition.sections.flatMap((section) => section.fields),
+    values,
+  );
+}
+
 export function serializeTsrfValues(values: FormValues): TSRFFormData {
   return {
     projectName: String(values.projectName ?? ''),

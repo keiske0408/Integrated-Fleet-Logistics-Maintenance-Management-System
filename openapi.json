@@ -496,11 +496,2051 @@
           "departureDate",
           "callTime"
         ]
+      },
+      "LovList": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "isSystem": {
+            "type": "boolean"
+          },
+          "supportsHierarchy": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["active", "archived"]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "name",
+          "description",
+          "isSystem",
+          "supportsHierarchy",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "LovAttribute": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "listId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["text", "number", "boolean", "select"]
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "showInGrid": {
+            "type": "boolean"
+          },
+          "sortOrder": {
+            "type": "integer"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "nullable": true
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "listId",
+          "key",
+          "label",
+          "type",
+          "required",
+          "showInGrid",
+          "sortOrder",
+          "options",
+          "createdAt"
+        ]
+      },
+      "LovItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "listId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "parentId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "sortOrder": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["active", "inactive"]
+          },
+          "effectiveFrom": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "effectiveTo": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "attrs": {
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            }
+          },
+          "approvalUserId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "listId",
+          "parentId",
+          "code",
+          "label",
+          "sortOrder",
+          "status",
+          "effectiveFrom",
+          "effectiveTo",
+          "attrs",
+          "approvalUserId",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "FormDefinitionInput": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "schema": {
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            }
+          },
+          "workflow": {
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            }
+          }
+        },
+        "required": ["key", "name", "schema"]
+      },
+      "FormVersionInput": {
+        "type": "object",
+        "properties": {
+          "schema": {
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            }
+          },
+          "workflow": {
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            }
+          }
+        },
+        "required": ["schema"]
+      },
+      "FormSubmissionInput": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            }
+          }
+        },
+        "required": ["data"]
+      },
+      "FormTransitionInput": {
+        "type": "object",
+        "properties": {
+          "toStage": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string"
+          }
+        },
+        "required": ["toStage"]
+      },
+      "FormDataPatch": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            }
+          }
+        },
+        "required": ["data"]
       }
     },
     "parameters": {}
   },
   "paths": {
+    "/api/roles": {
+      "get": {
+        "summary": "List roles and assigned permission keys",
+        "responses": {
+          "200": {
+            "description": "List roles and assigned permission keys response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/roles/permissions": {
+      "get": {
+        "summary": "List role permission catalog entries",
+        "responses": {
+          "200": {
+            "description": "List role permission catalog entries response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/lov/lists": {
+      "get": {
+        "summary": "List LOV catalogs",
+        "responses": {
+          "200": {
+            "description": "List LOV catalogs response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "code": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "description": {
+                        "type": "string"
+                      },
+                      "isSystem": {
+                        "type": "boolean"
+                      },
+                      "supportsHierarchy": {
+                        "type": "boolean"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": ["active", "archived"]
+                      },
+                      "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "updatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "code",
+                      "name",
+                      "description",
+                      "isSystem",
+                      "supportsHierarchy",
+                      "status",
+                      "createdAt",
+                      "updatedAt"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create an LOV catalog",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "isSystem": {
+                    "type": "boolean"
+                  },
+                  "supportsHierarchy": {
+                    "type": "boolean"
+                  }
+                },
+                "required": ["code", "name"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Create an LOV catalog response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "isSystem": {
+                      "type": "boolean"
+                    },
+                    "supportsHierarchy": {
+                      "type": "boolean"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": ["active", "archived"]
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "code",
+                    "name",
+                    "description",
+                    "isSystem",
+                    "supportsHierarchy",
+                    "status",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/lov/lists/{code}": {
+      "get": {
+        "summary": "Get an LOV catalog and its attributes",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "code",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Get an LOV catalog and its attributes response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "isSystem": {
+                      "type": "boolean"
+                    },
+                    "supportsHierarchy": {
+                      "type": "boolean"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": ["active", "archived"]
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "attributes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "listId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "key": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": ["text", "number", "boolean", "select"]
+                          },
+                          "required": {
+                            "type": "boolean"
+                          },
+                          "showInGrid": {
+                            "type": "boolean"
+                          },
+                          "sortOrder": {
+                            "type": "integer"
+                          },
+                          "options": {
+                            "type": "array",
+                            "items": {
+                              "nullable": true
+                            }
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "listId",
+                          "key",
+                          "label",
+                          "type",
+                          "required",
+                          "showInGrid",
+                          "sortOrder",
+                          "options",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "code",
+                    "name",
+                    "description",
+                    "isSystem",
+                    "supportsHierarchy",
+                    "status",
+                    "createdAt",
+                    "updatedAt",
+                    "attributes"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/lov/lists/{id}": {
+      "put": {
+        "summary": "Update LOV catalog metadata",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "supportsHierarchy": {
+                    "type": "boolean"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": ["active", "archived"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Update LOV catalog metadata response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "isSystem": {
+                      "type": "boolean"
+                    },
+                    "supportsHierarchy": {
+                      "type": "boolean"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": ["active", "archived"]
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "code",
+                    "name",
+                    "description",
+                    "isSystem",
+                    "supportsHierarchy",
+                    "status",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/lov/lists/{code}/items": {
+      "get": {
+        "summary": "Search LOV items",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "code",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "parentId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": ["active", "inactive"]
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Search LOV items response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "listId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "parentId": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uuid"
+                      },
+                      "code": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "sortOrder": {
+                        "type": "integer"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": ["active", "inactive"]
+                      },
+                      "effectiveFrom": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "date-time"
+                      },
+                      "effectiveTo": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "date-time"
+                      },
+                      "attrs": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "nullable": true
+                        }
+                      },
+                      "approvalUserId": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uuid"
+                      },
+                      "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "updatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "listId",
+                      "parentId",
+                      "code",
+                      "label",
+                      "sortOrder",
+                      "status",
+                      "effectiveFrom",
+                      "effectiveTo",
+                      "attrs",
+                      "approvalUserId",
+                      "createdAt",
+                      "updatedAt"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create an LOV item",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "code",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "approvalUserId": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uuid"
+                  },
+                  "parentId": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uuid"
+                  },
+                  "sortOrder": {
+                    "type": "integer"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": ["active", "inactive"]
+                  },
+                  "effectiveFrom": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "effectiveTo": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "attrs": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "nullable": true
+                    }
+                  }
+                },
+                "required": ["code", "label"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Create an LOV item response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "listId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "parentId": {
+                      "type": "string",
+                      "nullable": true,
+                      "format": "uuid"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "sortOrder": {
+                      "type": "integer"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": ["active", "inactive"]
+                    },
+                    "effectiveFrom": {
+                      "type": "string",
+                      "nullable": true,
+                      "format": "date-time"
+                    },
+                    "effectiveTo": {
+                      "type": "string",
+                      "nullable": true,
+                      "format": "date-time"
+                    },
+                    "attrs": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "approvalUserId": {
+                      "type": "string",
+                      "nullable": true,
+                      "format": "uuid"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "listId",
+                    "parentId",
+                    "code",
+                    "label",
+                    "sortOrder",
+                    "status",
+                    "effectiveFrom",
+                    "effectiveTo",
+                    "attrs",
+                    "approvalUserId",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/lov/items/{id}": {
+      "put": {
+        "summary": "Update an LOV item",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "approvalUserId": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uuid"
+                  },
+                  "parentId": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uuid"
+                  },
+                  "sortOrder": {
+                    "type": "integer"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": ["active", "inactive"]
+                  },
+                  "effectiveFrom": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "effectiveTo": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "attrs": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Update an LOV item response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "listId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "parentId": {
+                      "type": "string",
+                      "nullable": true,
+                      "format": "uuid"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "sortOrder": {
+                      "type": "integer"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": ["active", "inactive"]
+                    },
+                    "effectiveFrom": {
+                      "type": "string",
+                      "nullable": true,
+                      "format": "date-time"
+                    },
+                    "effectiveTo": {
+                      "type": "string",
+                      "nullable": true,
+                      "format": "date-time"
+                    },
+                    "attrs": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "approvalUserId": {
+                      "type": "string",
+                      "nullable": true,
+                      "format": "uuid"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "listId",
+                    "parentId",
+                    "code",
+                    "label",
+                    "sortOrder",
+                    "status",
+                    "effectiveFrom",
+                    "effectiveTo",
+                    "attrs",
+                    "approvalUserId",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Deactivate an LOV item",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deactivate an LOV item response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "listId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "parentId": {
+                      "type": "string",
+                      "nullable": true,
+                      "format": "uuid"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "sortOrder": {
+                      "type": "integer"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": ["active", "inactive"]
+                    },
+                    "effectiveFrom": {
+                      "type": "string",
+                      "nullable": true,
+                      "format": "date-time"
+                    },
+                    "effectiveTo": {
+                      "type": "string",
+                      "nullable": true,
+                      "format": "date-time"
+                    },
+                    "attrs": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "approvalUserId": {
+                      "type": "string",
+                      "nullable": true,
+                      "format": "uuid"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "listId",
+                    "parentId",
+                    "code",
+                    "label",
+                    "sortOrder",
+                    "status",
+                    "effectiveFrom",
+                    "effectiveTo",
+                    "attrs",
+                    "approvalUserId",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/lov/lists/{code}/attributes": {
+      "get": {
+        "summary": "List LOV attribute definitions",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "code",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List LOV attribute definitions response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "listId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "key": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "type": {
+                        "type": "string",
+                        "enum": ["text", "number", "boolean", "select"]
+                      },
+                      "required": {
+                        "type": "boolean"
+                      },
+                      "showInGrid": {
+                        "type": "boolean"
+                      },
+                      "sortOrder": {
+                        "type": "integer"
+                      },
+                      "options": {
+                        "type": "array",
+                        "items": {
+                          "nullable": true
+                        }
+                      },
+                      "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "listId",
+                      "key",
+                      "label",
+                      "type",
+                      "required",
+                      "showInGrid",
+                      "sortOrder",
+                      "options",
+                      "createdAt"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create an LOV attribute definition",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "code",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": ["text", "number", "boolean", "select"]
+                  },
+                  "required": {
+                    "type": "boolean"
+                  },
+                  "showInGrid": {
+                    "type": "boolean"
+                  },
+                  "sortOrder": {
+                    "type": "integer"
+                  },
+                  "options": {
+                    "type": "array",
+                    "items": {
+                      "nullable": true
+                    }
+                  }
+                },
+                "required": ["key", "label"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Create an LOV attribute definition response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "listId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": ["text", "number", "boolean", "select"]
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "showInGrid": {
+                      "type": "boolean"
+                    },
+                    "sortOrder": {
+                      "type": "integer"
+                    },
+                    "options": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "listId",
+                    "key",
+                    "label",
+                    "type",
+                    "required",
+                    "showInGrid",
+                    "sortOrder",
+                    "options",
+                    "createdAt"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/lov/attributes/{id}": {
+      "put": {
+        "summary": "Update an LOV attribute definition",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": ["text", "number", "boolean", "select"]
+                  },
+                  "required": {
+                    "type": "boolean"
+                  },
+                  "showInGrid": {
+                    "type": "boolean"
+                  },
+                  "sortOrder": {
+                    "type": "integer"
+                  },
+                  "options": {
+                    "type": "array",
+                    "items": {
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Update an LOV attribute definition response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "listId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": ["text", "number", "boolean", "select"]
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "showInGrid": {
+                      "type": "boolean"
+                    },
+                    "sortOrder": {
+                      "type": "integer"
+                    },
+                    "options": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "listId",
+                    "key",
+                    "label",
+                    "type",
+                    "required",
+                    "showInGrid",
+                    "sortOrder",
+                    "options",
+                    "createdAt"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete an LOV attribute definition",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Delete an LOV attribute definition response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  },
+                  "required": ["id"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forms/published/{key}": {
+      "get": {
+        "summary": "Get the published form definition",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "key",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Get the published form definition response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forms/{key}": {
+      "get": {
+        "summary": "Get a form definition and its versions",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "key",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Get a form definition and its versions response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forms/{key}/submissions/report": {
+      "get": {
+        "summary": "Get reportable form submission data",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "key",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Get reportable form submission data response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forms/{key}/submissions": {
+      "post": {
+        "summary": "Create a form submission",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "key",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "nullable": true
+                    }
+                  }
+                },
+                "required": ["data"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Create a form submission response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forms/submissions/{id}/transition": {
+      "post": {
+        "summary": "Transition a form submission",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "toStage": {
+                    "type": "string"
+                  },
+                  "comment": {
+                    "type": "string"
+                  }
+                },
+                "required": ["toStage"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Transition a form submission response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forms/submissions/{id}/data": {
+      "patch": {
+        "summary": "Update editable form submission data",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "nullable": true
+                    }
+                  }
+                },
+                "required": ["data"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Update editable form submission data response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forms/submissions/{id}": {
+      "get": {
+        "summary": "Get a form submission",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Get a form submission response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forms/submissions/{id}/events": {
+      "get": {
+        "summary": "List form submission events",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List form submission events response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forms": {
+      "post": {
+        "summary": "Create a form definition and initial draft",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "schema": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "nullable": true
+                    }
+                  },
+                  "workflow": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "nullable": true
+                    }
+                  }
+                },
+                "required": ["key", "name", "schema"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Create a form definition and initial draft response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forms/{id}/versions": {
+      "post": {
+        "summary": "Create a draft form version",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "schema": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "nullable": true
+                    }
+                  },
+                  "workflow": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "nullable": true
+                    }
+                  }
+                },
+                "required": ["schema"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Create a draft form version response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forms/versions/{id}": {
+      "put": {
+        "summary": "Update a draft form version",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "schema": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "nullable": true
+                    }
+                  },
+                  "workflow": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "nullable": true
+                    }
+                  }
+                },
+                "required": ["schema"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Update a draft form version response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forms/versions/{id}/publish": {
+      "post": {
+        "summary": "Publish a validated form version",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Publish a validated form version response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/vehicles": {
       "get": {
         "summary": "List all vehicles in fleet",

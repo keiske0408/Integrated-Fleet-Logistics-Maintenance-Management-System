@@ -22,14 +22,15 @@
 ## 4. Security & Abuse Prevention (Arcjet)
 
 - **Rule**: Any new public or write-heavy endpoint needs an Arcjet rule before it ships, not after.
-- **Spend Protection**: All financial and procurement approval endpoints (`/api/pr/*`, `/api/procurement/*`) must enforce rate limiting via `rateLimitPrApproval`.
+- **Spend Protection**: Procurement writes use `rateLimitProcurementWrite`; TSRF, dynamic form writes, and all other API writes also have Arcjet coverage. Production writes fail closed if required Arcjet configuration/checks are unavailable.
 - **Intake Defense**: External and public intake forms (such as TSRF requests) must enforce bot detection via `protectTsrfIntake`.
 
 ## 5. Feature Context
 
 - Form-builder and LOV architecture notes: `src/features/form-builder/AI_CONTEXT.md`.
+- Phase 1 implementation status and local demo/test instructions: `docs/PHASE_1_IMPLEMENTATION_AND_DEMO.md`.
 - Form-builder rules support client-side visibility, requiredness, and editability with publish validation; server validates version-pinned submissions and configured workflow transitions.
-- Workflow configuration is stored per form version; the builder edits stages/transitions/field access/cutoff, and the API enforces role transitions and stage-based data edits. Reports expose only configured reportable fields and exclude PII. Response masking, returned-edit/resubmit UI, and approval stamps remain pending. Successful authenticated backend mutations are now recorded in persistent Activity History; local UI demo actions remain local and are labeled accordingly.
+- Workflow configuration is stored per form version; the builder edits stages/transitions/field access/cutoff, and the API enforces role transitions and stage-based data edits. Reports expose only configured reportable fields and exclude PII. Submission details enforce owner scope and omit explicitly hidden fields; broader response masking, returned-edit/resubmit UI, and approval stamps remain pending. Successful authenticated backend mutations are now recorded in persistent Activity History; local UI demo actions remain local and are labeled accordingly.
 - TSRF Fleet Asset allocation can resolve an active vehicle by ID with a label snapshot; third-party allocation is conditional. Driver entity lookup remains unavailable until a backend driver entity is modeled.
 - Form print output is generated from the versioned schema and saved label snapshots; signature/finance blocks and full paper-form parity remain pending.
 

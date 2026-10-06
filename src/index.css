@@ -244,6 +244,25 @@
     padding: 8px;
   }
 
+  .form-print-metadata {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 16px;
+    border: 1px solid #777;
+    padding: 8px;
+  }
+
+  .form-print-metadata > div {
+    display: grid;
+    gap: 3px;
+  }
+
+  .form-print-metadata span {
+    color: #333;
+    font: 700 8pt Arial, sans-serif;
+  }
+
   .form-print-section {
     break-inside: avoid;
     margin-bottom: 16px;

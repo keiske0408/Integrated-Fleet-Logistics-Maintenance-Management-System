@@ -4,316 +4,1372 @@
  */
 
 export interface paths {
-    "/api/vehicles": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List all vehicles in fleet */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Vehicles list */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            /** Format: uuid */
-                            id: string;
-                            plateNumber: string;
-                            model: string;
-                            vehicleType: string;
-                            assignedDriver: string | null;
-                            currentKm: number;
-                            lastPmsKm: number;
-                            pmsIntervalKm: number;
-                            status: string;
-                            createdAt: string;
-                        }[];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+  '/api/roles': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/tsrf": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    /** List roles and assigned permission keys */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description List roles and assigned permission keys response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              [key: string]: unknown;
+            }[];
+          };
         };
-        get?: never;
-        put?: never;
-        /** Submit a new TSRF request */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: {
-                content: {
-                    "application/json": {
-                        /** Format: uuid */
-                        id?: string;
-                        requestNumber: string;
-                        department: string;
-                        projectName: string;
-                        origin: string;
-                        destination: string;
-                        stopsJson?: string;
-                        passengersJson?: string;
-                        cargoJson?: string;
-                        vehicleType?: string;
-                        /** Format: uuid */
-                        assignedVehicleId?: string | null;
-                        assignedDriver?: string | null;
-                        departureDate: string;
-                        callTime: string;
-                        startingKm?: number | null;
-                        endingKm?: number | null;
-                        isFlaggedAfterCutoff?: boolean;
-                        cutoffReason?: string | null;
-                        /** @enum {string} */
-                        approvalStatus?: "pending" | "approved" | "rejected";
-                        /** Format: uuid */
-                        linkedPrId?: string | null;
-                        tripStatus?: string;
-                        createdAt?: string;
-                    };
-                };
-            };
-            responses: {
-                /** @description TSRF created */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            /** Format: uuid */
-                            id: string;
-                            requestNumber: string;
-                            department: string;
-                            projectName: string;
-                            origin: string;
-                            destination: string;
-                            stopsJson: string;
-                            passengersJson: string;
-                            cargoJson: string;
-                            vehicleType: string;
-                            /** Format: uuid */
-                            assignedVehicleId: string | null;
-                            assignedDriver: string | null;
-                            departureDate: string;
-                            callTime: string;
-                            startingKm: number | null;
-                            endingKm: number | null;
-                            isFlaggedAfterCutoff: boolean;
-                            cutoffReason: string | null;
-                            /** @enum {string} */
-                            approvalStatus: "pending" | "approved" | "rejected";
-                            /** Format: uuid */
-                            linkedPrId: string | null;
-                            tripStatus: string;
-                            createdAt: string;
-                        };
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+      };
     };
-    "/api/pr/{id}/approve": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Approve a Purchase Requisition (gated spend) */
-        patch: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description PR approved */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            /** Format: uuid */
-                            id: string;
-                            prNumber: string;
-                            department: string;
-                            amount: number;
-                            /** @enum {string} */
-                            status: "draft" | "pending" | "approved" | "rejected";
-                            purpose: string;
-                            approvedBy: string | null;
-                            approvedAt: string | null;
-                            procurementNotes: string | null;
-                            createdAt: string;
-                        };
-                    };
-                };
-            };
-        };
-        trace?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/roles/permissions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-}
-export type webhooks = Record<string, never>;
-export interface components {
-    schemas: {
-        Vehicle: {
-            /** Format: uuid */
-            id: string;
-            plateNumber: string;
-            model: string;
-            vehicleType: string;
-            assignedDriver: string | null;
-            currentKm: number;
-            lastPmsKm: number;
-            pmsIntervalKm: number;
-            status: string;
-            createdAt: string;
+    /** List role permission catalog entries */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description List role permission catalog entries response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              [key: string]: unknown;
+            }[];
+          };
         };
-        InsertVehicle: {
-            /** Format: uuid */
-            id?: string;
-            plateNumber: string;
-            model?: string;
-            vehicleType?: string;
-            assignedDriver?: string | null;
-            currentKm?: number;
-            lastPmsKm?: number;
-            pmsIntervalKm?: number;
-            status?: string;
-            createdAt?: string;
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/lov/lists': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List LOV catalogs */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description List LOV catalogs response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              /** Format: uuid */
+              id: string;
+              code: string;
+              name: string;
+              description: string;
+              isSystem: boolean;
+              supportsHierarchy: boolean;
+              /** @enum {string} */
+              status: 'active' | 'archived';
+              /** Format: date-time */
+              createdAt: string;
+              /** Format: date-time */
+              updatedAt: string;
+            }[];
+          };
         };
-        PurchaseRequisition: {
-            /** Format: uuid */
-            id: string;
-            prNumber: string;
-            department: string;
-            amount: number;
+      };
+    };
+    put?: never;
+    /** Create an LOV catalog */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': {
+            code: string;
+            name: string;
+            description?: string;
+            isSystem?: boolean;
+            supportsHierarchy?: boolean;
+          };
+        };
+      };
+      responses: {
+        /** @description Create an LOV catalog response */
+        201: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              /** Format: uuid */
+              id: string;
+              code: string;
+              name: string;
+              description: string;
+              isSystem: boolean;
+              supportsHierarchy: boolean;
+              /** @enum {string} */
+              status: 'active' | 'archived';
+              /** Format: date-time */
+              createdAt: string;
+              /** Format: date-time */
+              updatedAt: string;
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/lov/lists/{code}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get an LOV catalog and its attributes */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          code: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Get an LOV catalog and its attributes response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              /** Format: uuid */
+              id: string;
+              code: string;
+              name: string;
+              description: string;
+              isSystem: boolean;
+              supportsHierarchy: boolean;
+              /** @enum {string} */
+              status: 'active' | 'archived';
+              /** Format: date-time */
+              createdAt: string;
+              /** Format: date-time */
+              updatedAt: string;
+              attributes: {
+                /** Format: uuid */
+                id: string;
+                /** Format: uuid */
+                listId: string;
+                key: string;
+                label: string;
+                /** @enum {string} */
+                type: 'text' | 'number' | 'boolean' | 'select';
+                required: boolean;
+                showInGrid: boolean;
+                sortOrder: number;
+                options: unknown[];
+                /** Format: date-time */
+                createdAt: string;
+              }[];
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/lov/lists/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Update LOV catalog metadata */
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': {
+            name?: string;
+            description?: string;
+            supportsHierarchy?: boolean;
             /** @enum {string} */
-            status: "draft" | "pending" | "approved" | "rejected";
-            purpose: string;
-            approvedBy: string | null;
-            approvedAt: string | null;
-            procurementNotes: string | null;
-            createdAt: string;
+            status?: 'active' | 'archived';
+          };
         };
-        InsertPurchaseRequisition: {
+      };
+      responses: {
+        /** @description Update LOV catalog metadata response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              /** Format: uuid */
+              id: string;
+              code: string;
+              name: string;
+              description: string;
+              isSystem: boolean;
+              supportsHierarchy: boolean;
+              /** @enum {string} */
+              status: 'active' | 'archived';
+              /** Format: date-time */
+              createdAt: string;
+              /** Format: date-time */
+              updatedAt: string;
+            };
+          };
+        };
+      };
+    };
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/lov/lists/{code}/items': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Search LOV items */
+    get: {
+      parameters: {
+        query?: {
+          q?: string;
+          parentId?: string;
+          status?: 'active' | 'inactive';
+        };
+        header?: never;
+        path: {
+          code: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Search LOV items response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              /** Format: uuid */
+              id: string;
+              /** Format: uuid */
+              listId: string;
+              /** Format: uuid */
+              parentId: string | null;
+              code: string;
+              label: string;
+              sortOrder: number;
+              /** @enum {string} */
+              status: 'active' | 'inactive';
+              /** Format: date-time */
+              effectiveFrom: string | null;
+              /** Format: date-time */
+              effectiveTo: string | null;
+              attrs: {
+                [key: string]: unknown;
+              };
+              /** Format: uuid */
+              approvalUserId: string | null;
+              /** Format: date-time */
+              createdAt: string;
+              /** Format: date-time */
+              updatedAt: string;
+            }[];
+          };
+        };
+      };
+    };
+    put?: never;
+    /** Create an LOV item */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          code: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': {
+            code: string;
+            label: string;
             /** Format: uuid */
-            id?: string;
-            prNumber: string;
-            department: string;
-            amount?: number;
+            approvalUserId?: string | null;
+            /** Format: uuid */
+            parentId?: string | null;
+            sortOrder?: number;
             /** @enum {string} */
-            status?: "draft" | "pending" | "approved" | "rejected";
-            purpose: string;
-            approvedBy?: string | null;
-            approvedAt?: string | null;
-            procurementNotes?: string | null;
-            createdAt?: string;
+            status?: 'active' | 'inactive';
+            /** Format: date-time */
+            effectiveFrom?: string;
+            /** Format: date-time */
+            effectiveTo?: string;
+            attrs?: {
+              [key: string]: unknown;
+            };
+          };
         };
-        RepairWorkOrder: {
+      };
+      responses: {
+        /** @description Create an LOV item response */
+        201: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              /** Format: uuid */
+              id: string;
+              /** Format: uuid */
+              listId: string;
+              /** Format: uuid */
+              parentId: string | null;
+              code: string;
+              label: string;
+              sortOrder: number;
+              /** @enum {string} */
+              status: 'active' | 'inactive';
+              /** Format: date-time */
+              effectiveFrom: string | null;
+              /** Format: date-time */
+              effectiveTo: string | null;
+              attrs: {
+                [key: string]: unknown;
+              };
+              /** Format: uuid */
+              approvalUserId: string | null;
+              /** Format: date-time */
+              createdAt: string;
+              /** Format: date-time */
+              updatedAt: string;
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/lov/items/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Update an LOV item */
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': {
+            code?: string;
+            label?: string;
             /** Format: uuid */
-            id: string;
+            approvalUserId?: string | null;
             /** Format: uuid */
-            vehicleId: string;
-            description: string;
+            parentId?: string | null;
+            sortOrder?: number;
             /** @enum {string} */
-            status: "pending" | "approved" | "in_progress" | "completed" | "rejected";
-            /** Format: uuid */
-            linkedPrId: string | null;
-            hasPmsCompliance: boolean;
-            incidentReportFiled: boolean;
-            procurementFulfillmentStatus: string;
-            createdAt: string;
+            status?: 'active' | 'inactive';
+            /** Format: date-time */
+            effectiveFrom?: string;
+            /** Format: date-time */
+            effectiveTo?: string;
+            attrs?: {
+              [key: string]: unknown;
+            };
+          };
         };
-        InsertRepairWorkOrder: {
-            /** Format: uuid */
-            id?: string;
-            /** Format: uuid */
-            vehicleId: string;
-            description: string;
+      };
+      responses: {
+        /** @description Update an LOV item response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              /** Format: uuid */
+              id: string;
+              /** Format: uuid */
+              listId: string;
+              /** Format: uuid */
+              parentId: string | null;
+              code: string;
+              label: string;
+              sortOrder: number;
+              /** @enum {string} */
+              status: 'active' | 'inactive';
+              /** Format: date-time */
+              effectiveFrom: string | null;
+              /** Format: date-time */
+              effectiveTo: string | null;
+              attrs: {
+                [key: string]: unknown;
+              };
+              /** Format: uuid */
+              approvalUserId: string | null;
+              /** Format: date-time */
+              createdAt: string;
+              /** Format: date-time */
+              updatedAt: string;
+            };
+          };
+        };
+      };
+    };
+    post?: never;
+    /** Deactivate an LOV item */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Deactivate an LOV item response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              /** Format: uuid */
+              id: string;
+              /** Format: uuid */
+              listId: string;
+              /** Format: uuid */
+              parentId: string | null;
+              code: string;
+              label: string;
+              sortOrder: number;
+              /** @enum {string} */
+              status: 'active' | 'inactive';
+              /** Format: date-time */
+              effectiveFrom: string | null;
+              /** Format: date-time */
+              effectiveTo: string | null;
+              attrs: {
+                [key: string]: unknown;
+              };
+              /** Format: uuid */
+              approvalUserId: string | null;
+              /** Format: date-time */
+              createdAt: string;
+              /** Format: date-time */
+              updatedAt: string;
+            };
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/lov/lists/{code}/attributes': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List LOV attribute definitions */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          code: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description List LOV attribute definitions response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              /** Format: uuid */
+              id: string;
+              /** Format: uuid */
+              listId: string;
+              key: string;
+              label: string;
+              /** @enum {string} */
+              type: 'text' | 'number' | 'boolean' | 'select';
+              required: boolean;
+              showInGrid: boolean;
+              sortOrder: number;
+              options: unknown[];
+              /** Format: date-time */
+              createdAt: string;
+            }[];
+          };
+        };
+      };
+    };
+    put?: never;
+    /** Create an LOV attribute definition */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          code: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': {
+            key: string;
+            label: string;
             /** @enum {string} */
-            status?: "pending" | "approved" | "in_progress" | "completed" | "rejected";
-            /** Format: uuid */
-            linkedPrId?: string | null;
-            hasPmsCompliance?: boolean;
-            incidentReportFiled?: boolean;
-            procurementFulfillmentStatus?: string;
-            createdAt?: string;
+            type?: 'text' | 'number' | 'boolean' | 'select';
+            required?: boolean;
+            showInGrid?: boolean;
+            sortOrder?: number;
+            options?: unknown[];
+          };
         };
-        TSRFRequest: {
-            /** Format: uuid */
-            id: string;
-            requestNumber: string;
-            department: string;
-            projectName: string;
-            origin: string;
-            destination: string;
-            stopsJson: string;
-            passengersJson: string;
-            cargoJson: string;
-            vehicleType: string;
-            /** Format: uuid */
-            assignedVehicleId: string | null;
-            assignedDriver: string | null;
-            departureDate: string;
-            callTime: string;
-            startingKm: number | null;
-            endingKm: number | null;
-            isFlaggedAfterCutoff: boolean;
-            cutoffReason: string | null;
+      };
+      responses: {
+        /** @description Create an LOV attribute definition response */
+        201: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              /** Format: uuid */
+              id: string;
+              /** Format: uuid */
+              listId: string;
+              key: string;
+              label: string;
+              /** @enum {string} */
+              type: 'text' | 'number' | 'boolean' | 'select';
+              required: boolean;
+              showInGrid: boolean;
+              sortOrder: number;
+              options: unknown[];
+              /** Format: date-time */
+              createdAt: string;
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/lov/attributes/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Update an LOV attribute definition */
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': {
+            key?: string;
+            label?: string;
             /** @enum {string} */
-            approvalStatus: "pending" | "approved" | "rejected";
-            /** Format: uuid */
-            linkedPrId: string | null;
-            tripStatus: string;
-            createdAt: string;
+            type?: 'text' | 'number' | 'boolean' | 'select';
+            required?: boolean;
+            showInGrid?: boolean;
+            sortOrder?: number;
+            options?: unknown[];
+          };
         };
-        InsertTSRFRequest: {
+      };
+      responses: {
+        /** @description Update an LOV attribute definition response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              /** Format: uuid */
+              id: string;
+              /** Format: uuid */
+              listId: string;
+              key: string;
+              label: string;
+              /** @enum {string} */
+              type: 'text' | 'number' | 'boolean' | 'select';
+              required: boolean;
+              showInGrid: boolean;
+              sortOrder: number;
+              options: unknown[];
+              /** Format: date-time */
+              createdAt: string;
+            };
+          };
+        };
+      };
+    };
+    post?: never;
+    /** Delete an LOV attribute definition */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Delete an LOV attribute definition response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              /** Format: uuid */
+              id: string;
+            };
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/forms/published/{key}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get the published form definition */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          key: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Get the published form definition response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/forms/{key}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get a form definition and its versions */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          key: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Get a form definition and its versions response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/forms/{key}/submissions/report': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get reportable form submission data */
+    get: {
+      parameters: {
+        query?: {
+          limit?: string;
+        };
+        header?: never;
+        path: {
+          key: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Get reportable form submission data response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              [key: string]: unknown;
+            }[];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/forms/{key}/submissions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Create a form submission */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          key: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': {
+            data: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+      responses: {
+        /** @description Create a form submission response */
+        201: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/forms/submissions/{id}/transition': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Transition a form submission */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': {
+            toStage: string;
+            comment?: string;
+          };
+        };
+      };
+      responses: {
+        /** @description Transition a form submission response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/forms/submissions/{id}/data': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Update editable form submission data */
+    patch: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': {
+            data: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+      responses: {
+        /** @description Update editable form submission data response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+    trace?: never;
+  };
+  '/api/forms/submissions/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get a form submission */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Get a form submission response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/forms/submissions/{id}/events': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List form submission events */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description List form submission events response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              [key: string]: unknown;
+            }[];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/forms': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Create a form definition and initial draft */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': {
+            key: string;
+            name: string;
+            schema: {
+              [key: string]: unknown;
+            };
+            workflow?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+      responses: {
+        /** @description Create a form definition and initial draft response */
+        201: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/forms/{id}/versions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Create a draft form version */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': {
+            schema: {
+              [key: string]: unknown;
+            };
+            workflow?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+      responses: {
+        /** @description Create a draft form version response */
+        201: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/forms/versions/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Update a draft form version */
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': {
+            schema: {
+              [key: string]: unknown;
+            };
+            workflow?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+      responses: {
+        /** @description Update a draft form version response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/forms/versions/{id}/publish': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Publish a validated form version */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Publish a validated form version response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/vehicles': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List all vehicles in fleet */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Vehicles list */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              /** Format: uuid */
+              id: string;
+              plateNumber: string;
+              model: string;
+              vehicleType: string;
+              assignedDriver: string | null;
+              currentKm: number;
+              lastPmsKm: number;
+              pmsIntervalKm: number;
+              status: string;
+              createdAt: string;
+            }[];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/tsrf': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Submit a new TSRF request */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': {
             /** Format: uuid */
             id?: string;
             requestNumber: string;
@@ -335,18 +1391,349 @@ export interface components {
             isFlaggedAfterCutoff?: boolean;
             cutoffReason?: string | null;
             /** @enum {string} */
-            approvalStatus?: "pending" | "approved" | "rejected";
+            approvalStatus?: 'pending' | 'approved' | 'rejected';
             /** Format: uuid */
             linkedPrId?: string | null;
             tripStatus?: string;
             createdAt?: string;
+          };
         };
+      };
+      responses: {
+        /** @description TSRF created */
+        201: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              /** Format: uuid */
+              id: string;
+              requestNumber: string;
+              department: string;
+              projectName: string;
+              origin: string;
+              destination: string;
+              stopsJson: string;
+              passengersJson: string;
+              cargoJson: string;
+              vehicleType: string;
+              /** Format: uuid */
+              assignedVehicleId: string | null;
+              assignedDriver: string | null;
+              departureDate: string;
+              callTime: string;
+              startingKm: number | null;
+              endingKm: number | null;
+              isFlaggedAfterCutoff: boolean;
+              cutoffReason: string | null;
+              /** @enum {string} */
+              approvalStatus: 'pending' | 'approved' | 'rejected';
+              /** Format: uuid */
+              linkedPrId: string | null;
+              tripStatus: string;
+              createdAt: string;
+            };
+          };
+        };
+      };
     };
-    responses: never;
-    parameters: never;
-    requestBodies: never;
-    headers: never;
-    pathItems: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/pr/{id}/approve': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Approve a Purchase Requisition (gated spend) */
+    patch: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description PR approved */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              /** Format: uuid */
+              id: string;
+              prNumber: string;
+              department: string;
+              amount: number;
+              /** @enum {string} */
+              status: 'draft' | 'pending' | 'approved' | 'rejected';
+              purpose: string;
+              approvedBy: string | null;
+              approvedAt: string | null;
+              procurementNotes: string | null;
+              createdAt: string;
+            };
+          };
+        };
+      };
+    };
+    trace?: never;
+  };
+}
+export type webhooks = Record<string, never>;
+export interface components {
+  schemas: {
+    Vehicle: {
+      /** Format: uuid */
+      id: string;
+      plateNumber: string;
+      model: string;
+      vehicleType: string;
+      assignedDriver: string | null;
+      currentKm: number;
+      lastPmsKm: number;
+      pmsIntervalKm: number;
+      status: string;
+      createdAt: string;
+    };
+    InsertVehicle: {
+      /** Format: uuid */
+      id?: string;
+      plateNumber: string;
+      model?: string;
+      vehicleType?: string;
+      assignedDriver?: string | null;
+      currentKm?: number;
+      lastPmsKm?: number;
+      pmsIntervalKm?: number;
+      status?: string;
+      createdAt?: string;
+    };
+    PurchaseRequisition: {
+      /** Format: uuid */
+      id: string;
+      prNumber: string;
+      department: string;
+      amount: number;
+      /** @enum {string} */
+      status: 'draft' | 'pending' | 'approved' | 'rejected';
+      purpose: string;
+      approvedBy: string | null;
+      approvedAt: string | null;
+      procurementNotes: string | null;
+      createdAt: string;
+    };
+    InsertPurchaseRequisition: {
+      /** Format: uuid */
+      id?: string;
+      prNumber: string;
+      department: string;
+      amount?: number;
+      /** @enum {string} */
+      status?: 'draft' | 'pending' | 'approved' | 'rejected';
+      purpose: string;
+      approvedBy?: string | null;
+      approvedAt?: string | null;
+      procurementNotes?: string | null;
+      createdAt?: string;
+    };
+    RepairWorkOrder: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      vehicleId: string;
+      description: string;
+      /** @enum {string} */
+      status: 'pending' | 'approved' | 'in_progress' | 'completed' | 'rejected';
+      /** Format: uuid */
+      linkedPrId: string | null;
+      hasPmsCompliance: boolean;
+      incidentReportFiled: boolean;
+      procurementFulfillmentStatus: string;
+      createdAt: string;
+    };
+    InsertRepairWorkOrder: {
+      /** Format: uuid */
+      id?: string;
+      /** Format: uuid */
+      vehicleId: string;
+      description: string;
+      /** @enum {string} */
+      status?: 'pending' | 'approved' | 'in_progress' | 'completed' | 'rejected';
+      /** Format: uuid */
+      linkedPrId?: string | null;
+      hasPmsCompliance?: boolean;
+      incidentReportFiled?: boolean;
+      procurementFulfillmentStatus?: string;
+      createdAt?: string;
+    };
+    TSRFRequest: {
+      /** Format: uuid */
+      id: string;
+      requestNumber: string;
+      department: string;
+      projectName: string;
+      origin: string;
+      destination: string;
+      stopsJson: string;
+      passengersJson: string;
+      cargoJson: string;
+      vehicleType: string;
+      /** Format: uuid */
+      assignedVehicleId: string | null;
+      assignedDriver: string | null;
+      departureDate: string;
+      callTime: string;
+      startingKm: number | null;
+      endingKm: number | null;
+      isFlaggedAfterCutoff: boolean;
+      cutoffReason: string | null;
+      /** @enum {string} */
+      approvalStatus: 'pending' | 'approved' | 'rejected';
+      /** Format: uuid */
+      linkedPrId: string | null;
+      tripStatus: string;
+      createdAt: string;
+    };
+    InsertTSRFRequest: {
+      /** Format: uuid */
+      id?: string;
+      requestNumber: string;
+      department: string;
+      projectName: string;
+      origin: string;
+      destination: string;
+      stopsJson?: string;
+      passengersJson?: string;
+      cargoJson?: string;
+      vehicleType?: string;
+      /** Format: uuid */
+      assignedVehicleId?: string | null;
+      assignedDriver?: string | null;
+      departureDate: string;
+      callTime: string;
+      startingKm?: number | null;
+      endingKm?: number | null;
+      isFlaggedAfterCutoff?: boolean;
+      cutoffReason?: string | null;
+      /** @enum {string} */
+      approvalStatus?: 'pending' | 'approved' | 'rejected';
+      /** Format: uuid */
+      linkedPrId?: string | null;
+      tripStatus?: string;
+      createdAt?: string;
+    };
+    LovList: {
+      /** Format: uuid */
+      id: string;
+      code: string;
+      name: string;
+      description: string;
+      isSystem: boolean;
+      supportsHierarchy: boolean;
+      /** @enum {string} */
+      status: 'active' | 'archived';
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    LovAttribute: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      listId: string;
+      key: string;
+      label: string;
+      /** @enum {string} */
+      type: 'text' | 'number' | 'boolean' | 'select';
+      required: boolean;
+      showInGrid: boolean;
+      sortOrder: number;
+      options: unknown[];
+      /** Format: date-time */
+      createdAt: string;
+    };
+    LovItem: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      listId: string;
+      /** Format: uuid */
+      parentId: string | null;
+      code: string;
+      label: string;
+      sortOrder: number;
+      /** @enum {string} */
+      status: 'active' | 'inactive';
+      /** Format: date-time */
+      effectiveFrom: string | null;
+      /** Format: date-time */
+      effectiveTo: string | null;
+      attrs: {
+        [key: string]: unknown;
+      };
+      /** Format: uuid */
+      approvalUserId: string | null;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    FormDefinitionInput: {
+      key: string;
+      name: string;
+      schema: {
+        [key: string]: unknown;
+      };
+      workflow?: {
+        [key: string]: unknown;
+      };
+    };
+    FormVersionInput: {
+      schema: {
+        [key: string]: unknown;
+      };
+      workflow?: {
+        [key: string]: unknown;
+      };
+    };
+    FormSubmissionInput: {
+      data: {
+        [key: string]: unknown;
+      };
+    };
+    FormTransitionInput: {
+      toStage: string;
+      comment?: string;
+    };
+    FormDataPatch: {
+      data: {
+        [key: string]: unknown;
+      };
+    };
+  };
+  responses: never;
+  parameters: never;
+  requestBodies: never;
+  headers: never;
+  pathItems: never;
 }
 export type $defs = Record<string, never>;
 export type operations = Record<string, never>;

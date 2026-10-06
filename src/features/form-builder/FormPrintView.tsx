@@ -6,9 +6,23 @@ interface FormPrintViewProps {
   values: FormValues;
   submissionNumber: string;
   labelSnapshots: Record<string, { code: string; label: string }>;
+  status?: string;
+  stage?: string;
+  isLate?: boolean;
+  createdAt?: string;
+  currentAssignee?: { name: string; role: string } | null;
+  currentResponsibleRoles?: string[];
 }
 
-function displayValue(
+function displayStatus(value: string | undefined): string {
+  if (!value) return 'Not available';
+  return value
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+export function formatPrintableFieldValue(
   field: FormField,
   value: unknown,
   path: string,
@@ -17,6 +31,8 @@ function displayValue(
   if (value === undefined || value === null || value === '') return ' ';
   const snapshot = snapshots[path];
   if (snapshot) return snapshot.label;
+  const option = field.options?.find((candidate) => candidate.value === String(value));
+  if (option) return option.label;
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (typeof value === 'string' || typeof value === 'number') return String(value);
   return field.type === 'notice' ? (field.content ?? '') : ' ';
@@ -56,7 +72,7 @@ function PrintField({
               <tr key={index}>
                 {rowFields.map((rowField) => (
                   <td key={rowField.key}>
-                    {displayValue(
+                    {formatPrintableFieldValue(
                       rowField,
                       row[rowField.key],
                       `${path}[${index}].${rowField.key}`,
@@ -79,7 +95,7 @@ function PrintField({
   return (
     <div className="form-print-field" key={path}>
       <span>{field.label}</span>
-      <strong>{displayValue(field, value, path, labelSnapshots)}</strong>
+      <strong>{formatPrintableFieldValue(field, value, path, labelSnapshots)}</strong>
     </div>
   );
 }
@@ -89,7 +105,18 @@ export function FormPrintView({
   values,
   submissionNumber,
   labelSnapshots,
+  status,
+  stage,
+  isLate,
+  createdAt,
+  currentAssignee,
+  currentResponsibleRoles = [],
 }: FormPrintViewProps) {
+  const responsibility = currentAssignee
+    ? `${currentAssignee.name} (${displayStatus(currentAssignee.role)})`
+    : currentResponsibleRoles.length
+      ? `${currentResponsibleRoles.map(displayStatus).join(', ')} queue`
+      : 'No active assignee';
   return (
     <main className="form-print-sheet" aria-label="Printable form">
       <header className="form-print-header">
@@ -102,6 +129,28 @@ export function FormPrintView({
           <strong>{submissionNumber}</strong>
         </div>
       </header>
+      <section className="form-print-metadata" aria-label="Request status">
+        <div>
+          <span>Status</span>
+          <strong>{displayStatus(status)}</strong>
+        </div>
+        <div>
+          <span>Workflow stage</span>
+          <strong>{displayStatus(stage)}</strong>
+        </div>
+        <div>
+          <span>Current responsibility</span>
+          <strong>{responsibility}</strong>
+        </div>
+        <div>
+          <span>Submitted</span>
+          <strong>{createdAt ? new Date(createdAt).toLocaleString() : ' '}</strong>
+        </div>
+        <div>
+          <span>Cut-off</span>
+          <strong>{isLate === undefined ? ' ' : isLate ? 'Late' : 'On time'}</strong>
+        </div>
+      </section>
       {definition.sections.map((section) => (
         <section className="form-print-section" key={section.id}>
           <h2>{section.title}</h2>
