@@ -440,6 +440,7 @@ interface LovContextValue {
 
   addList: (data: LovListFormData) => Promise<void>;
   updateList: (id: string, updates: Partial<LovList>) => Promise<void>;
+  deleteList: (id: string) => Promise<void>;
 
   addAttribute: (listCode: string, attr: Omit<LovAttribute, 'id' | 'listCode'>) => Promise<void>;
   updateAttribute: (id: string, updates: Partial<LovAttribute>) => Promise<void>;
@@ -448,7 +449,7 @@ interface LovContextValue {
   addItem: (listCode: string, data: LovItemFormData) => Promise<void>;
   updateItem: (id: string, updates: Partial<LovItemFormData>) => Promise<void>;
   deactivateItem: (id: string) => Promise<void>;
-  deleteItem: (id: string) => Promise<void>;
+  deleteItem: (id: string, permanent?: boolean) => Promise<void>;
 }
 
 const LovContext = createContext<LovContextValue | null>(null);
@@ -610,6 +611,23 @@ export function LovProvider({ children }: { children: React.ReactNode }) {
     [apiAvailable, request],
   );
 
+  const deleteList = useCallback(
+    async (id: string) => {
+      const listToDelete = lists.find((l) => l.id === id);
+      if (apiAvailable) {
+        const res = await request(`/lists/${encodeURIComponent(id)}`, 'DELETE');
+        if (!res) return;
+      }
+      setLists((prev) => prev.filter((l) => l.id !== id));
+      if (listToDelete) {
+        setAttributes((prev) => prev.filter((a) => a.listCode !== listToDelete.code));
+        setItems((prev) => prev.filter((i) => i.listCode !== listToDelete.code));
+      }
+      setSyncError(null);
+    },
+    [apiAvailable, lists, request],
+  );
+
   // ── Attribute CRUD ────────────────────────────────────────────────────────
 
   const addAttribute = useCallback(
@@ -753,20 +771,31 @@ export function LovProvider({ children }: { children: React.ReactNode }) {
   );
 
   const deleteItem = useCallback(
-    async (id: string) => {
+    async (id: string, permanent: boolean = true) => {
       if (apiAvailable) {
-        if (!(await request(`/items/${encodeURIComponent(id)}`, 'DELETE'))) return;
-        setItems((prev) =>
-          prev.map((item) => (item.id === id ? { ...item, status: 'inactive' } : item)),
-        );
+        const url = permanent
+          ? `/items/${encodeURIComponent(id)}?permanent=true`
+          : `/items/${encodeURIComponent(id)}`;
+        if (!(await request(url, 'DELETE'))) return;
+        if (permanent) {
+          setItems((prev) => prev.filter((item) => item.id !== id));
+        } else {
+          setItems((prev) =>
+            prev.map((item) => (item.id === id ? { ...item, status: 'inactive' } : item)),
+          );
+        }
         setSyncError(null);
         return;
       }
-      setItems((prev) =>
-        prev.map((item) =>
-          item.id === id ? { ...item, status: 'inactive' as LovItemStatus } : item,
-        ),
-      );
+      if (permanent) {
+        setItems((prev) => prev.filter((item) => item.id !== id));
+      } else {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === id ? { ...item, status: 'inactive' as LovItemStatus } : item,
+          ),
+        );
+      }
     },
     [apiAvailable, request],
   );
@@ -783,6 +812,7 @@ export function LovProvider({ children }: { children: React.ReactNode }) {
         getActiveItems,
         addList,
         updateList,
+        deleteList,
         addAttribute,
         updateAttribute,
         deleteAttribute,

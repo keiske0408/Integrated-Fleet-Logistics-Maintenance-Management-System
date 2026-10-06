@@ -2189,7 +2189,7 @@
     },
     "/api/forms/submissions/{id}/transition": {
       "post": {
-        "summary": "Transition a form submission",
+        "summary": "Transition a submission or resubmit an owned returned request",
         "parameters": [
           {
             "schema": {
@@ -2221,7 +2221,7 @@
         },
         "responses": {
           "200": {
-            "description": "Transition a form submission response",
+            "description": "Transition a submission or resubmit an owned returned request response",
             "content": {
               "application/json": {
                 "schema": {
@@ -2238,7 +2238,7 @@
     },
     "/api/forms/submissions/{id}/data": {
       "patch": {
-        "summary": "Update editable form submission data",
+        "summary": "Update fields editable at the current workflow stage",
         "parameters": [
           {
             "schema": {
@@ -2270,7 +2270,7 @@
         },
         "responses": {
           "200": {
-            "description": "Update editable form submission data response",
+            "description": "Update fields editable at the current workflow stage response",
             "content": {
               "application/json": {
                 "schema": {
@@ -2287,7 +2287,7 @@
     },
     "/api/forms/submissions/{id}": {
       "get": {
-        "summary": "Get a form submission",
+        "summary": "Get a role- and stage-projected form submission",
         "parameters": [
           {
             "schema": {
@@ -2301,7 +2301,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Get a form submission response",
+            "description": "Get a role- and stage-projected form submission response",
             "content": {
               "application/json": {
                 "schema": {

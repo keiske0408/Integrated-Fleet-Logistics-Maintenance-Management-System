@@ -30,7 +30,9 @@ The seeded request includes Fleet Asset versus 3rd Party Trucker selection: Flee
 
 Role catalog writes are intentionally disabled: the backend continues to authorize through fixed CASL policies, and the Roles page displays the local catalog read-only until a server-backed policy source is implemented. Production writes require configured Arcjet protection; development/test behavior differs and is covered in `docs/PHASE_1_IMPLEMENTATION_AND_DEMO.md`.
 
-Still pending: requestor returned-edit/resubmit UI, finance/approval stamp fields, end-to-end Activity History linkage for builder/workflow edits, driver entity lookup, and the remaining paper-form fields. Response projection currently omits explicitly hidden fields on submission details; extend tests if field-access semantics expand to other read surfaces.
+Still pending: finance/approval stamp fields, end-to-end Activity History linkage for builder/workflow edits, driver entity lookup, dynamic server-backed role policies, and the remaining paper-form fields. Owner detail masking is enforced on the detail endpoint; report projection continues to use its reportable-field and PII rules.
+
+Requestors can filter Returned submissions in the owner-scoped register and open their own returned request directly in edit mode. Edits use the pinned schema and expose only fields explicitly marked `read` or `edit` for the current stage; only changed editable paths are sent. Repeater child patches preserve unchanged stored fields. The API permits owner edits only while returned and resubmission only through a configured transition to the version's initial in-review stage.
 
 ## Validation
 

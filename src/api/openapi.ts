@@ -331,7 +331,7 @@ registerJsonEndpoint({
 registerJsonEndpoint({
   method: 'post',
   path: '/api/forms/submissions/{id}/transition',
-  summary: 'Transition a form submission',
+  summary: 'Transition a submission or resubmit an owned returned request',
   params: idParamsSchema,
   body: formTransitionInputSchema,
   response: jsonResponseSchema,
@@ -339,7 +339,7 @@ registerJsonEndpoint({
 registerJsonEndpoint({
   method: 'patch',
   path: '/api/forms/submissions/{id}/data',
-  summary: 'Update editable form submission data',
+  summary: 'Update fields editable at the current workflow stage',
   params: idParamsSchema,
   body: formDataPatchSchema,
   response: jsonResponseSchema,
@@ -347,7 +347,7 @@ registerJsonEndpoint({
 registerJsonEndpoint({
   method: 'get',
   path: '/api/forms/submissions/{id}',
-  summary: 'Get a form submission',
+  summary: 'Get a role- and stage-projected form submission',
   params: idParamsSchema,
   response: jsonResponseSchema,
 });

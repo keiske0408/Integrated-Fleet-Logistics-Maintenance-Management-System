@@ -943,7 +943,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Transition a form submission */
+    /** Transition a submission or resubmit an owned returned request */
     post: {
       parameters: {
         query?: never;
@@ -962,7 +962,7 @@ export interface paths {
         };
       };
       responses: {
-        /** @description Transition a form submission response */
+        /** @description Transition a submission or resubmit an owned returned request response */
         200: {
           headers: {
             [name: string]: unknown;
@@ -994,7 +994,7 @@ export interface paths {
     delete?: never;
     options?: never;
     head?: never;
-    /** Update editable form submission data */
+    /** Update fields editable at the current workflow stage */
     patch: {
       parameters: {
         query?: never;
@@ -1014,7 +1014,7 @@ export interface paths {
         };
       };
       responses: {
-        /** @description Update editable form submission data response */
+        /** @description Update fields editable at the current workflow stage response */
         200: {
           headers: {
             [name: string]: unknown;
@@ -1036,7 +1036,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Get a form submission */
+    /** Get a role- and stage-projected form submission */
     get: {
       parameters: {
         query?: never;
@@ -1048,7 +1048,7 @@ export interface paths {
       };
       requestBody?: never;
       responses: {
-        /** @description Get a form submission response */
+        /** @description Get a role- and stage-projected form submission response */
         200: {
           headers: {
             [name: string]: unknown;

@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { evaluateTsrfSubmissionTime, DEFAULT_TSRF_CUTOFF } from '../src/domain/tsrf';
+import { collectEditableFormChanges } from '../src/features/form-builder/FormRenderer';
+import type { FormField, FormValues } from '../src/features/form-builder/types';
 
 describe('Domain Rule 5: TSRF Cutoff Time Flagging', () => {
   it('should not flag TSRF request submitted before 16:00 (4:00 PM) standard cutoff', () => {
@@ -40,5 +42,46 @@ describe('Domain Rule 5: TSRF Cutoff Time Flagging', () => {
 
     expect(result.isFlaggedAfterCutoff).toBe(true);
     expect(result.cutoffTime).toBe('14:00');
+  });
+
+  it('should include only changed editable fields, including nested repeater edits', () => {
+    const fields: FormField[] = [
+      { id: 'project', key: 'project', type: 'text', label: 'Project', section: 'request' },
+      { id: 'notes', key: 'notes', type: 'text', label: 'Notes', section: 'request' },
+      {
+        id: 'passengers',
+        key: 'passengers',
+        type: 'repeater',
+        label: 'Passengers',
+        section: 'request',
+        rowFields: [
+          { id: 'name', key: 'name', type: 'text', label: 'Name', section: 'passenger' },
+          { id: 'role', key: 'role', type: 'text', label: 'Role', section: 'passenger' },
+        ],
+      },
+    ];
+    const initial: FormValues = {
+      project: 'Original',
+      notes: 'Read-only',
+      passengers: [{ name: 'Ana', role: 'Driver' }],
+    };
+    const updated: FormValues = {
+      project: 'Revised',
+      notes: 'Changed read-only value',
+      passengers: [{ name: 'Ana Reyes', role: 'Changed read-only role' }],
+    };
+
+    expect(
+      collectEditableFormChanges(fields, initial, updated, {
+        project: 'edit',
+        notes: 'read',
+        passengers: 'read',
+        'passengers.name': 'edit',
+        'passengers.role': 'read',
+      }),
+    ).toEqual({
+      project: 'Revised',
+      passengers: [{ name: 'Ana Reyes' }],
+    });
   });
 });

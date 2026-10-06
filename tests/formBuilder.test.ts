@@ -75,6 +75,23 @@ describe('TSRF form definition', () => {
     );
   });
 
+  it('allows requestors to edit and resubmit the default returned TSRF', () => {
+    const returnedStage = TSRF_WORKFLOW.stages.find((stage) => stage.id === 'returned');
+    expect(returnedStage?.fieldPermissions).toMatchObject({
+      projectName: { department_requester: 'edit' },
+      'passengers.name': { department_requester: 'edit' },
+      'cargo.description': { department_requester: 'edit' },
+    });
+    expect(TSRF_WORKFLOW.transitions).toContainEqual(
+      expect.objectContaining({
+        from: 'returned',
+        to: TSRF_WORKFLOW.initialStage,
+        roles: ['department_requester', 'admin'],
+        action: 'resubmitted',
+      }),
+    );
+  });
+
   it('passes disabled rule state to registered field controls', () => {
     const field = TSRF_V1.sections[1].fields[0];
     const element = fieldRegistry.text({

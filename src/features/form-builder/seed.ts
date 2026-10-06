@@ -1,6 +1,35 @@
 import type { TSRFFormData } from '@/features/logistics/TSRFForm';
 import type { FormDefinition, FormField, FormValues, FormWorkflow } from './types';
 
+const returnedRequestorFieldAccess = Object.fromEntries(
+  [
+    'projectName',
+    'department',
+    'departureDate',
+    'callTime',
+    'vehicleType',
+    'allocationType',
+    'assignedVehicleId',
+    'truckerName',
+    'origin',
+    'destination',
+    'stops',
+    'stops.locationName',
+    'stops.address',
+    'stops.waitingTimeMinutes',
+    'stops.notes',
+    'passengers',
+    'passengers.name',
+    'passengers.department',
+    'passengers.role',
+    'cargo',
+    'cargo.description',
+    'cargo.quantity',
+    'cargo.weightKg',
+    'cargo.isFragile',
+  ].map((path) => [path, { department_requester: 'edit' }]),
+) as NonNullable<FormWorkflow['stages'][number]['fieldPermissions']>;
+
 export const TSRF_WORKFLOW: FormWorkflow = {
   initialStage: 'submitted',
   stages: [
@@ -13,7 +42,12 @@ export const TSRF_WORKFLOW: FormWorkflow = {
     { id: 'confirmed', label: 'Confirmed', statusCategory: 'approved' },
     { id: 'in_progress', label: 'In Progress', statusCategory: 'in_progress' },
     { id: 'completed', label: 'Completed', statusCategory: 'completed' },
-    { id: 'returned', label: 'Returned', statusCategory: 'returned' },
+    {
+      id: 'returned',
+      label: 'Returned',
+      statusCategory: 'returned',
+      fieldPermissions: returnedRequestorFieldAccess,
+    },
     { id: 'rejected', label: 'Rejected', statusCategory: 'rejected' },
     { id: 'cancelled', label: 'Cancelled', statusCategory: 'cancelled' },
   ],
@@ -21,6 +55,12 @@ export const TSRF_WORKFLOW: FormWorkflow = {
     { from: 'draft', to: 'submitted', roles: ['department_requester', 'admin'] },
     { from: 'submitted', to: 'endorsement', roles: ['approver', 'admin'] },
     { from: 'submitted', to: 'returned', roles: ['approver', 'admin'], reasonRequired: true },
+    {
+      from: 'returned',
+      to: 'submitted',
+      roles: ['department_requester', 'admin'],
+      action: 'resubmitted',
+    },
     { from: 'submitted', to: 'rejected', roles: ['approver', 'admin'], reasonRequired: true },
     { from: 'endorsement', to: 'finance_verification', roles: ['finance', 'admin'] },
     { from: 'endorsement', to: 'approval', roles: ['approver', 'admin'] },

@@ -14,6 +14,8 @@ interface FormRendererProps {
   initialValues?: FormValues;
   onSubmit: (values: FormValues) => void | Promise<void>;
   submitLabel?: string;
+  fieldAccess?: Record<string, 'read' | 'edit'>;
+  submitChangedFieldsOnly?: boolean;
 }
 
 function getInitialValues(definition: FormDefinition, initialValues: FormValues): FormValues {
@@ -29,19 +31,78 @@ function getInitialValues(definition: FormDefinition, initialValues: FormValues)
     );
 }
 
+function valuesEqual(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+export function collectEditableFormChanges(
+  fields: FormField[],
+  initialValues: FormValues,
+  values: FormValues,
+  fieldAccess: Record<string, 'read' | 'edit'>,
+  prefix = '',
+): FormValues {
+  const changes: FormValues = {};
+  fields.forEach((field) => {
+    const path = prefix ? `${prefix}.${field.key}` : field.key;
+    const initialValue = initialValues[field.key];
+    const value = values[field.key];
+    if (field.type === 'repeater') {
+      const initialRows = Array.isArray(initialValue) ? initialValue : [];
+      const rows = Array.isArray(value) ? value : [];
+      if (initialRows.length !== rows.length) {
+        if (fieldAccess[path] === 'edit' && !valuesEqual(initialRows, rows))
+          changes[field.key] = value;
+        return;
+      }
+      const rowChanges = rows.map((row, index) => {
+        const initialRow = initialRows[index];
+        const rowValues =
+          typeof row === 'object' && row !== null && !Array.isArray(row) ? (row as FormValues) : {};
+        const initialRowValues =
+          typeof initialRow === 'object' && initialRow !== null && !Array.isArray(initialRow)
+            ? (initialRow as FormValues)
+            : {};
+        return collectEditableFormChanges(
+          field.rowFields ?? [],
+          initialRowValues,
+          rowValues,
+          fieldAccess,
+          path,
+        );
+      });
+      if (rowChanges.some((row) => Object.keys(row).length > 0)) changes[field.key] = rowChanges;
+      return;
+    }
+    if (
+      fieldAccess[path] === 'edit' &&
+      Object.prototype.hasOwnProperty.call(values, field.key) &&
+      !valuesEqual(initialValue, value)
+    ) {
+      changes[field.key] = value;
+    }
+  });
+  return changes;
+}
+
 function Field({
   field,
   value,
   values,
   onChange,
+  fieldAccess,
+  path,
 }: {
   field: FormField;
   value: FormValues[string];
   values: FormValues;
   onChange: (value: FormValues[string]) => void;
+  fieldAccess?: Record<string, 'read' | 'edit'>;
+  path: string;
 }) {
   const renderer = fieldRegistry[field.type];
   const state = getFieldState(field.rules, values);
+  const canEditStructure = fieldAccess ? fieldAccess[path] === 'edit' : true;
   if (!state.visible) return null;
   if (field.type === 'repeater') {
     const rows = Array.isArray(value) ? value : [];
@@ -63,6 +124,7 @@ function Field({
               <button
                 type="button"
                 className="text-xs text-destructive"
+                disabled={!canEditStructure}
                 onClick={() => onChange(rows.filter((_, rowIndex) => rowIndex !== index))}
               >
                 Remove row
@@ -74,6 +136,8 @@ function Field({
                 field={rowField}
                 value={row[rowField.key]}
                 values={row}
+                fieldAccess={fieldAccess}
+                path={`${path}.${rowField.key}`}
                 onChange={(nextValue) =>
                   onChange(
                     rows.map((currentRow, rowIndex) =>
@@ -87,7 +151,7 @@ function Field({
             ))}
           </div>
         ))}
-        {rows.length < (field.maxRows ?? Number.POSITIVE_INFINITY) && (
+        {canEditStructure && rows.length < (field.maxRows ?? Number.POSITIVE_INFINITY) && (
           <button
             type="button"
             className="text-sm font-medium text-primary"
@@ -115,7 +179,7 @@ function Field({
       {renderer({
         field: { ...field, required: field.required || state.required },
         value,
-        disabled: !state.enabled,
+        disabled: !state.enabled || (fieldAccess !== undefined && !canEditStructure),
         onChange,
       })}
     </div>
@@ -127,13 +191,14 @@ export function FormRenderer({
   initialValues = {},
   onSubmit,
   submitLabel = 'Submit Request',
+  fieldAccess,
+  submitChangedFieldsOnly = false,
 }: FormRendererProps) {
   const { getActiveItems } = useLov();
   const { currentUser } = useAuth();
   const [vehicleOptions, setVehicleOptions] = useState<Array<{ value: string; label: string }>>([]);
-  const [values, setValues] = useState<FormValues>(() =>
-    getInitialValues(definition, initialValues),
-  );
+  const [initialValuesSnapshot] = useState(() => getInitialValues(definition, initialValues));
+  const [values, setValues] = useState<FormValues>(initialValuesSnapshot);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   useEffect(() => {
@@ -198,7 +263,15 @@ export function FormRenderer({
     if (errors.length > 0) return;
     setSubmitting(true);
     try {
-      await onSubmit(values);
+      const submittedValues = submitChangedFieldsOnly
+        ? collectEditableFormChanges(
+            definition.sections.flatMap((section) => section.fields),
+            initialValuesSnapshot,
+            values,
+            fieldAccess ?? {},
+          )
+        : values;
+      await onSubmit(submittedValues);
       setValidationErrors([]);
     } catch (error) {
       setValidationErrors([error instanceof Error ? error.message : 'Submission failed.']);
@@ -238,6 +311,8 @@ export function FormRenderer({
                 field={field}
                 value={values[field.key]}
                 values={values}
+                fieldAccess={fieldAccess}
+                path={field.key}
                 onChange={(value) => updateValue(field.key, value)}
               />
             ))}

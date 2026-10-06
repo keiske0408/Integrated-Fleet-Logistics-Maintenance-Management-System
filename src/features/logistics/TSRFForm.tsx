@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
+  Calendar,
   Clock,
   MapPin,
   Users,
@@ -250,29 +251,44 @@ export function TSRFForm({ onSubmit, isSubmitting = false }: TSRFFormProps) {
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Departure Date
               </label>
-              <Input
-                type="date"
-                value={departureDate}
-                onChange={(e) => setDepartureDate(e.target.value)}
-                required
-              />
+              <div className="relative flex items-center">
+                <Input
+                  type="date"
+                  value={departureDate}
+                  onChange={(e) => setDepartureDate(e.target.value)}
+                  onClick={(e) => {
+                    e.currentTarget.showPicker?.();
+                  }}
+                  className="w-full pr-10 cursor-pointer [color-scheme:dark] dark:[color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                  required
+                />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
+                  <Calendar className="h-4 w-4 text-primary" />
+                </div>
+              </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Expected Call Time
               </label>
-              <Input
-                type="text"
-                value={callTime}
-                onChange={(e) => setCallTime(e.target.value)}
-                required
-                placeholder="e.g. 08:00 AM"
-              />
+              <div className="relative flex items-center">
+                <Input
+                  type="text"
+                  value={callTime}
+                  onChange={(e) => setCallTime(e.target.value)}
+                  required
+                  placeholder="e.g. 08:00 AM"
+                  className="w-full pr-10"
+                />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
+                  <Clock className="h-4 w-4 text-primary" />
+                </div>
+              </div>
             </div>
 
             <div className="md:col-span-2">

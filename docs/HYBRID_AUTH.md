@@ -113,4 +113,4 @@ Before production enablement:
 3. Add focused tests for local lifecycle and CSRF/reset behavior, Entra identity and role checks, frontend signup/approval, and development-demo gating.
 4. Confirm production rate limiting and operational audit retention.
 
-The next product feature phase after auth setup is the owner-scoped returned-TSRF inbox and edit/resubmit workflow. See [PROJECT_CONTEXT.md](../PROJECT_CONTEXT.md) for the current project phase summary.
+The owner-scoped returned-TSRF inbox and edit/resubmit workflow is implemented. Production rollout still depends on the deployment prerequisites above. See [PROJECT_CONTEXT.md](../PROJECT_CONTEXT.md) for the current project phase summary.

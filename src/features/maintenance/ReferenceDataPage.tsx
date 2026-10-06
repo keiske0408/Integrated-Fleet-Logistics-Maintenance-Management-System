@@ -33,6 +33,9 @@ import {
   ChevronsUpDown,
   ListPlus,
   Columns,
+  Layers,
+  PanelLeft,
+  PanelLeftClose,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 import { Dialog } from '@/components/ui/dialog';
@@ -390,6 +393,7 @@ export function ReferenceDataPage() {
     syncError,
     apiAvailable,
     addList,
+    deleteList,
     addItem,
     updateItem,
     deleteItem,
@@ -412,20 +416,60 @@ export function ReferenceDataPage() {
   const [modalMode, setModalMode] = useState<ModalMode>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [listToDelete, setListToDelete] = useState<LovList | null>(null);
+  const [isDeletingList, setIsDeletingList] = useState(false);
   const [search, setSearch] = useState('');
   const [showTweak, setShowTweak] = useState(false);
   const [tweakMap, setTweakMap] = useState<Record<string, TweakSettings>>({});
   const [sortField, setSortField] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>(null);
 
+  // Navigator & Filter state
+  const [listSearch, setListSearch] = useState('');
+  const [listCategory, setListCategory] = useState<'all' | 'core' | 'custom'>('all');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  // Reset page on tab, search, or sort change
+  // Reset page on tab, search, status, or sort change
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [activeTabCode, search, sortField, sortDir]);
+  }, [activeTabCode, search, statusFilter, sortField, sortDir]);
+
+  // List classification
+  const CORE_LIST_CODES = useMemo(
+    () => new Set(['DEPARTMENTS', 'VEHICLE_TYPES', 'MAINTENANCE_CATEGORIES', 'VENDORS']),
+    [],
+  );
+
+  const filteredLists = useMemo(() => {
+    return activeLists.filter((list) => {
+      const matchesSearch =
+        !listSearch ||
+        list.name.toLowerCase().includes(listSearch.toLowerCase()) ||
+        list.code.toLowerCase().includes(listSearch.toLowerCase()) ||
+        (list.description && list.description.toLowerCase().includes(listSearch.toLowerCase()));
+      if (!matchesSearch) return false;
+      if (listCategory === 'core') return CORE_LIST_CODES.has(list.code);
+      if (listCategory === 'custom') return !CORE_LIST_CODES.has(list.code);
+      return true;
+    });
+  }, [activeLists, listSearch, listCategory, CORE_LIST_CODES]);
+
+  const coreCount = useMemo(
+    () => activeLists.filter((l) => CORE_LIST_CODES.has(l.code)).length,
+    [activeLists, CORE_LIST_CODES],
+  );
+  const customCount = activeLists.length - coreCount;
+
+  const activeCount = useMemo(
+    () => activeItems.filter((i) => i.status === 'active').length,
+    [activeItems],
+  );
+  const inactiveCount = activeItems.length - activeCount;
 
   // Item form state
   const [itemForm, setItemForm] = useState<LovItemFormData>({
@@ -495,6 +539,9 @@ export function ReferenceDataPage() {
 
   const filteredItems = useMemo(() => {
     let result = activeItems;
+    if (statusFilter !== 'all') {
+      result = result.filter((item) => item.status === statusFilter);
+    }
     if (search) {
       const q = search.toLowerCase();
       result = result.filter((item) => {
@@ -521,7 +568,7 @@ export function ReferenceDataPage() {
       });
     }
     return result;
-  }, [activeItems, search, sortField, sortDir]);
+  }, [activeItems, search, statusFilter, sortField, sortDir]);
 
   const totalItems = filteredItems.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
@@ -552,6 +599,7 @@ export function ReferenceDataPage() {
     setSortField(null);
     setSortDir(null);
     setSearch('');
+    setStatusFilter('all');
   };
 
   // ── Item form handlers ──────────────────────────────────────────────────
@@ -661,6 +709,35 @@ export function ReferenceDataPage() {
     showToast(`List "${listForm.name}" created.`);
     setModalMode(null);
     setActiveTabCode(code);
+  };
+
+  const handleDeleteListConfirm = async () => {
+    if (!listToDelete) return;
+    setIsDeletingList(true);
+    try {
+      await deleteList(listToDelete.id);
+      logLocalAction({
+        module: 'Reference Data',
+        action: 'Deleted',
+        subject: `List: ${listToDelete.name}`,
+        description: `Deleted reference data list "${listToDelete.name}" (${listToDelete.code}).`,
+        severity: 'warning',
+        user: 'Admin',
+      });
+      showToast(`Reference list "${listToDelete.name}" deleted successfully.`);
+      if (activeTabCode === listToDelete.code) {
+        const remaining = activeLists.filter((l) => l.id !== listToDelete.id);
+        const fallback = remaining.find((l) => CORE_LIST_CODES.has(l.code)) || remaining[0];
+        if (fallback) {
+          switchTab(fallback.code);
+        }
+      }
+      setListToDelete(null);
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : 'Failed to delete list.');
+    } finally {
+      setIsDeletingList(false);
+    }
   };
 
   // ── Attribute form handlers ─────────────────────────────────────────────
@@ -798,106 +875,418 @@ export function ReferenceDataPage() {
         </p>
       )}
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/40 pb-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Reference Data</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">
-            Manage master data used in dropdowns and selections throughout the system.
-          </p>
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-primary/10 text-primary">
+              <Database className="h-5 w-5" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-foreground">
+                Reference Data Hub
+              </h1>
+              <p className="text-muted-foreground text-xs sm:text-sm mt-0.5">
+                Centralized master data management for system taxonomies, dropdowns, and lookup
+                tables.
+              </p>
+            </div>
+          </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Button
             id="btn-manage-attrs"
             variant="outline"
+            size="sm"
             onClick={openManageAttributes}
-            className="gap-2"
+            className="gap-1.5"
             title="Manage columns / attributes for this list"
           >
-            <Columns className="h-4 w-4" />
+            <Columns className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Attributes</span>
           </Button>
           <Button
             id="btn-tweak-ui"
             variant="outline"
+            size="sm"
             onClick={() => setShowTweak(!showTweak)}
-            className={`gap-2 ${showTweak ? 'border-primary text-primary bg-primary/5' : ''}`}
+            className={`gap-1.5 ${showTweak ? 'border-primary text-primary bg-primary/5' : ''}`}
           >
-            <Settings2 className="h-4 w-4" />
+            <Settings2 className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Customize</span>
           </Button>
-          <Button variant="outline" onClick={exportCSV} className="gap-2">
-            <Download className="h-4 w-4" />
+          <Button variant="outline" size="sm" onClick={exportCSV} className="gap-1.5">
+            <Download className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Export</span>
           </Button>
-          <Button id="btn-add-ref" onClick={openAddItem} className="gap-2">
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Add New</span>
+          <Button id="btn-add-ref" size="sm" onClick={openAddItem} className="gap-1.5">
+            <Plus className="h-3.5 w-3.5" />
+            <span>Add Item</span>
           </Button>
         </div>
       </div>
 
-      {/* Main content */}
-      <div className="flex gap-5 items-start">
-        <div className="flex-1 min-w-0 space-y-4">
-          {/* Tabs — dynamic from LOV lists */}
-          <div className="flex gap-1 bg-muted/40 p-1 rounded-xl w-full sm:w-fit overflow-x-auto items-center">
-            {activeLists.map((list) => {
-              const Icon = LIST_ICONS[list.code] || Database;
-              const isActive = activeTabCode === list.code;
-              const count = getItems(list.code).length;
-              return (
-                <button
-                  key={list.code}
-                  id={`ref-tab-${list.code.toLowerCase()}`}
-                  onClick={() => switchTab(list.code)}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
-                    isActive
-                      ? 'bg-card text-foreground shadow-sm border border-border'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  <span>{list.name}</span>
-                  <span
-                    className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${isActive ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}
-                  >
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-            <button
+      {/* Mobile Reference List Selector (<lg screens) */}
+      <div className="lg:hidden flex flex-col gap-2 p-3 rounded-xl border border-border bg-card/60">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            Active Catalog
+          </span>
+          <div className="flex items-center gap-1.5">
+            {activeList && !activeList.isSystem && !CORE_LIST_CODES.has(activeList.code) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setListToDelete(activeList)}
+                className="h-7 text-xs text-destructive hover:bg-destructive/10 gap-1 px-2"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>Delete</span>
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={openAddList}
-              className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-              title="Create new reference data list"
+              className="h-7 text-xs text-primary gap-1"
             >
-              <ListPlus className="h-4 w-4" />
-            </button>
+              <ListPlus className="h-3.5 w-3.5" />
+              New List
+            </Button>
           </div>
+        </div>
+        <select
+          value={activeTabCode}
+          onChange={(e) => switchTab(e.target.value)}
+          className="w-full h-9 px-3 rounded-lg border border-input bg-background text-sm font-medium focus:ring-1 focus:ring-primary"
+        >
+          {activeLists.map((l) => (
+            <option key={l.code} value={l.code}>
+              {l.name} · {l.code} ({getItems(l.code).length})
+            </option>
+          ))}
+        </select>
+      </div>
 
-          {/* Search toolbar */}
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1 max-w-xs">
+      {/* Main Two-Column Master-Detail Layout */}
+      <div className="flex gap-5 items-start">
+        {/* Left Column: Reference Lists Navigator */}
+        {!sidebarCollapsed && (
+          <aside className="hidden lg:flex flex-col w-72 xl:w-80 shrink-0 rounded-2xl border border-border/70 bg-card/80 backdrop-blur-xs p-3.5 space-y-3.5 shadow-xs">
+            {/* Sidebar Header */}
+            <div className="flex items-center justify-between pb-1 border-b border-border/40">
+              <div className="flex items-center gap-2">
+                <Layers className="h-4 w-4 text-primary" />
+                <span className="text-xs font-bold uppercase tracking-wider text-foreground">
+                  Catalogs ({activeLists.length})
+                </span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={openAddList}
+                className="h-7 px-2 text-xs text-primary hover:text-primary hover:bg-primary/10 gap-1 rounded-md"
+                title="Create new reference data list"
+              >
+                <Plus className="h-3 w-3" />
+                <span>New List</span>
+              </Button>
+            </div>
+
+            {/* List Search Bar */}
+            <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
-                id="ref-search"
-                placeholder="Search..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-8 h-8 text-sm"
+                placeholder="Filter lists..."
+                value={listSearch}
+                onChange={(e) => setListSearch(e.target.value)}
+                className="pl-8 h-8 text-xs bg-muted/30 focus-visible:ring-1"
               />
-              {search && (
+              {listSearch && (
                 <button
-                  onClick={() => setSearch('')}
+                  onClick={() => setListSearch('')}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
-                  <X className="h-3.5 w-3.5" />
+                  <X className="h-3 w-3" />
                 </button>
               )}
             </div>
-            {search && (
-              <span className="text-xs text-muted-foreground">Showing filtered results</span>
-            )}
+
+            {/* Category Filter Pills */}
+            <div className="grid grid-cols-3 gap-1 p-0.5 bg-muted/40 rounded-lg text-xs font-medium">
+              <button
+                type="button"
+                onClick={() => setListCategory('all')}
+                className={`py-1 rounded-md transition-all text-[11px] font-semibold ${
+                  listCategory === 'all'
+                    ? 'bg-card text-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                All ({activeLists.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setListCategory('core')}
+                className={`py-1 rounded-md transition-all text-[11px] font-semibold ${
+                  listCategory === 'core'
+                    ? 'bg-card text-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Core ({coreCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setListCategory('custom')}
+                className={`py-1 rounded-md transition-all text-[11px] font-semibold ${
+                  listCategory === 'custom'
+                    ? 'bg-card text-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Custom ({customCount})
+              </button>
+            </div>
+
+            {/* List Catalog Items (Scrollable) */}
+            <div className="space-y-1 max-h-[calc(100vh-320px)] overflow-y-auto pr-1">
+              {filteredLists.length === 0 ? (
+                <div className="p-6 text-center text-xs text-muted-foreground space-y-2">
+                  <p>No catalogs match "{listSearch}".</p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setListSearch('');
+                      setListCategory('all');
+                    }}
+                    className="h-7 text-xs"
+                  >
+                    Reset Filter
+                  </Button>
+                </div>
+              ) : (
+                filteredLists.map((list) => {
+                  const Icon = LIST_ICONS[list.code] || Database;
+                  const isActive = activeTabCode === list.code;
+                  const count = getItems(list.code).length;
+                  const isDeletable = !list.isSystem && !CORE_LIST_CODES.has(list.code);
+                  return (
+                    <button
+                      key={list.code}
+                      id={`ref-tab-${list.code.toLowerCase()}`}
+                      onClick={() => switchTab(list.code)}
+                      className={`w-full text-left p-2.5 rounded-xl transition-all flex items-start gap-2.5 border group ${
+                        isActive
+                          ? 'bg-primary/10 border-primary/40 shadow-xs'
+                          : 'bg-transparent hover:bg-muted/60 border-transparent hover:border-border/40 text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <div
+                        className={`p-2 rounded-lg shrink-0 mt-0.5 transition-colors ${
+                          isActive
+                            ? 'bg-primary text-primary-foreground shadow-xs'
+                            : 'bg-muted/70 text-muted-foreground group-hover:bg-muted group-hover:text-foreground'
+                        }`}
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1">
+                          <span
+                            className={`text-xs font-semibold truncate ${
+                              isActive ? 'text-foreground' : 'text-foreground/80'
+                            }`}
+                          >
+                            {list.name}
+                          </span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <span
+                              className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
+                                isActive
+                                  ? 'bg-primary/20 text-primary'
+                                  : 'bg-muted text-muted-foreground'
+                              }`}
+                            >
+                              {count}
+                            </span>
+                            {isDeletable && (
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setListToDelete(list);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.stopPropagation();
+                                    setListToDelete(list);
+                                  }
+                                }}
+                                className="p-0.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/15 transition-colors cursor-pointer"
+                                title={`Delete catalog "${list.name}"`}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="font-mono text-[10px] text-muted-foreground/75 uppercase tracking-wider truncate">
+                            {list.code}
+                          </span>
+                          {list.supportsHierarchy && (
+                            <span className="text-[9px] px-1 py-0.2 rounded bg-amber-500/10 text-amber-500 font-medium">
+                              Tree
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </aside>
+        )}
+
+        {/* Right Column: Active Reference Data Workspace */}
+        <div className="flex-1 min-w-0 space-y-4">
+          {/* Active Catalog Overview Card */}
+          <div className="p-4 rounded-2xl border border-border/70 bg-card/60 backdrop-blur-xs space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                  className="hidden lg:flex p-1.5 h-8 w-8 text-muted-foreground hover:text-foreground"
+                  title={
+                    sidebarCollapsed
+                      ? 'Show catalog sidebar'
+                      : 'Hide catalog sidebar for wider view'
+                  }
+                >
+                  {sidebarCollapsed ? (
+                    <PanelLeft className="h-4 w-4" />
+                  ) : (
+                    <PanelLeftClose className="h-4 w-4" />
+                  )}
+                </Button>
+                {activeList && (
+                  <div className="flex items-center gap-2.5">
+                    {React.createElement(LIST_ICONS[activeList.code] || Database, {
+                      className: 'h-5 w-5 text-primary',
+                    })}
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-lg font-bold text-foreground">{activeList.name}</h2>
+                        <Badge
+                          variant="outline"
+                          className="font-mono text-[10px] uppercase px-1.5 py-0.5"
+                        >
+                          {activeList.code}
+                        </Badge>
+                        {activeList.supportsHierarchy && (
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5">
+                            Hierarchy Enabled
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {activeList.description ||
+                          'Master reference values configured for this catalog.'}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Quick Summary Pill Stats */}
+              <div className="flex items-center gap-2 self-start sm:self-auto text-xs">
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-muted/50 border border-border/50">
+                  <span className="text-muted-foreground">Total:</span>
+                  <span className="font-bold text-foreground">{activeItems.length}</span>
+                </div>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  <span className="font-semibold">{activeCount} Active</span>
+                </div>
+                {inactiveCount > 0 && (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-muted/60 border border-border/50 text-muted-foreground">
+                    <span className="font-medium">{inactiveCount} Inactive</span>
+                  </div>
+                )}
+                {activeList && !activeList.isSystem && !CORE_LIST_CODES.has(activeList.code) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setListToDelete(activeList)}
+                    className="h-7 px-2.5 text-xs text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30 gap-1 ml-1"
+                    title={`Delete catalog "${activeList.name}"`}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    <span>Delete Catalog</span>
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Table Toolbar & In-Table Filters */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2 flex-1 max-w-md">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  id="ref-search"
+                  placeholder="Search code, label, or attributes..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-8 h-9 text-xs"
+                />
+                {search && (
+                  <button
+                    onClick={() => setSearch('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Status Filter */}
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive')}
+                className="h-9 rounded-lg border border-input bg-card px-2.5 text-xs text-foreground focus:ring-1 focus:ring-primary"
+              >
+                <option value="all">All Statuses</option>
+                <option value="active">Active Only</option>
+                <option value="inactive">Inactive Only</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              {(search || statusFilter !== 'all') && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setSearch('');
+                    setStatusFilter('all');
+                  }}
+                  className="h-7 text-xs text-primary gap-1"
+                >
+                  <X className="h-3 w-3" />
+                  Clear Filters
+                </Button>
+              )}
+              <span>
+                Showing <strong>{filteredItems.length}</strong> of {activeItems.length} entries
+              </span>
+            </div>
           </div>
 
           {/* Dynamic Table */}
@@ -1449,6 +1838,76 @@ export function ReferenceDataPage() {
               </Button>
             </div>
           </form>
+        </div>
+      </Dialog>
+
+      {/* ── Delete Catalog Confirmation Modal ── */}
+      <Dialog
+        open={Boolean(listToDelete)}
+        onOpenChange={(isOpen) => !isOpen && !isDeletingList && setListToDelete(null)}
+        className="max-w-md"
+        showCloseButton={false}
+      >
+        <div className="space-y-4">
+          <div className="flex items-center justify-between pb-2 border-b border-border/50">
+            <div className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-4 w-4" />
+              <h3 className="text-base font-bold text-foreground">Delete Reference Catalog</h3>
+            </div>
+            <button
+              type="button"
+              onClick={() => !isDeletingList && setListToDelete(null)}
+              className="text-muted-foreground hover:text-foreground p-1 rounded-lg hover:bg-muted transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-xs text-foreground space-y-2">
+            <p className="font-semibold text-destructive">
+              Are you sure you want to delete this catalog?
+            </p>
+            <p className="text-muted-foreground leading-relaxed">
+              You are about to delete{' '}
+              <strong className="text-foreground">{listToDelete?.name}</strong> (
+              <span className="font-mono text-foreground font-semibold">{listToDelete?.code}</span>
+              ).
+            </p>
+            <p className="text-muted-foreground leading-relaxed">
+              This will permanently remove the catalog, along with its{' '}
+              <strong className="text-foreground">
+                {listToDelete ? getAttributes(listToDelete.code).length : 0} defined attributes
+              </strong>{' '}
+              and all{' '}
+              <strong className="text-foreground">
+                {listToDelete ? getItems(listToDelete.code).length : 0} items
+              </strong>
+              . This action cannot be undone.
+            </p>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setListToDelete(null)}
+              disabled={isDeletingList}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={handleDeleteListConfirm}
+              disabled={isDeletingList}
+              className="gap-1.5"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>{isDeletingList ? 'Deleting...' : 'Delete Catalog'}</span>
+            </Button>
+          </div>
         </div>
       </Dialog>
 

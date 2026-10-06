@@ -19,12 +19,14 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Building2,
+  Pencil,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { apiFetch } from '@/lib/api';
+import { useAuth } from '@/features/auth/AuthContext';
 import type { FormDefinition, FormValues } from './types';
 
 export interface SubmissionRow {
@@ -51,9 +53,12 @@ export interface SubmissionEvent {
 }
 
 export interface SubmissionDetail extends SubmissionRow {
+  createdById: string;
   formSchema: FormDefinition;
   data: FormValues;
   labelSnapshots: Record<string, { code: string; label: string }>;
+  fieldAccess: Record<string, 'read' | 'edit'>;
+  resubmitStage: string | null;
 }
 
 export interface SubmissionPrintRequest {
@@ -114,6 +119,7 @@ function displayResponsibility(submission: SubmissionRow): string {
 
 export function TSRFSubmissionTracker({ refreshToken, onNewRequest }: TSRFSubmissionTrackerProps) {
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
 
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -123,7 +129,7 @@ export function TSRFSubmissionTracker({ refreshToken, onNewRequest }: TSRFSubmis
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<
-    'all' | 'pending' | 'approved' | 'dispatched' | 'late'
+    'all' | 'pending' | 'returned' | 'approved' | 'dispatched' | 'late'
   >('all');
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
   const [slaFilter, setSlaFilter] = useState<'all' | 'on_time' | 'late'>('all');
@@ -166,12 +172,14 @@ export function TSRFSubmissionTracker({ refreshToken, onNewRequest }: TSRFSubmis
   const stats = useMemo(() => {
     const total = submissions.length;
     let pending = 0;
+    let returned = 0;
     let approved = 0;
     let dispatched = 0;
     let late = 0;
 
     for (const sub of submissions) {
       const s = (sub.status || '').toLowerCase();
+      if (s === 'returned') returned++;
       if (
         s.includes('pending') ||
         s.includes('review') ||
@@ -185,7 +193,7 @@ export function TSRFSubmissionTracker({ refreshToken, onNewRequest }: TSRFSubmis
     }
 
     const onTimePct = total > 0 ? Math.round(((total - late) / total) * 100) : 100;
-    return { total, pending, approved, dispatched, late, onTimePct };
+    return { total, pending, returned, approved, dispatched, late, onTimePct };
   }, [submissions]);
 
   // Unique departments for dropdown filter
@@ -217,6 +225,8 @@ export function TSRFSubmissionTracker({ refreshToken, onNewRequest }: TSRFSubmis
           !s.includes('endorsement')
         )
           return false;
+      } else if (statusFilter === 'returned') {
+        if ((sub.status || '').toLowerCase() !== 'returned') return false;
       } else if (statusFilter === 'approved') {
         const s = (sub.status || '').toLowerCase();
         if (!s.includes('approved')) return false;
@@ -491,6 +501,7 @@ export function TSRFSubmissionTracker({ refreshToken, onNewRequest }: TSRFSubmis
               [
                 { id: 'all', label: 'All', count: stats.total },
                 { id: 'pending', label: 'Pending', count: stats.pending },
+                { id: 'returned', label: 'Returned', count: stats.returned },
                 { id: 'approved', label: 'Approved', count: stats.approved },
                 { id: 'dispatched', label: 'Dispatched', count: stats.dispatched },
                 { id: 'late', label: 'Late SLA', count: stats.late },
@@ -710,10 +721,27 @@ export function TSRFSubmissionTracker({ refreshToken, onNewRequest }: TSRFSubmis
                           variant="ghost"
                           size="sm"
                           className="h-8 gap-1 px-2.5 text-xs text-primary hover:bg-primary/10 font-medium"
-                          onClick={() => navigate(`/tsrf/${submission.id}`)}
+                          onClick={() =>
+                            navigate(
+                              currentUser?.role === 'department_requester' &&
+                                submission.status.toLowerCase() === 'returned'
+                                ? `/tsrf/${submission.id}?edit=true`
+                                : `/tsrf/${submission.id}`,
+                            )
+                          }
                         >
-                          <span>View Details</span>
-                          <ArrowRight className="h-3 w-3" />
+                          {currentUser?.role === 'department_requester' &&
+                          submission.status.toLowerCase() === 'returned' ? (
+                            <>
+                              <Pencil className="h-3 w-3" />
+                              <span>Edit &amp; Resubmit</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>View Details</span>
+                              <ArrowRight className="h-3 w-3" />
+                            </>
+                          )}
                         </Button>
                       </td>
                     </tr>

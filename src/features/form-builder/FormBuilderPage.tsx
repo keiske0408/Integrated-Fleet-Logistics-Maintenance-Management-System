@@ -161,7 +161,8 @@ export function FormBuilderPage() {
       }
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? 'Unable to save draft.');
-      setDefinitionId(result.id ?? definitionId);
+      const resolvedDefId = result.formDefinitionId ?? (result.version ? result.id : definitionId);
+      if (resolvedDefId) setDefinitionId(resolvedDefId);
       const version = result.version ?? result;
       setDraftVersionId(version.id);
       setDefinition({ ...draft, version: version.version, status: 'draft' });
