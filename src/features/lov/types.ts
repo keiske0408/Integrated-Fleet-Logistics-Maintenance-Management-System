@@ -34,6 +34,8 @@ export interface LovItem {
   label: string;
   sortOrder: number;
   status: LovItemStatus;
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
   attrs: Record<string, string | number | boolean>;
   approvalUserId?: string | null;
 }

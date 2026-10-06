@@ -541,7 +541,17 @@ export function LovProvider({ children }: { children: React.ReactNode }) {
   );
 
   const getActiveItems = useCallback(
-    (listCode: string) => getItems(listCode).filter((i) => i.status === 'active'),
+    (listCode: string) => {
+      const now = Date.now();
+      return getItems(listCode).filter((item) => {
+        if (item.status !== 'active') return false;
+        const startsAt = item.effectiveFrom
+          ? Date.parse(item.effectiveFrom)
+          : Number.NEGATIVE_INFINITY;
+        const endsAt = item.effectiveTo ? Date.parse(item.effectiveTo) : Number.POSITIVE_INFINITY;
+        return startsAt <= now && endsAt >= now;
+      });
+    },
     [getItems],
   );
 
