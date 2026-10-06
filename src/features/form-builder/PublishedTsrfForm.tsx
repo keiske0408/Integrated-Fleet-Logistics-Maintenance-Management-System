@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, ClipboardList, Printer } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, Calendar, ClipboardList, MapPin, ShieldCheck } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { FormRenderer } from './FormRenderer';
-import { FormPrintView } from './FormPrintView';
-import { TSRFSubmissionTracker, type SubmissionPrintRequest } from './TSRFSubmissionTracker';
+import { TSRFSubmissionTracker } from './TSRFSubmissionTracker';
+import { TSRFDetailView } from './TSRFDetailView';
 import { projectFormValuesToDefinition, serializeTsrfValues, TSRF_V1 } from './seed';
 import type { FormDefinition, FormValues } from './types';
 import type { TSRFFormData } from '@/features/logistics/TSRFForm';
@@ -33,23 +36,12 @@ export function choosePublishedDefinition(
 }
 
 export function PublishedTsrfForm({ onSubmit }: PublishedTsrfFormProps) {
+  const navigate = useNavigate();
+  const { id } = useParams<{ id?: string }>();
+
   const [definition, setDefinition] = useState<FormDefinition>(TSRF_V1);
   const [hasPublishedDefinition, setHasPublishedDefinition] = useState(false);
   const [submissionRefreshToken, setSubmissionRefreshToken] = useState(0);
-  const [focusSubmissionId, setFocusSubmissionId] = useState<string | null>(null);
-  const [showRequestForm, setShowRequestForm] = useState(false);
-  const [printReceipt, setPrintReceipt] = useState<{
-    definition: FormDefinition;
-    number: string;
-    values: FormValues;
-    labelSnapshots: Record<string, { code: string; label: string }>;
-    status?: string;
-    stage?: string;
-    isLate?: boolean;
-    createdAt?: string;
-    currentAssignee?: { name: string; role: string } | null;
-    currentResponsibleRoles?: string[];
-  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,104 +79,119 @@ export function PublishedTsrfForm({ onSubmit }: PublishedTsrfFormProps) {
       const detail = Array.isArray(result.details) ? result.details.join(' ') : result.error;
       throw new Error(detail ?? 'Unable to submit TSRF request.');
     }
-    setPrintReceipt({
-      definition,
-      number: result.submissionNumber ?? result.requestNumber ?? 'Pending number',
-      values,
-      labelSnapshots: result.labelSnapshots ?? {},
-      status: result.status,
-      stage: result.stage,
-      isLate: result.isLate,
-      createdAt: result.createdAt,
-      currentAssignee: result.currentAssignee ?? null,
-      currentResponsibleRoles: result.currentResponsibleRoles ?? [],
-    });
+
     setSubmissionRefreshToken((current) => current + 1);
-    setFocusSubmissionId(typeof result.id === 'string' ? result.id : null);
-    setShowRequestForm(false);
     onSubmit(legacyData);
+
+    // Navigate to the newly created TSRF detail page!
+    if (result.id) {
+      navigate(`/tsrf/${result.id}`);
+    } else {
+      navigate('/tsrf');
+    }
   };
 
-  const preparePrintRequest = (request: SubmissionPrintRequest) => {
-    setPrintReceipt({
-      definition: request.definition,
-      number: request.submissionNumber,
-      values: request.values,
-      labelSnapshots: request.labelSnapshots,
-      status: request.status,
-      stage: request.stage,
-      isLate: request.isLate,
-      createdAt: request.createdAt,
-      currentAssignee: request.currentAssignee,
-      currentResponsibleRoles: request.currentResponsibleRoles,
-    });
-  };
+  // Case 1: Specific TSRF Record Route -> /tsrf/:id (where id !== 'new')
+  if (id && id !== 'new') {
+    return <TSRFDetailView id={id} />;
+  }
 
-  return (
-    <div className="space-y-4">
-      {!showRequestForm ? (
-        <TSRFSubmissionTracker
-          refreshToken={submissionRefreshToken}
-          focusSubmissionId={focusSubmissionId}
-          onPrint={preparePrintRequest}
-          onNewRequest={() => {
-            setPrintReceipt(null);
-            setShowRequestForm(true);
-          }}
-        />
-      ) : (
-        <div className="space-y-5">
-          <Button
-            type="button"
-            variant="ghost"
-            className="gap-2 px-0"
-            onClick={() => setShowRequestForm(false)}
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to requests
-          </Button>
-          <section className="border-l-2 border-primary pl-4" aria-labelledby="request-guide-title">
-            <h2
-              id="request-guide-title"
-              className="flex items-center gap-2 text-base font-semibold"
+  // Case 2: New Request Route -> /tsrf/new
+  if (id === 'new') {
+    return (
+      <div className="space-y-6 animate-fade-in">
+        {/* Navigation & Header */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/50 pb-4">
+          <div className="space-y-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="gap-2 -ml-2 text-xs font-medium text-muted-foreground hover:text-foreground"
+              onClick={() => navigate('/tsrf')}
             >
-              <ClipboardList className="h-4 w-4" />
-              Before you request a vehicle
-            </h2>
-            <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
-              <li>Choose your department and provide the project and trip schedule.</li>
-              <li>Enter the origin, destination, stops, passengers, and cargo details.</li>
-              <li>
-                Submit complete details; the request will appear in your register with its current
-                status and history.
-              </li>
-            </ol>
-          </section>
-          <FormRenderer definition={definition} onSubmit={submit} />
-        </div>
-      )}
-      {printReceipt && (
-        <>
-          <div className="flex justify-end print:hidden">
-            <Button type="button" variant="outline" onClick={() => window.print()}>
-              <Printer className="mr-2 h-4 w-4" />
-              Print Request
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back to Request Register
             </Button>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              Create New Transportation Service Request
+            </h1>
           </div>
-          <FormPrintView
-            definition={printReceipt.definition}
-            values={printReceipt.values}
-            submissionNumber={printReceipt.number}
-            labelSnapshots={printReceipt.labelSnapshots}
-            status={printReceipt.status}
-            stage={printReceipt.stage}
-            isLate={printReceipt.isLate}
-            createdAt={printReceipt.createdAt}
-            currentAssignee={printReceipt.currentAssignee}
-            currentResponsibleRoles={printReceipt.currentResponsibleRoles}
-          />
-        </>
-      )}
-    </div>
+          <Badge
+            variant="outline"
+            className="self-start sm:self-auto px-2.5 py-1 text-xs font-mono"
+          >
+            Standard TSRF V{definition.version ?? 1}
+          </Badge>
+        </div>
+
+        {/* Structured Intake Guidelines Banner */}
+        <Card className="border-primary/25 bg-primary/5 shadow-xs">
+          <CardContent className="p-4 sm:p-5">
+            <div className="flex items-start gap-3">
+              <div className="rounded-xl bg-primary/10 p-2.5 text-primary">
+                <ClipboardList className="h-5 w-5" />
+              </div>
+              <div className="flex-1 space-y-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Fleet Logistics Intake Protocol
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Ensure complete schedule and passenger/cargo information for rapid review and
+                    vehicle allocation.
+                  </p>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-lg border border-border/60 bg-background/80 p-3 space-y-1">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                      <Calendar className="h-3.5 w-3.5 text-primary" />
+                      <span>1. Schedule & Purpose</span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Specify project purpose, department, departure date, and call time.
+                    </p>
+                  </div>
+
+                  <div className="rounded-lg border border-border/60 bg-background/80 p-3 space-y-1">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                      <MapPin className="h-3.5 w-3.5 text-primary" />
+                      <span>2. Route & Manifest</span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Enter origin, destination, intermediate drop-offs, and passenger list.
+                    </p>
+                  </div>
+
+                  <div className="rounded-lg border border-border/60 bg-background/80 p-3 space-y-1">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                      <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+                      <span>3. Approval & Dispatch</span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Automatic routing through endorsement, gating, and dispatch queues.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Form Renderer */}
+        <FormRenderer definition={definition} onSubmit={submit} />
+      </div>
+    );
+  }
+
+  // Case 3: Main Registry List Route -> /tsrf
+  return (
+    <TSRFSubmissionTracker
+      refreshToken={submissionRefreshToken}
+      onNewRequest={() => navigate('/tsrf/new')}
+    />
   );
 }
+
+export default PublishedTsrfForm;

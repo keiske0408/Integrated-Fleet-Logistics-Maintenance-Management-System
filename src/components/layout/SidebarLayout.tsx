@@ -118,7 +118,11 @@ export function SidebarLayout({ notifications = 0 }: SidebarLayoutProps) {
 
   // Derive current page label from URL for the breadcrumb
   const activeLabel = useMemo(() => {
-    const activePage = PATH_TO_PAGE[location.pathname] || 'dashboard';
+    const matchedPath = Object.keys(PATH_TO_PAGE).find(
+      (path) =>
+        location.pathname === path || (path !== '/' && location.pathname.startsWith(`${path}/`)),
+    );
+    const activePage = (matchedPath ? PATH_TO_PAGE[matchedPath] : undefined) || 'dashboard';
     return [...NAV_ITEMS, ...SETTINGS_ITEMS].find((i) => i.id === activePage)?.label || 'Dashboard';
   }, [location.pathname]);
 
@@ -135,7 +139,7 @@ export function SidebarLayout({ notifications = 0 }: SidebarLayoutProps) {
         title={collapsed ? item.label : undefined}
         className={({ isActive }) =>
           `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group ${
-            isActive
+            isActive || (to !== '/' && location.pathname.startsWith(`${to}/`))
               ? 'bg-primary text-primary-foreground shadow-sm'
               : 'text-muted-foreground hover:bg-accent hover:text-foreground'
           } ${collapsed ? 'justify-center' : ''}`

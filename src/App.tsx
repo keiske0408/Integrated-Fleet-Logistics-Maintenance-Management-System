@@ -222,13 +222,7 @@ const TsrfPage = React.memo(function TsrfPage({
   onSubmit: (data: TSRFFormData) => void;
 }) {
   return (
-    <div className="space-y-4 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">TSRF Logistics Intake</h1>
-        <p className="text-muted-foreground text-sm mt-0.5">
-          Submit Transportation Service Request Forms for dispatch.
-        </p>
-      </div>
+    <div className="animate-fade-in">
       <Suspense fallback={<RouteLoadingFallback />}>
         <PublishedTsrfForm onSubmit={onSubmit} />
       </Suspense>
@@ -672,6 +666,14 @@ function InnerApp() {
           {/* TSRF */}
           <Route
             path={PAGE_ROUTES.tsrf}
+            element={
+              <ProtectedRoute permission="view:tsrf">
+                <TsrfPage onSubmit={handleTsrfSubmit} />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={`${PAGE_ROUTES.tsrf}/:id`}
             element={
               <ProtectedRoute permission="view:tsrf">
                 <TsrfPage onSubmit={handleTsrfSubmit} />

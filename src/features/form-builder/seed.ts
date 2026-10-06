@@ -1,5 +1,5 @@
 import type { TSRFFormData } from '@/features/logistics/TSRFForm';
-import type { FormDefinition, FormValues, FormWorkflow } from './types';
+import type { FormDefinition, FormField, FormValues, FormWorkflow } from './types';
 
 export const TSRF_WORKFLOW: FormWorkflow = {
   initialStage: 'submitted',
