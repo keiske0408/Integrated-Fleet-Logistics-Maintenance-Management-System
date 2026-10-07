@@ -32,11 +32,14 @@ import {
   ShieldCheck,
   GitBranch,
   Lock,
+  ArrowLeft,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { useToast } from '@/components/ui/toast';
 import { FormRenderer } from './FormRenderer';
 import { TSRF_V1, TSRF_WORKFLOW } from './seed';
 import { useLov } from '@/features/lov';
@@ -49,6 +52,7 @@ import type {
   FormDefinition,
   FormField,
   FormWorkflow,
+  StageFieldPermission,
   SystemStatusCategory,
 } from './types';
 import type { FieldRule, RuleOperator } from './rules';
@@ -184,10 +188,19 @@ export function FormBuilderPage() {
   const [paletteSearch, setPaletteSearch] = useState('');
   const [inspectorTab, setInspectorTab] = useState<'settings' | 'logic' | 'governance'>('settings');
   const [permissionFieldSearch, setPermissionFieldSearch] = useState('');
+  const [mobileStudioView, setMobileStudioView] = useState<'canvas' | 'palette' | 'properties'>(
+    'canvas',
+  );
+  const [isDeletingDraft, setIsDeletingDraft] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const { success: toastSuccess, error: toastError, warning: toastWarning } = useToast();
   const propertiesPanelRef = useRef<HTMLDivElement>(null);
 
   const selectFieldAndScroll = (fieldId: string) => {
     setSelectedId(fieldId);
+    if (window.innerWidth < 1024) {
+      setMobileStudioView('properties');
+    }
     propertiesPanelRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   };
   const [preview, setPreview] = useState(false);
@@ -201,7 +214,6 @@ export function FormBuilderPage() {
   >([]);
   const [saving, setSaving] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const [permissionRole, setPermissionRole] = useState('department_requester');
   const [permissionStageId, setPermissionStageId] = useState('dispatch_assignment');
   const { lists } = useLov();
@@ -230,7 +242,7 @@ export function FormBuilderPage() {
   };
   const selectVersion = (version: string) => {
     if (saving || editRevision > savedRevisionRef.current) {
-      setMessage('Save the current changes before switching versions.');
+      toastWarning('Save the current changes before switching versions.');
       return;
     }
     navigate(version === 'working' ? '/form-builder' : `/form-builder/versions/${version}`);
@@ -297,8 +309,9 @@ export function FormBuilderPage() {
         const requestedVersion = routeVersion
           ? versions.find((version) => String(version.version) === routeVersion)
           : undefined;
-        if (routeVersion && !requestedVersion)
-          setMessage(`Form version ${routeVersion} was not found.`);
+        if (routeVersion && !requestedVersion) {
+          toastWarning(`Form version ${routeVersion} was not found.`);
+        }
         const selected =
           requestedVersion ??
           activeDraft ??
@@ -326,7 +339,7 @@ export function FormBuilderPage() {
       })
       .catch((error: unknown) => {
         if (!cancelled) {
-          setMessage(error instanceof Error ? error.message : 'Unable to load form definition.');
+          toastError(error instanceof Error ? error.message : 'Unable to load form definition.');
           setIsDefinitionLoaded(true);
         }
       });
@@ -338,7 +351,6 @@ export function FormBuilderPage() {
   const saveDraft = async (automatic = false, revision = editRevision) => {
     if (saving) return;
     setSaving(true);
-    if (!automatic) setMessage(null);
     try {
       const draft = { ...definition, status: 'draft' as const };
       let response: Response;
@@ -363,24 +375,58 @@ export function FormBuilderPage() {
       }
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? 'Unable to save draft.');
-      const resolvedDefId = result.formDefinitionId ?? (result.version ? result.id : definitionId);
+
+      // Safely extract version metadata whether returned as an object or top-level row
+      const versionObj =
+        typeof result.version === 'object' && result.version !== null ? result.version : result;
+      const versionNum =
+        typeof result.version === 'number'
+          ? result.version
+          : typeof versionObj?.version === 'number'
+            ? versionObj.version
+            : (definition.version ?? 1);
+      const savedVersionId =
+        (typeof versionObj?.id === 'string' ? versionObj.id : undefined) ?? result.id;
+      const resolvedDefId =
+        result.formDefinitionId ??
+        versionObj?.formDefinitionId ??
+        (typeof result.version === 'object' ? result.id : definitionId);
+
       if (resolvedDefId) setDefinitionId(resolvedDefId);
-      const version = result.version ?? result;
-      setDraftVersionId(version.id);
+      if (savedVersionId) setDraftVersionId(savedVersionId);
+
       savedRevisionRef.current = Math.max(savedRevisionRef.current, revision);
       autosaveErrorRevisionRef.current = null;
+
       dispatchEditorHistory({
         type: 'replace-present',
         update: (snapshot) => ({
           ...snapshot,
-          definition: { ...snapshot.definition, version: version.version, status: 'draft' },
+          definition: { ...snapshot.definition, version: versionNum, status: 'draft' },
         }),
       });
-      setMessage(`Draft v${version.version} ${automatic ? 'autosaved' : 'saved'}.`);
+
+      setAvailableVersions((prev) => {
+        const exists = prev.some((v) => v.version === versionNum);
+        if (exists) {
+          return prev.map((v) => (v.version === versionNum ? { ...v, status: 'draft' } : v));
+        }
+        return [{ version: versionNum, status: 'draft' }, ...prev].sort(
+          (a, b) => b.version - a.version,
+        );
+      });
+
+      if (!automatic) {
+        toastSuccess(`Draft v${versionNum} saved successfully.`);
+      }
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Unable to save draft.';
-      if (automatic) autosaveErrorRevisionRef.current = revision;
-      setMessage(automatic ? `Autosave failed: ${detail} Use Save Draft to retry.` : detail);
+      if (automatic) {
+        autosaveErrorRevisionRef.current = revision;
+        toastError(`Autosave failed: ${detail}`);
+      } else {
+        toastError(detail);
+      }
     } finally {
       setSaving(false);
     }
@@ -409,19 +455,18 @@ export function FormBuilderPage() {
       ...validateFormWorkflow(workflow, fields),
     ];
     if (errors.length) {
-      setMessage(errors.join(' '));
+      toastWarning(errors.join(' '));
       return;
     }
     if (!draftVersionId) {
-      setMessage('Save a draft before publishing.');
+      toastWarning('Save a draft before publishing.');
       return;
     }
     if (editRevision > savedRevisionRef.current) {
-      setMessage('Wait for the current draft changes to save before publishing.');
+      toastWarning('Wait for the current draft changes to save before publishing.');
       return;
     }
     setSaving(true);
-    setMessage(null);
     try {
       const response = await apiFetch(
         `/api/forms/versions/${encodeURIComponent(draftVersionId)}/publish`,
@@ -438,11 +483,59 @@ export function FormBuilderPage() {
       setPublishedBaseline(published);
       setPublishedFieldIds(new Set(collectFieldIds(fields)));
       setDraftVersionId(null);
-      setMessage(`Form v${result.version} published.`);
+
+      setAvailableVersions((prev) =>
+        prev
+          .map((v) => {
+            if (v.version === result.version) return { ...v, status: 'published' };
+            if (v.status === 'published') return { ...v, status: 'archived' };
+            return v;
+          })
+          .sort((a, b) => b.version - a.version),
+      );
+
+      toastSuccess(`Form v${result.version} published successfully!`);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Unable to publish form.');
+      toastError(error instanceof Error ? error.message : 'Unable to publish form.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const deleteDraft = async () => {
+    if (!draftVersionId) {
+      toastWarning('No active draft version selected to delete.');
+      return;
+    }
+    setIsDeletingDraft(true);
+    try {
+      const response = await apiFetch(`/api/forms/versions/${encodeURIComponent(draftVersionId)}`, {
+        method: 'DELETE',
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? 'Unable to delete draft.');
+
+      const deletedVer = result.deletedVersion ?? definition.version;
+      toastSuccess(`Draft v${deletedVer} deleted successfully.`);
+
+      const remainingVersions = availableVersions.filter((v) => v.version !== deletedVer);
+      setAvailableVersions(remainingVersions);
+      setShowDeleteConfirm(false);
+      setDraftVersionId(null);
+
+      // Navigate to latest published version if available, or base form-builder
+      const latestPublished = remainingVersions.find((v) => v.status === 'published');
+      const latestDraft = remainingVersions.find((v) => v.status === 'draft');
+      const nextTarget = latestPublished ?? latestDraft;
+      if (nextTarget) {
+        navigate(`/form-builder/versions/${nextTarget.version}`);
+      } else {
+        navigate('/form-builder');
+      }
+    } catch (error) {
+      toastError(error instanceof Error ? error.message : 'Unable to delete draft.');
+    } finally {
+      setIsDeletingDraft(false);
     }
   };
 
@@ -546,6 +639,9 @@ export function FormBuilderPage() {
       ),
     }));
     setSelectedId(field.id);
+    if (window.innerWidth < 1024) {
+      setMobileStudioView('canvas');
+    }
     propertiesPanelRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -698,14 +794,18 @@ export function FormBuilderPage() {
 
   const setAllFieldPermissions = (access: '' | 'edit' | 'read' | 'hidden') => {
     if (!selectedPermissionStage) return;
-    const nextPermissions: Record<string, Record<string, '' | 'edit' | 'read' | 'hidden'>> = {
-      ...(selectedPermissionStage.fieldPermissions ?? {}),
-    };
+    const nextPermissions: Record<string, Record<string, StageFieldPermission>> = {};
+    const current = selectedPermissionStage.fieldPermissions ?? {};
     permissionFields.forEach((field) => {
-      nextPermissions[field.key] = {
-        ...(nextPermissions[field.key] ?? {}),
-        [permissionRole]: access,
-      };
+      const fieldRoles = { ...(current[field.key] ?? {}) };
+      if (access) {
+        fieldRoles[permissionRole] = access;
+      } else {
+        delete fieldRoles[permissionRole];
+      }
+      if (Object.keys(fieldRoles).length > 0) {
+        nextPermissions[field.key] = fieldRoles;
+      }
     });
     const stageIndex = workflow.stages.findIndex((s) => s.id === selectedPermissionStage.id);
     if (stageIndex >= 0) {
@@ -732,11 +832,11 @@ export function FormBuilderPage() {
         new Set(lists.map((list) => list.code)),
       );
       if (!result.definition) {
-        setMessage(result.errors.join(' '));
+        toastWarning(result.errors.join(' '));
         return;
       }
       if (result.definition.key !== definition.key) {
-        setMessage(
+        toastWarning(
           `This file is for "${result.definition.key}"; the current form is "${definition.key}".`,
         );
         return;
@@ -750,9 +850,9 @@ export function FormBuilderPage() {
       setSelectedId(
         imported.sections.find((section) => section.fields.length > 0)?.fields[0].id ?? '',
       );
-      setMessage('Schema imported locally. Save Draft to persist the changes.');
+      toastSuccess('Schema imported locally. Save Draft to persist the changes.');
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Unable to read the JSON file.');
+      toastError(error instanceof Error ? error.message : 'Unable to read the JSON file.');
     }
   };
 
@@ -823,10 +923,10 @@ export function FormBuilderPage() {
         <div>
           <h1 className="text-2xl font-bold">Form Builder</h1>
           <p className="text-sm text-muted-foreground">
-            Design {definition.name} v{definition.version} · {definition.status}
+            Design {definition.name} v{definition.version ?? 'draft'} · {definition.status}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {availableVersions.length > 0 && (
             <div>
               <label htmlFor="form-version" className="sr-only">
@@ -888,6 +988,21 @@ export function FormBuilderPage() {
             <Upload className="mr-2 h-4 w-4" />
             Import JSON
           </Button>
+
+          {/* Delete Draft Button */}
+          {definition.status === 'draft' && Boolean(draftVersionId) && (
+            <Button
+              type="button"
+              variant="outline"
+              className="border-red-500/40 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-500/40 dark:text-red-400 dark:hover:bg-red-950/30"
+              onClick={() => setShowDeleteConfirm(true)}
+              disabled={saving || isDeletingDraft}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete Draft
+            </Button>
+          )}
+
           <Button onClick={() => void saveDraft()} disabled={saving}>
             <Save className="mr-2 h-4 w-4" />
             {saving
@@ -908,15 +1023,64 @@ export function FormBuilderPage() {
           </Button>
         </div>
       </div>
-      {message && (
-        <p role="status" className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
-          {message}
-        </p>
+
+      {/* Delete Draft Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-500/10 text-red-500">
+                <Trash2 className="h-5 w-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-semibold text-foreground">
+                  Delete Draft v{definition.version}?
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Are you sure you want to delete this draft? Any changes in draft v
+                  {definition.version} will be permanently removed. Published and archived versions
+                  will not be affected.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={isDeletingDraft}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                className="bg-red-600 hover:bg-red-700 text-white"
+                onClick={() => void deleteDraft()}
+                disabled={isDeletingDraft}
+              >
+                {isDeletingDraft ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                    Delete Draft
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
+
       {definition.status === 'draft' && publishedBaseline && (
         <details className="rounded-md border border-border px-3 py-2">
           <summary className="cursor-pointer text-sm font-semibold">
-            Draft v{definition.version} compared with published v{publishedBaseline.version}
+            Draft v{definition.version ?? 'draft'} compared with published v
+            {publishedBaseline.version}
             <span className="ml-2 font-normal text-muted-foreground">
               {versionChanges.length} change(s)
             </span>
@@ -940,12 +1104,13 @@ export function FormBuilderPage() {
           )}
         </details>
       )}
+
       {/* Primary Builder Navigation */}
-      <div className="flex items-center gap-1.5 border-b border-border/80 pb-2">
+      <div className="flex items-center gap-1.5 border-b border-border/80 pb-2 overflow-x-auto no-scrollbar">
         <button
           type="button"
           onClick={() => setActiveTab('canvas')}
-          className={`flex items-center gap-2 px-3.5 py-2 text-sm font-medium rounded-lg transition-all ${
+          className={`flex items-center gap-2 px-3.5 py-2 text-sm font-medium rounded-lg transition-all shrink-0 ${
             activeTab === 'canvas'
               ? 'bg-primary text-primary-foreground shadow-sm'
               : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground'
@@ -966,7 +1131,7 @@ export function FormBuilderPage() {
         <button
           type="button"
           onClick={() => setActiveTab('workflow')}
-          className={`flex items-center gap-2 px-3.5 py-2 text-sm font-medium rounded-lg transition-all ${
+          className={`flex items-center gap-2 px-3.5 py-2 text-sm font-medium rounded-lg transition-all shrink-0 ${
             activeTab === 'workflow'
               ? 'bg-primary text-primary-foreground shadow-sm'
               : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground'
@@ -987,7 +1152,7 @@ export function FormBuilderPage() {
         <button
           type="button"
           onClick={() => setActiveTab('permissions')}
-          className={`flex items-center gap-2 px-3.5 py-2 text-sm font-medium rounded-lg transition-all ${
+          className={`flex items-center gap-2 px-3.5 py-2 text-sm font-medium rounded-lg transition-all shrink-0 ${
             activeTab === 'permissions'
               ? 'bg-primary text-primary-foreground shadow-sm'
               : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground'
@@ -999,1097 +1164,1179 @@ export function FormBuilderPage() {
       </div>
 
       {activeTab === 'canvas' && (
-        <div className="grid grid-cols-1 xl:grid-cols-[260px_minmax(0,1fr)_340px] items-start gap-5">
-          {/* Left Column: Component Library & Structure Outline */}
-          <div className="sticky top-0 self-start max-h-[calc(100vh-8.5rem)] flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-            <div className="p-3 border-b border-border bg-muted/20 shrink-0">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Components
-                </h3>
-                <div className="flex rounded-md bg-muted p-0.5 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setSidebarTab('palette')}
-                    className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
-                      sidebarTab === 'palette'
-                        ? 'bg-background text-foreground shadow-xs'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    Library
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSidebarTab('outline')}
-                    className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
-                      sidebarTab === 'outline'
-                        ? 'bg-background text-foreground shadow-xs'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    Outline
-                  </button>
-                </div>
-              </div>
-              {sidebarTab === 'palette' && (
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
-                  <Input
-                    value={paletteSearch}
-                    onChange={(e) => setPaletteSearch(e.target.value)}
-                    placeholder="Filter components..."
-                    className="h-7 pl-8 text-xs bg-background"
-                  />
-                </div>
-              )}
-            </div>
+        <>
+          {/* Mobile / Tablet Studio Switcher (Visible only below 1024px) */}
+          <div className="flex lg:hidden items-center justify-between gap-1 p-1 bg-muted/60 rounded-xl border border-border/70 mb-3">
+            <button
+              type="button"
+              onClick={() => setMobileStudioView('canvas')}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs transition-all ${
+                mobileStudioView === 'canvas'
+                  ? 'bg-background text-foreground shadow-xs font-semibold'
+                  : 'text-muted-foreground hover:text-foreground font-medium'
+              }`}
+            >
+              <Sliders className="h-3.5 w-3.5" />
+              <span>Canvas</span>
+              <span className="rounded-full bg-muted px-1.5 py-0.2 text-[10px]">
+                {fields.length}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileStudioView('palette')}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs transition-all ${
+                mobileStudioView === 'palette'
+                  ? 'bg-background text-foreground shadow-xs font-semibold'
+                  : 'text-muted-foreground hover:text-foreground font-medium'
+              }`}
+            >
+              <Layers className="h-3.5 w-3.5" />
+              <span>Components</span>
+              <span className="rounded-full bg-muted px-1.5 py-0.2 text-[10px]">
+                {PALETTE.length}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileStudioView('properties')}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs transition-all ${
+                mobileStudioView === 'properties'
+                  ? 'bg-background text-foreground shadow-xs font-semibold'
+                  : 'text-muted-foreground hover:text-foreground font-medium'
+              }`}
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              <span>Properties</span>
+              {selectedField && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+            </button>
+          </div>
 
-            <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5">
-              {sidebarTab === 'palette' ? (
-                PALETTE.filter(
-                  (item) =>
-                    item.label.toLowerCase().includes(paletteSearch.toLowerCase()) ||
-                    item.type.toLowerCase().includes(paletteSearch.toLowerCase()),
-                ).map((item) => {
-                  const meta = PALETTE_META[item.type] || {
-                    label: item.label,
-                    icon: Type,
-                    description: '',
-                  };
-                  const Icon = meta.icon;
-                  return (
-                    <div
-                      key={item.type}
-                      draggable
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData('field-type', item.type);
-                      }}
-                      className="group flex items-center justify-between gap-2 rounded-lg border border-border bg-card p-2 text-left text-sm transition-all hover:border-primary/50 hover:bg-muted/40 cursor-grab active:cursor-grabbing shadow-2xs"
+          <div className="grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)_300px] xl:grid-cols-[260px_minmax(0,1fr)_340px] items-start gap-5">
+            {/* Left Column: Component Library & Structure Outline */}
+            <div
+              className={`sticky top-0 self-start max-h-[calc(100vh-8.5rem)] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm ${
+                mobileStudioView === 'palette' ? 'flex' : 'hidden lg:flex'
+              }`}
+            >
+              <div className="p-3 border-b border-border bg-muted/20 shrink-0">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Components
+                  </h3>
+                  <div className="flex rounded-md bg-muted p-0.5 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setSidebarTab('palette')}
+                      className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                        sidebarTab === 'palette'
+                          ? 'bg-background text-foreground shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
                     >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
-                          <Icon className="h-3.5 w-3.5" />
+                      Library
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSidebarTab('outline')}
+                      className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                        sidebarTab === 'outline'
+                          ? 'bg-background text-foreground shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      Outline
+                    </button>
+                  </div>
+                </div>
+                {sidebarTab === 'palette' && (
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input
+                      value={paletteSearch}
+                      onChange={(e) => setPaletteSearch(e.target.value)}
+                      placeholder="Filter components..."
+                      className="h-7 pl-8 text-xs bg-background"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5">
+                {sidebarTab === 'palette' ? (
+                  PALETTE.filter(
+                    (item) =>
+                      item.label.toLowerCase().includes(paletteSearch.toLowerCase()) ||
+                      item.type.toLowerCase().includes(paletteSearch.toLowerCase()),
+                  ).map((item) => {
+                    const meta = PALETTE_META[item.type] || {
+                      label: item.label,
+                      icon: Type,
+                      description: '',
+                    };
+                    const Icon = meta.icon;
+                    return (
+                      <div
+                        key={item.type}
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData('field-type', item.type);
+                        }}
+                        className="group flex items-center justify-between gap-2 rounded-lg border border-border bg-card p-2 text-left text-sm transition-all hover:border-primary/50 hover:bg-muted/40 cursor-grab active:cursor-grabbing shadow-2xs"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                            <Icon className="h-3.5 w-3.5" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-medium leading-none truncate">
+                              {meta.label}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground truncate mt-0.5">
+                              {meta.description}
+                            </p>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-medium leading-none truncate">{meta.label}</p>
-                          <p className="text-[10px] text-muted-foreground truncate mt-0.5">
-                            {meta.description}
-                          </p>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 shrink-0 opacity-40 group-hover:opacity-100"
+                          title={`Add ${meta.label}`}
+                          onClick={() => addField(item.type)}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="space-y-3 p-1">
+                    {definition.sections.map((sec, secIdx) => (
+                      <div key={sec.id} className="space-y-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            document.getElementById(sec.id)?.scrollIntoView({ behavior: 'smooth' });
+                          }}
+                          className="w-full text-left flex items-center justify-between text-xs font-semibold py-1 px-1.5 rounded hover:bg-muted/50"
+                        >
+                          <span className="truncate">
+                            §{secIdx + 1} {sec.title}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground font-normal bg-muted px-1.5 py-0.2 rounded">
+                            {sec.fields.length}
+                          </span>
+                        </button>
+                        <div className="pl-3 space-y-0.5 border-l border-border/60 ml-2">
+                          {sec.fields.map((f) => (
+                            <button
+                              key={f.id}
+                              type="button"
+                              onClick={() => selectFieldAndScroll(f.id)}
+                              className={`w-full text-left text-[11px] py-1 px-1.5 rounded truncate transition-colors ${
+                                selectedId === f.id
+                                  ? 'bg-primary/10 text-primary font-medium'
+                                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
+                              }`}
+                            >
+                              {f.label}
+                            </button>
+                          ))}
                         </div>
                       </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Center Column: Canvas */}
+            <div
+              className={`space-y-4 min-w-0 pb-16 ${
+                mobileStudioView === 'canvas' ? 'block' : 'hidden lg:block'
+              }`}
+            >
+              <div className="flex items-center justify-between pb-1">
+                <div>
+                  <h2 className="text-base font-semibold">Form Canvas</h2>
+                  <p className="text-xs text-muted-foreground">
+                    {definition.sections.length}{' '}
+                    {definition.sections.length === 1 ? 'section' : 'sections'} · {fields.length}{' '}
+                    {fields.length === 1 ? 'field' : 'fields'}
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" onClick={addSection}>
+                  <Plus className="mr-1.5 h-3.5 w-3.5" />
+                  Add Section
+                </Button>
+              </div>
+
+              {definition.sections.map((section, sectionIndex) => (
+                <div
+                  key={section.id}
+                  id={section.id}
+                  className="space-y-3 rounded-xl border border-border bg-card p-4 transition-all shadow-sm hover:shadow"
+                  onDragOver={(e) => {
+                    handleDragOverScroll(e);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const type = e.dataTransfer.getData('field-type') as FieldType;
+                    if (type) {
+                      addField(type, section.id);
+                    } else if (draggedId) {
+                      moveField(draggedId, section.id);
+                    }
+                  }}
+                >
+                  {/* Section Header */}
+                  <div className="flex items-start justify-between gap-3 group border-b border-border/50 pb-3">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className="flex h-6 px-2 items-center justify-center rounded bg-primary/10 text-primary text-xs font-semibold shrink-0">
+                        § {sectionIndex + 1}
+                      </span>
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <Input
+                          value={section.title}
+                          onChange={(e) => updateSection(section.id, { title: e.target.value })}
+                          className="font-semibold bg-transparent border-transparent hover:border-input focus-visible:border-input text-base h-8 px-2 -ml-2"
+                        />
+                        <Input
+                          value={section.description ?? ''}
+                          onChange={(e) =>
+                            updateSection(section.id, { description: e.target.value })
+                          }
+                          placeholder="Add a description for this section..."
+                          className="text-xs text-muted-foreground bg-transparent border-transparent hover:border-input focus-visible:border-input h-6 px-2 -ml-2"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        disabled={sectionIndex === 0}
+                        onClick={() => moveSectionByOffset(section.id, -1)}
+                        title="Move section up"
+                      >
+                        <ChevronUp className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        disabled={sectionIndex === definition.sections.length - 1}
+                        onClick={() => moveSectionByOffset(section.id, 1)}
+                        title="Move section down"
+                      >
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => removeSection(section.id)}
+                        title="Remove section"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Fields List */}
+                  <div className="space-y-2 min-h-10">
+                    {section.fields.map((field, fieldIndex) => {
+                      const isSelected = selectedId === field.id;
+                      const meta = PALETTE_META[field.type] || { icon: Type, label: field.type };
+                      const Icon = meta.icon;
+                      return (
+                        <div
+                          key={field.id}
+                          draggable
+                          onDragStart={(e) => {
+                            e.stopPropagation();
+                            setDraggedId(field.id);
+                          }}
+                          onDragOver={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const type = e.dataTransfer.getData('field-type') as FieldType;
+                            if (type) {
+                              addField(type, section.id);
+                            } else {
+                              moveField(field.id);
+                            }
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            selectFieldAndScroll(field.id);
+                          }}
+                          className={`group flex cursor-pointer items-center gap-2.5 rounded-lg border p-2.5 transition-all ${
+                            isSelected
+                              ? 'border-primary bg-primary/[0.04] ring-2 ring-primary/40 shadow-sm'
+                              : 'border-border/80 bg-card hover:border-primary/40 hover:bg-muted/20'
+                          }`}
+                        >
+                          <GripVertical className="h-4 w-4 text-muted-foreground/50 shrink-0 cursor-grab" />
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-muted/60 text-muted-foreground">
+                            <Icon className="h-3.5 w-3.5" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium truncate">{field.label}</span>
+                              {field.required && (
+                                <span className="text-[10px] font-semibold text-destructive bg-destructive/10 px-1.5 py-0.2 rounded">
+                                  Required
+                                </span>
+                              )}
+                              {field.rules && field.rules.length > 0 && (
+                                <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.2 rounded">
+                                  {field.rules.length} {field.rules.length === 1 ? 'rule' : 'rules'}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <span className="font-mono text-[11px] bg-muted/50 px-1 rounded">
+                                {field.key}
+                              </span>
+                              <span>·</span>
+                              <span className="capitalize">{field.type.replaceAll('_', ' ')}</span>
+                              <span>·</span>
+                              <span className="capitalize">{field.width ?? 'half'} width</span>
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-0.5 opacity-40 group-hover:opacity-100 transition-opacity">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              title={`Move ${field.label} up`}
+                              disabled={fieldIndex === 0}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                moveFieldByOffset(field.id, -1);
+                              }}
+                            >
+                              <ChevronUp className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              title={`Move ${field.label} down`}
+                              disabled={fieldIndex === section.fields.length - 1}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                moveFieldByOffset(field.id, 1);
+                              }}
+                            >
+                              <ChevronDown className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                              title="Duplicate field"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                duplicateField(field.id);
+                              }}
+                            >
+                              <Copy className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              title="Remove field"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setDefinition((current) => ({
+                                  ...current,
+                                  sections: current.sections.map((s) => ({
+                                    ...s,
+                                    fields: s.fields.filter((f) => f.id !== field.id),
+                                  })),
+                                }));
+                              }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {section.fields.length === 0 && (
+                      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-8 text-xs text-muted-foreground bg-muted/5 gap-1">
+                        <Copy className="h-4 w-4 opacity-40" />
+                        <span>Drag components here from the library, or click Add Field below</span>
+                      </div>
+                    )}
+
+                    {/* Inline Add Field Button */}
+                    <div className="pt-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full border-dashed hover:border-primary hover:text-primary transition-all text-xs h-8"
+                        onClick={() => addField('text', section.id)}
+                      >
+                        <Plus className="h-3.5 w-3.5 mr-1.5" />
+                        Add Field to {section.title}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Right Column: Properties Inspector (Sticky!) */}
+            <div
+              ref={propertiesPanelRef}
+              className={`sticky top-0 self-start max-h-[calc(100vh-8.5rem)] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm ${
+                mobileStudioView === 'properties' ? 'flex' : 'hidden lg:flex'
+              }`}
+            >
+              {selectedField ? (
+                <>
+                  {/* Sticky Header with Field Name, Key, Actions */}
+                  <div className="p-3 border-b border-border bg-muted/20 flex items-center justify-between gap-2 shrink-0">
+                    <div className="min-w-0 flex items-center gap-2">
+                      {(() => {
+                        const meta = PALETTE_META[selectedField.type] || {
+                          icon: Type,
+                          label: selectedField.type,
+                        };
+                        const Icon = meta.icon;
+                        return (
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-primary/10 text-primary">
+                            <Icon className="h-3.5 w-3.5" />
+                          </div>
+                        );
+                      })()}
+                      <div className="min-w-0">
+                        <h3 className="text-sm font-semibold truncate leading-none">
+                          {selectedField.label}
+                        </h3>
+                        <p className="text-[10px] text-muted-foreground truncate mt-0.5 font-mono">
+                          {selectedField.key}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="lg:hidden h-7 text-xs px-2 text-muted-foreground hover:text-foreground"
+                        onClick={() => setMobileStudioView('canvas')}
+                      >
+                        <ArrowLeft className="h-3.5 w-3.5 mr-1" />
+                        Canvas
+                      </Button>
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6 shrink-0 opacity-40 group-hover:opacity-100"
-                        title={`Add ${meta.label}`}
-                        onClick={() => addField(item.type)}
+                        className="h-7 w-7"
+                        title="Duplicate field"
+                        onClick={() => duplicateField(selectedField.id)}
                       >
-                        <Plus className="h-3.5 w-3.5" />
+                        <Copy className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        title="Delete field"
+                        onClick={() => {
+                          setDefinition((current) => ({
+                            ...current,
+                            sections: current.sections.map((section) => ({
+                              ...section,
+                              fields: section.fields.filter((field) => field.id !== selectedId),
+                            })),
+                          }));
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                        title="Close properties"
+                        onClick={() => setSelectedId('')}
+                      >
+                        <X className="h-3.5 w-3.5" />
                       </Button>
                     </div>
-                  );
-                })
-              ) : (
-                <div className="space-y-3 p-1">
-                  {definition.sections.map((sec, secIdx) => (
-                    <div key={sec.id} className="space-y-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          document.getElementById(sec.id)?.scrollIntoView({ behavior: 'smooth' });
-                        }}
-                        className="w-full text-left flex items-center justify-between text-xs font-semibold py-1 px-1.5 rounded hover:bg-muted/50"
-                      >
-                        <span className="truncate">
-                          §{secIdx + 1} {sec.title}
+                  </div>
+
+                  {/* Sub-tabs: Settings | Logic & Data | Governance */}
+                  <div className="flex border-b border-border px-3 pt-1 shrink-0 bg-muted/5 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setInspectorTab('settings')}
+                      className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
+                        inspectorTab === 'settings'
+                          ? 'border-primary text-primary font-semibold'
+                          : 'border-transparent text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      General
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInspectorTab('logic')}
+                      className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors flex items-center gap-1 ${
+                        inspectorTab === 'logic'
+                          ? 'border-primary text-primary font-semibold'
+                          : 'border-transparent text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      Data & Logic
+                      {selectedField.rules && selectedField.rules.length > 0 && (
+                        <span className="rounded-full bg-primary/20 text-primary text-[10px] px-1 font-semibold">
+                          {selectedField.rules.length}
                         </span>
-                        <span className="text-[10px] text-muted-foreground font-normal bg-muted px-1.5 py-0.2 rounded">
-                          {sec.fields.length}
-                        </span>
-                      </button>
-                      <div className="pl-3 space-y-0.5 border-l border-border/60 ml-2">
-                        {sec.fields.map((f) => (
-                          <button
-                            key={f.id}
-                            type="button"
-                            onClick={() => selectFieldAndScroll(f.id)}
-                            className={`w-full text-left text-[11px] py-1 px-1.5 rounded truncate transition-colors ${
-                              selectedId === f.id
-                                ? 'bg-primary/10 text-primary font-medium'
-                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
-                            }`}
-                          >
-                            {f.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Center Column: Canvas */}
-          <div className="space-y-4 min-w-0 pb-16">
-            <div className="flex items-center justify-between pb-1">
-              <div>
-                <h2 className="text-base font-semibold">Form Canvas</h2>
-                <p className="text-xs text-muted-foreground">
-                  {definition.sections.length}{' '}
-                  {definition.sections.length === 1 ? 'section' : 'sections'} · {fields.length}{' '}
-                  {fields.length === 1 ? 'field' : 'fields'}
-                </p>
-              </div>
-              <Button variant="outline" size="sm" onClick={addSection}>
-                <Plus className="mr-1.5 h-3.5 w-3.5" />
-                Add Section
-              </Button>
-            </div>
-
-            {definition.sections.map((section, sectionIndex) => (
-              <div
-                key={section.id}
-                id={section.id}
-                className="space-y-3 rounded-xl border border-border bg-card p-4 transition-all shadow-sm hover:shadow"
-                onDragOver={(e) => {
-                  handleDragOverScroll(e);
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  const type = e.dataTransfer.getData('field-type') as FieldType;
-                  if (type) {
-                    addField(type, section.id);
-                  } else if (draggedId) {
-                    moveField(draggedId, section.id);
-                  }
-                }}
-              >
-                {/* Section Header */}
-                <div className="flex items-start justify-between gap-3 group border-b border-border/50 pb-3">
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <span className="flex h-6 px-2 items-center justify-center rounded bg-primary/10 text-primary text-xs font-semibold shrink-0">
-                      § {sectionIndex + 1}
-                    </span>
-                    <div className="flex-1 min-w-0 space-y-1">
-                      <Input
-                        value={section.title}
-                        onChange={(e) => updateSection(section.id, { title: e.target.value })}
-                        className="font-semibold bg-transparent border-transparent hover:border-input focus-visible:border-input text-base h-8 px-2 -ml-2"
-                      />
-                      <Input
-                        value={section.description ?? ''}
-                        onChange={(e) => updateSection(section.id, { description: e.target.value })}
-                        placeholder="Add a description for this section..."
-                        className="text-xs text-muted-foreground bg-transparent border-transparent hover:border-input focus-visible:border-input h-6 px-2 -ml-2"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      disabled={sectionIndex === 0}
-                      onClick={() => moveSectionByOffset(section.id, -1)}
-                      title="Move section up"
-                    >
-                      <ChevronUp className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      disabled={sectionIndex === definition.sections.length - 1}
-                      onClick={() => moveSectionByOffset(section.id, 1)}
-                      title="Move section down"
-                    >
-                      <ChevronDown className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => removeSection(section.id)}
-                      title="Remove section"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Fields List */}
-                <div className="space-y-2 min-h-10">
-                  {section.fields.map((field, fieldIndex) => {
-                    const isSelected = selectedId === field.id;
-                    const meta = PALETTE_META[field.type] || { icon: Type, label: field.type };
-                    const Icon = meta.icon;
-                    return (
-                      <div
-                        key={field.id}
-                        draggable
-                        onDragStart={(e) => {
-                          e.stopPropagation();
-                          setDraggedId(field.id);
-                        }}
-                        onDragOver={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                        }}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          const type = e.dataTransfer.getData('field-type') as FieldType;
-                          if (type) {
-                            addField(type, section.id);
-                          } else {
-                            moveField(field.id);
-                          }
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          selectFieldAndScroll(field.id);
-                        }}
-                        className={`group flex cursor-pointer items-center gap-2.5 rounded-lg border p-2.5 transition-all ${
-                          isSelected
-                            ? 'border-primary bg-primary/[0.04] ring-2 ring-primary/40 shadow-sm'
-                            : 'border-border/80 bg-card hover:border-primary/40 hover:bg-muted/20'
-                        }`}
-                      >
-                        <GripVertical className="h-4 w-4 text-muted-foreground/50 shrink-0 cursor-grab" />
-                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-muted/60 text-muted-foreground">
-                          <Icon className="h-3.5 w-3.5" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium truncate">{field.label}</span>
-                            {field.required && (
-                              <span className="text-[10px] font-semibold text-destructive bg-destructive/10 px-1.5 py-0.2 rounded">
-                                Required
-                              </span>
-                            )}
-                            {field.rules && field.rules.length > 0 && (
-                              <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.2 rounded">
-                                {field.rules.length} {field.rules.length === 1 ? 'rule' : 'rules'}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <span className="font-mono text-[11px] bg-muted/50 px-1 rounded">
-                              {field.key}
-                            </span>
-                            <span>·</span>
-                            <span className="capitalize">{field.type.replaceAll('_', ' ')}</span>
-                            <span>·</span>
-                            <span className="capitalize">{field.width ?? 'half'} width</span>
-                          </div>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-0.5 opacity-40 group-hover:opacity-100 transition-opacity">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            title={`Move ${field.label} up`}
-                            disabled={fieldIndex === 0}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              moveFieldByOffset(field.id, -1);
-                            }}
-                          >
-                            <ChevronUp className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            title={`Move ${field.label} down`}
-                            disabled={fieldIndex === section.fields.length - 1}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              moveFieldByOffset(field.id, 1);
-                            }}
-                          >
-                            <ChevronDown className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                            title="Duplicate field"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              duplicateField(field.id);
-                            }}
-                          >
-                            <Copy className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                            title="Remove field"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setDefinition((current) => ({
-                                ...current,
-                                sections: current.sections.map((s) => ({
-                                  ...s,
-                                  fields: s.fields.filter((f) => f.id !== field.id),
-                                })),
-                              }));
-                            }}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  {section.fields.length === 0 && (
-                    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-8 text-xs text-muted-foreground bg-muted/5 gap-1">
-                      <Copy className="h-4 w-4 opacity-40" />
-                      <span>Drag components here from the library, or click Add Field below</span>
-                    </div>
-                  )}
-
-                  {/* Inline Add Field Button */}
-                  <div className="pt-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full border-dashed hover:border-primary hover:text-primary transition-all text-xs h-8"
-                      onClick={() => addField('text', section.id)}
-                    >
-                      <Plus className="h-3.5 w-3.5 mr-1.5" />
-                      Add Field to {section.title}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Right Column: Properties Inspector (Sticky!) */}
-          <div
-            ref={propertiesPanelRef}
-            className="sticky top-0 self-start max-h-[calc(100vh-8.5rem)] flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm"
-          >
-            {selectedField ? (
-              <>
-                {/* Sticky Header with Field Name, Key, Actions */}
-                <div className="p-3 border-b border-border bg-muted/20 flex items-center justify-between gap-2 shrink-0">
-                  <div className="min-w-0 flex items-center gap-2">
-                    {(() => {
-                      const meta = PALETTE_META[selectedField.type] || {
-                        icon: Type,
-                        label: selectedField.type,
-                      };
-                      const Icon = meta.icon;
-                      return (
-                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-primary/10 text-primary">
-                          <Icon className="h-3.5 w-3.5" />
-                        </div>
-                      );
-                    })()}
-                    <div className="min-w-0">
-                      <h3 className="text-sm font-semibold truncate leading-none">
-                        {selectedField.label}
-                      </h3>
-                      <p className="text-[10px] text-muted-foreground truncate mt-0.5 font-mono">
-                        {selectedField.key}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Button
+                      )}
+                    </button>
+                    <button
                       type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      title="Duplicate field"
-                      onClick={() => duplicateField(selectedField.id)}
+                      onClick={() => setInspectorTab('governance')}
+                      className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
+                        inspectorTab === 'governance'
+                          ? 'border-primary text-primary font-semibold'
+                          : 'border-transparent text-muted-foreground hover:text-foreground'
+                      }`}
                     >
-                      <Copy className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                      title="Delete field"
-                      onClick={() => {
-                        setDefinition((current) => ({
-                          ...current,
-                          sections: current.sections.map((section) => ({
-                            ...section,
-                            fields: section.fields.filter((field) => field.id !== selectedId),
-                          })),
-                        }));
-                      }}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                      title="Close properties"
-                      onClick={() => setSelectedId('')}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
+                      Governance
+                    </button>
                   </div>
-                </div>
 
-                {/* Sub-tabs: Settings | Logic & Data | Governance */}
-                <div className="flex border-b border-border px-3 pt-1 shrink-0 bg-muted/5 gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setInspectorTab('settings')}
-                    className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
-                      inspectorTab === 'settings'
-                        ? 'border-primary text-primary font-semibold'
-                        : 'border-transparent text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    General
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setInspectorTab('logic')}
-                    className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors flex items-center gap-1 ${
-                      inspectorTab === 'logic'
-                        ? 'border-primary text-primary font-semibold'
-                        : 'border-transparent text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    Data & Logic
-                    {selectedField.rules && selectedField.rules.length > 0 && (
-                      <span className="rounded-full bg-primary/20 text-primary text-[10px] px-1 font-semibold">
-                        {selectedField.rules.length}
-                      </span>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setInspectorTab('governance')}
-                    className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
-                      inspectorTab === 'governance'
-                        ? 'border-primary text-primary font-semibold'
-                        : 'border-transparent text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    Governance
-                  </button>
-                </div>
-
-                {/* Scrollable Form Body */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                  {inspectorTab === 'settings' && (
-                    <div className="space-y-3.5 animate-fade-in">
-                      <div>
-                        <label className="mb-1 block text-xs font-semibold">Label</label>
-                        <Input
-                          value={selectedField.label}
-                          onChange={(event) => updateField({ label: event.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="block text-xs font-semibold">Field Key</label>
-                          {publishedFieldIds.has(selectedField.id) && (
-                            <span className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-0.5">
-                              <Lock className="h-3 w-3" /> Published
-                            </span>
-                          )}
-                        </div>
-                        <Input
-                          value={selectedField.key}
-                          disabled={publishedFieldIds.has(selectedField.id)}
-                          onChange={(event) => updateField({ key: event.target.value })}
-                          className="font-mono text-xs"
-                        />
-                        <p className="text-[10px] text-muted-foreground mt-1">
-                          Unique key used in submissions and reporting.
-                        </p>
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs font-semibold">Field Type</label>
-                        <Select
-                          value={selectedField.type}
-                          onChange={(event) => {
-                            const type = event.target.value as FieldType;
-                            updateField({
-                              type,
-                              dataSource:
-                                type === 'entity_lookup'
-                                  ? {
-                                      kind: 'entity',
-                                      entity: 'vehicles',
-                                      valueField: 'id',
-                                      labelField: 'plateNumber',
-                                    }
-                                  : undefined,
-                              options:
-                                type === 'select' ? (selectedField.options ?? []) : undefined,
-                              rowFields:
-                                type === 'repeater' ? (selectedField.rowFields ?? []) : undefined,
-                              minRows:
-                                type === 'repeater' ? (selectedField.minRows ?? 0) : undefined,
-                            });
-                          }}
-                        >
-                          {PALETTE.map((item) => (
-                            <option key={item.type} value={item.type}>
-                              {item.label}
-                            </option>
-                          ))}
-                        </Select>
-                      </div>
-                      {['text', 'textarea', 'number', 'date', 'time'].includes(
-                        selectedField.type,
-                      ) && (
+                  {/* Scrollable Form Body */}
+                  <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    {inspectorTab === 'settings' && (
+                      <div className="space-y-3.5 animate-fade-in">
                         <div>
-                          <label
-                            htmlFor="field-placeholder"
-                            className="mb-1 block text-xs font-semibold"
-                          >
-                            Placeholder Text
-                          </label>
+                          <label className="mb-1 block text-xs font-semibold">Label</label>
                           <Input
-                            id="field-placeholder"
-                            value={selectedField.placeholder ?? ''}
-                            placeholder="Enter hint..."
-                            onChange={(event) => updateField({ placeholder: event.target.value })}
+                            value={selectedField.label}
+                            onChange={(event) => updateField({ label: event.target.value })}
                           />
                         </div>
-                      )}
-                      {selectedField.type !== 'notice' && selectedField.type !== 'repeater' && (
                         <div>
-                          <label htmlFor="field-width" className="mb-1 block text-xs font-semibold">
-                            Field Width
-                          </label>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="block text-xs font-semibold">Field Key</label>
+                            {publishedFieldIds.has(selectedField.id) && (
+                              <span className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-0.5">
+                                <Lock className="h-3 w-3" /> Published
+                              </span>
+                            )}
+                          </div>
+                          <Input
+                            value={selectedField.key}
+                            disabled={publishedFieldIds.has(selectedField.id)}
+                            onChange={(event) => updateField({ key: event.target.value })}
+                            className="font-mono text-xs"
+                          />
+                          <p className="text-[10px] text-muted-foreground mt-1">
+                            Unique key used in submissions and reporting.
+                          </p>
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-semibold">Field Type</label>
                           <Select
-                            id="field-width"
-                            value={selectedField.width ?? 'half'}
-                            onChange={(event) =>
-                              updateField({ width: event.target.value as FormField['width'] })
-                            }
-                          >
-                            <option value="half">Half Width (2 columns)</option>
-                            <option value="full">Full Width (1 column)</option>
-                          </Select>
-                        </div>
-                      )}
-                      <div className="pt-1">
-                        <label className="flex items-center gap-2.5 rounded-lg border border-border p-2.5 text-xs font-medium cursor-pointer hover:bg-muted/30">
-                          <input
-                            type="checkbox"
-                            className="rounded border-input text-primary focus:ring-primary"
-                            checked={selectedField.required ?? false}
-                            onChange={(event) => updateField({ required: event.target.checked })}
-                          />
-                          <div>
-                            <p className="leading-none">Required Field</p>
-                            <p className="text-[10px] text-muted-foreground mt-0.5">
-                              Mark as mandatory before stage submission.
-                            </p>
-                          </div>
-                        </label>
-                      </div>
-                    </div>
-                  )}
-
-                  {inspectorTab === 'logic' && (
-                    <div className="space-y-4 animate-fade-in">
-                      {selectedField.type === 'select' && (
-                        <div>
-                          <label
-                            htmlFor="field-options"
-                            className="mb-1 block text-xs font-semibold"
-                          >
-                            Options (one per line)
-                          </label>
-                          <textarea
-                            id="field-options"
-                            rows={5}
-                            value={formatFieldOptions(selectedField.options)}
-                            onChange={(event) =>
-                              updateField({ options: parseFieldOptions(event.target.value) })
-                            }
-                            className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono"
-                            placeholder="Option 1&#10;Option 2&#10;Option 3"
-                          />
-                        </div>
-                      )}
-
-                      {selectedField.type === 'repeater' && (
-                        <div className="space-y-3">
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <label
-                                htmlFor="repeater-min-rows"
-                                className="mb-1 block text-xs font-semibold"
-                              >
-                                Min Rows
-                              </label>
-                              <Input
-                                id="repeater-min-rows"
-                                type="number"
-                                min={0}
-                                value={selectedField.minRows ?? 0}
-                                onChange={(event) =>
-                                  updateField({
-                                    minRows:
-                                      event.target.value === '' ? 0 : Number(event.target.value),
-                                  })
-                                }
-                              />
-                            </div>
-                            <div>
-                              <label
-                                htmlFor="repeater-max-rows"
-                                className="mb-1 block text-xs font-semibold"
-                              >
-                                Max Rows
-                              </label>
-                              <Input
-                                id="repeater-max-rows"
-                                type="number"
-                                min={selectedField.minRows ?? 0}
-                                value={selectedField.maxRows ?? ''}
-                                onChange={(event) =>
-                                  updateField({
-                                    maxRows:
-                                      event.target.value === ''
-                                        ? undefined
-                                        : Number(event.target.value),
-                                  })
-                                }
-                              />
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <label className="block text-xs font-semibold">
-                              Repeater Row Columns
-                            </label>
-                            {selectedField.rowFields?.map((rowField, index) => (
-                              <div key={rowField.id} className="flex items-center gap-1.5">
-                                <Input
-                                  aria-label={`Repeater field ${index + 1} label`}
-                                  value={rowField.label}
-                                  className="text-xs h-8"
-                                  onChange={(event) =>
-                                    updateField({
-                                      rowFields: selectedField.rowFields?.map((item, itemIndex) =>
-                                        itemIndex === index
-                                          ? { ...item, label: event.target.value }
-                                          : item,
-                                      ),
-                                    })
-                                  }
-                                />
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                                  title={`Remove ${rowField.label}`}
-                                  onClick={() =>
-                                    updateField({
-                                      rowFields: selectedField.rowFields?.filter(
-                                        (_, itemIndex) => itemIndex !== index,
-                                      ),
-                                    })
-                                  }
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            ))}
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="w-full text-xs h-7 border-dashed"
-                              onClick={() =>
-                                updateField({
-                                  rowFields: [
-                                    ...(selectedField.rowFields ?? []),
-                                    {
-                                      id: `${selectedField.id}-row-${Date.now()}`,
-                                      key: `item_${(selectedField.rowFields?.length ?? 0) + 1}`,
-                                      type: 'text',
-                                      label: 'New row field',
-                                      section: selectedField.section,
-                                    },
-                                  ],
-                                })
-                              }
-                            >
-                              <Plus className="h-3 w-3 mr-1" />
-                              Add Row Field
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-
-                      {selectedField.type === 'lookup' && (
-                        <div>
-                          <label
-                            htmlFor="field-lov-source"
-                            className="mb-1 block text-xs font-semibold"
-                          >
-                            Reference Data List
-                          </label>
-                          <Select
-                            id="field-lov-source"
-                            value={
-                              selectedField.dataSource?.kind === 'lov'
-                                ? selectedField.dataSource.listCode
-                                : ''
-                            }
-                            onChange={(event) =>
+                            value={selectedField.type}
+                            onChange={(event) => {
+                              const type = event.target.value as FieldType;
                               updateField({
-                                dataSource: event.target.value
-                                  ? { kind: 'lov', listCode: event.target.value }
-                                  : undefined,
-                              })
-                            }
-                          >
-                            <option value="">Choose a list</option>
-                            {lists.map((list) => (
-                              <option key={list.code} value={list.code}>
-                                {list.name}
-                              </option>
-                            ))}
-                          </Select>
-                        </div>
-                      )}
-
-                      {selectedField.type === 'entity_lookup' && (
-                        <div>
-                          <label
-                            htmlFor="field-entity-source"
-                            className="mb-1 block text-xs font-semibold"
-                          >
-                            Entity Source
-                          </label>
-                          <Select
-                            id="field-entity-source"
-                            value={
-                              selectedField.dataSource?.kind === 'entity'
-                                ? selectedField.dataSource.entity
-                                : 'vehicles'
-                            }
-                            onChange={(event) =>
-                              updateField({
+                                type,
                                 dataSource:
-                                  event.target.value === 'drivers'
+                                  type === 'entity_lookup'
                                     ? {
-                                        kind: 'entity',
-                                        entity: 'drivers',
-                                        valueField: 'id',
-                                        labelField: 'name',
-                                      }
-                                    : {
                                         kind: 'entity',
                                         entity: 'vehicles',
                                         valueField: 'id',
                                         labelField: 'plateNumber',
-                                      },
-                              })
-                            }
-                          >
-                            <option value="vehicles">Active fleet vehicles</option>
-                            <option value="drivers">Active drivers</option>
-                          </Select>
-                          <p className="mt-1 text-[10px] text-muted-foreground">
-                            The submitted value will be the selected entity record ID.
-                          </p>
-                        </div>
-                      )}
-
-                      {/* Conditional Rules Section */}
-                      <div className="space-y-2.5 pt-2 border-t border-border">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold">Conditional Visibility</span>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs"
-                            onClick={() => {
-                              const source = fields.find(
-                                (field) =>
-                                  field.id !== selectedId &&
-                                  !['notice', 'repeater'].includes(field.type),
-                              );
-                              if (!source) return;
-                              updateRules([
-                                ...(selectedField.rules ?? []),
-                                {
-                                  when: { field: source.key, operator: 'exists' },
-                                  show: true,
-                                  required: false,
-                                  enabled: true,
-                                },
-                              ]);
+                                      }
+                                    : undefined,
+                                options:
+                                  type === 'select' ? (selectedField.options ?? []) : undefined,
+                                rowFields:
+                                  type === 'repeater' ? (selectedField.rowFields ?? []) : undefined,
+                                minRows:
+                                  type === 'repeater' ? (selectedField.minRows ?? 0) : undefined,
+                              });
                             }}
                           >
-                            <Plus className="h-3 w-3 mr-1" />
-                            Add Rule
-                          </Button>
+                            {PALETTE.map((item) => (
+                              <option key={item.type} value={item.type}>
+                                {item.label}
+                              </option>
+                            ))}
+                          </Select>
                         </div>
-
-                        {(selectedField.rules ?? []).map((rule, index) => {
-                          const ruleId = `${selectedField.id}-rule-${index}`;
-                          const setRule = (updates: Partial<FieldRule>) =>
-                            updateRules(
-                              (selectedField.rules ?? []).map((item, itemIndex) =>
-                                itemIndex === index ? { ...item, ...updates } : item,
-                              ),
-                            );
-                          return (
-                            <div
-                              key={ruleId}
-                              className="space-y-2.5 rounded-lg border border-border p-3 bg-muted/20 text-xs"
+                        {['text', 'textarea', 'number', 'date', 'time'].includes(
+                          selectedField.type,
+                        ) && (
+                          <div>
+                            <label
+                              htmlFor="field-placeholder"
+                              className="mb-1 block text-xs font-semibold"
                             >
-                              <div className="grid grid-cols-2 gap-2">
-                                <div>
-                                  <label
-                                    htmlFor={`${ruleId}-field`}
-                                    className="mb-1 block text-[10px] font-semibold text-muted-foreground"
-                                  >
-                                    When Field
-                                  </label>
-                                  <Select
-                                    id={`${ruleId}-field`}
-                                    className="h-7 text-xs"
-                                    value={rule.when.field}
-                                    onChange={(event) =>
-                                      setRule({ when: { ...rule.when, field: event.target.value } })
-                                    }
-                                  >
-                                    {fields
-                                      .filter(
-                                        (field) =>
-                                          field.id !== selectedId &&
-                                          !['notice', 'repeater'].includes(field.type),
-                                      )
-                                      .map((field) => (
-                                        <option key={field.id} value={field.key}>
-                                          {field.label}
-                                        </option>
-                                      ))}
-                                  </Select>
-                                </div>
-                                <div>
-                                  <label
-                                    htmlFor={`${ruleId}-operator`}
-                                    className="mb-1 block text-[10px] font-semibold text-muted-foreground"
-                                  >
-                                    Condition
-                                  </label>
-                                  <Select
-                                    id={`${ruleId}-operator`}
-                                    className="h-7 text-xs"
-                                    value={rule.when.operator}
-                                    onChange={(event) =>
-                                      setRule({
-                                        when: {
-                                          ...rule.when,
-                                          operator: event.target.value as RuleOperator,
-                                        },
-                                      })
-                                    }
-                                  >
-                                    <option value="exists">Has a value</option>
-                                    <option value="eq">Equals</option>
-                                    <option value="neq">Does not equal</option>
-                                    <option value="in">Is one of</option>
-                                    <option value="not_in">Is not one of</option>
-                                  </Select>
-                                </div>
+                              Placeholder Text
+                            </label>
+                            <Input
+                              id="field-placeholder"
+                              value={selectedField.placeholder ?? ''}
+                              placeholder="Enter hint..."
+                              onChange={(event) => updateField({ placeholder: event.target.value })}
+                            />
+                          </div>
+                        )}
+                        {selectedField.type !== 'notice' && selectedField.type !== 'repeater' && (
+                          <div>
+                            <label
+                              htmlFor="field-width"
+                              className="mb-1 block text-xs font-semibold"
+                            >
+                              Field Width
+                            </label>
+                            <Select
+                              id="field-width"
+                              value={selectedField.width ?? 'half'}
+                              onChange={(event) =>
+                                updateField({ width: event.target.value as FormField['width'] })
+                              }
+                            >
+                              <option value="half">Half Width (2 columns)</option>
+                              <option value="full">Full Width (1 column)</option>
+                            </Select>
+                          </div>
+                        )}
+                        <div className="pt-1">
+                          <label className="flex items-center gap-2.5 rounded-lg border border-border p-2.5 text-xs font-medium cursor-pointer hover:bg-muted/30">
+                            <input
+                              type="checkbox"
+                              className="rounded border-input text-primary focus:ring-primary"
+                              checked={selectedField.required ?? false}
+                              onChange={(event) => updateField({ required: event.target.checked })}
+                            />
+                            <div>
+                              <p className="leading-none">Required Field</p>
+                              <p className="text-[10px] text-muted-foreground mt-0.5">
+                                Mark as mandatory before stage submission.
+                              </p>
+                            </div>
+                          </label>
+                        </div>
+                      </div>
+                    )}
+
+                    {inspectorTab === 'logic' && (
+                      <div className="space-y-4 animate-fade-in">
+                        {selectedField.type === 'select' && (
+                          <div>
+                            <label
+                              htmlFor="field-options"
+                              className="mb-1 block text-xs font-semibold"
+                            >
+                              Options (one per line)
+                            </label>
+                            <textarea
+                              id="field-options"
+                              rows={5}
+                              value={formatFieldOptions(selectedField.options)}
+                              onChange={(event) =>
+                                updateField({ options: parseFieldOptions(event.target.value) })
+                              }
+                              className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono"
+                              placeholder="Option 1&#10;Option 2&#10;Option 3"
+                            />
+                          </div>
+                        )}
+
+                        {selectedField.type === 'repeater' && (
+                          <div className="space-y-3">
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label
+                                  htmlFor="repeater-min-rows"
+                                  className="mb-1 block text-xs font-semibold"
+                                >
+                                  Min Rows
+                                </label>
+                                <Input
+                                  id="repeater-min-rows"
+                                  type="number"
+                                  min={0}
+                                  value={selectedField.minRows ?? 0}
+                                  onChange={(event) =>
+                                    updateField({
+                                      minRows:
+                                        event.target.value === '' ? 0 : Number(event.target.value),
+                                    })
+                                  }
+                                />
                               </div>
-                              {rule.when.operator !== 'exists' && (
-                                <div>
-                                  <label
-                                    htmlFor={`${ruleId}-value`}
-                                    className="mb-1 block text-[10px] font-semibold text-muted-foreground"
-                                  >
-                                    Match Value
-                                  </label>
+                              <div>
+                                <label
+                                  htmlFor="repeater-max-rows"
+                                  className="mb-1 block text-xs font-semibold"
+                                >
+                                  Max Rows
+                                </label>
+                                <Input
+                                  id="repeater-max-rows"
+                                  type="number"
+                                  min={selectedField.minRows ?? 0}
+                                  value={selectedField.maxRows ?? ''}
+                                  onChange={(event) =>
+                                    updateField({
+                                      maxRows:
+                                        event.target.value === ''
+                                          ? undefined
+                                          : Number(event.target.value),
+                                    })
+                                  }
+                                />
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              <label className="block text-xs font-semibold">
+                                Repeater Row Columns
+                              </label>
+                              {selectedField.rowFields?.map((rowField, index) => (
+                                <div key={rowField.id} className="flex items-center gap-1.5">
                                   <Input
-                                    id={`${ruleId}-value`}
-                                    className="h-7 text-xs"
-                                    value={
-                                      Array.isArray(rule.when.value)
-                                        ? rule.when.value.join(', ')
-                                        : String(rule.when.value ?? '')
-                                    }
+                                    aria-label={`Repeater field ${index + 1} label`}
+                                    value={rowField.label}
+                                    className="text-xs h-8"
                                     onChange={(event) =>
-                                      setRule({
-                                        when: {
-                                          ...rule.when,
-                                          value: ['in', 'not_in'].includes(rule.when.operator)
-                                            ? event.target.value
-                                                .split(',')
-                                                .map((value) => value.trim())
-                                                .filter(Boolean)
-                                            : event.target.value,
-                                        },
+                                      updateField({
+                                        rowFields: selectedField.rowFields?.map(
+                                          (item, itemIndex) =>
+                                            itemIndex === index
+                                              ? { ...item, label: event.target.value }
+                                              : item,
+                                        ),
                                       })
                                     }
-                                    placeholder={
-                                      ['in', 'not_in'].includes(rule.when.operator)
-                                        ? 'value1, value2'
-                                        : 'Enter value'
-                                    }
                                   />
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                                    title={`Remove ${rowField.label}`}
+                                    onClick={() =>
+                                      updateField({
+                                        rowFields: selectedField.rowFields?.filter(
+                                          (_, itemIndex) => itemIndex !== index,
+                                        ),
+                                      })
+                                    }
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
                                 </div>
-                              )}
-                              <div className="flex flex-col gap-1.5 pt-1">
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    className="rounded border-input text-primary"
-                                    checked={rule.show !== false}
-                                    onChange={(event) => setRule({ show: event.target.checked })}
-                                  />
-                                  Show when matched
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    className="rounded border-input text-primary"
-                                    checked={rule.required ?? false}
-                                    onChange={(event) =>
-                                      setRule({ required: event.target.checked })
-                                    }
-                                  />
-                                  Require when matched
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    className="rounded border-input text-primary"
-                                    checked={rule.enabled !== false}
-                                    onChange={(event) => setRule({ enabled: event.target.checked })}
-                                  />
-                                  Editable when matched
-                                </label>
-                              </div>
+                              ))}
                               <Button
                                 type="button"
-                                variant="ghost"
+                                variant="outline"
                                 size="sm"
-                                className="text-destructive h-6 text-xs w-full justify-center hover:bg-destructive/10"
+                                className="w-full text-xs h-7 border-dashed"
                                 onClick={() =>
-                                  updateRules(
-                                    (selectedField.rules ?? []).filter(
-                                      (_, itemIndex) => itemIndex !== index,
-                                    ),
-                                  )
+                                  updateField({
+                                    rowFields: [
+                                      ...(selectedField.rowFields ?? []),
+                                      {
+                                        id: `${selectedField.id}-row-${Date.now()}`,
+                                        key: `item_${(selectedField.rowFields?.length ?? 0) + 1}`,
+                                        type: 'text',
+                                        label: 'New row field',
+                                        section: selectedField.section,
+                                      },
+                                    ],
+                                  })
                                 }
                               >
-                                Remove Rule
+                                <Plus className="h-3 w-3 mr-1" />
+                                Add Row Field
                               </Button>
                             </div>
-                          );
-                        })}
+                          </div>
+                        )}
+
+                        {selectedField.type === 'lookup' && (
+                          <div>
+                            <label
+                              htmlFor="field-lov-source"
+                              className="mb-1 block text-xs font-semibold"
+                            >
+                              Reference Data List
+                            </label>
+                            <Select
+                              id="field-lov-source"
+                              value={
+                                selectedField.dataSource?.kind === 'lov'
+                                  ? selectedField.dataSource.listCode
+                                  : ''
+                              }
+                              onChange={(event) =>
+                                updateField({
+                                  dataSource: event.target.value
+                                    ? { kind: 'lov', listCode: event.target.value }
+                                    : undefined,
+                                })
+                              }
+                            >
+                              <option value="">Choose a list</option>
+                              {lists.map((list) => (
+                                <option key={list.code} value={list.code}>
+                                  {list.name}
+                                </option>
+                              ))}
+                            </Select>
+                          </div>
+                        )}
+
+                        {selectedField.type === 'entity_lookup' && (
+                          <div>
+                            <label
+                              htmlFor="field-entity-source"
+                              className="mb-1 block text-xs font-semibold"
+                            >
+                              Entity Source
+                            </label>
+                            <Select
+                              id="field-entity-source"
+                              value={
+                                selectedField.dataSource?.kind === 'entity'
+                                  ? selectedField.dataSource.entity
+                                  : 'vehicles'
+                              }
+                              onChange={(event) =>
+                                updateField({
+                                  dataSource:
+                                    event.target.value === 'drivers'
+                                      ? {
+                                          kind: 'entity',
+                                          entity: 'drivers',
+                                          valueField: 'id',
+                                          labelField: 'name',
+                                        }
+                                      : {
+                                          kind: 'entity',
+                                          entity: 'vehicles',
+                                          valueField: 'id',
+                                          labelField: 'plateNumber',
+                                        },
+                                })
+                              }
+                            >
+                              <option value="vehicles">Active fleet vehicles</option>
+                              <option value="drivers">Active drivers</option>
+                            </Select>
+                            <p className="mt-1 text-[10px] text-muted-foreground">
+                              The submitted value will be the selected entity record ID.
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Conditional Rules Section */}
+                        <div className="space-y-2.5 pt-2 border-t border-border">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold">Conditional Visibility</span>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={() => {
+                                const source = fields.find(
+                                  (field) =>
+                                    field.id !== selectedId &&
+                                    !['notice', 'repeater'].includes(field.type),
+                                );
+                                if (!source) return;
+                                updateRules([
+                                  ...(selectedField.rules ?? []),
+                                  {
+                                    when: { field: source.key, operator: 'exists' },
+                                    show: true,
+                                    required: false,
+                                    enabled: true,
+                                  },
+                                ]);
+                              }}
+                            >
+                              <Plus className="h-3 w-3 mr-1" />
+                              Add Rule
+                            </Button>
+                          </div>
+
+                          {(selectedField.rules ?? []).map((rule, index) => {
+                            const ruleId = `${selectedField.id}-rule-${index}`;
+                            const setRule = (updates: Partial<FieldRule>) =>
+                              updateRules(
+                                (selectedField.rules ?? []).map((item, itemIndex) =>
+                                  itemIndex === index ? { ...item, ...updates } : item,
+                                ),
+                              );
+                            return (
+                              <div
+                                key={ruleId}
+                                className="space-y-2.5 rounded-lg border border-border p-3 bg-muted/20 text-xs"
+                              >
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <label
+                                      htmlFor={`${ruleId}-field`}
+                                      className="mb-1 block text-[10px] font-semibold text-muted-foreground"
+                                    >
+                                      When Field
+                                    </label>
+                                    <Select
+                                      id={`${ruleId}-field`}
+                                      className="h-7 text-xs"
+                                      value={rule.when.field}
+                                      onChange={(event) =>
+                                        setRule({
+                                          when: { ...rule.when, field: event.target.value },
+                                        })
+                                      }
+                                    >
+                                      {fields
+                                        .filter(
+                                          (field) =>
+                                            field.id !== selectedId &&
+                                            !['notice', 'repeater'].includes(field.type),
+                                        )
+                                        .map((field) => (
+                                          <option key={field.id} value={field.key}>
+                                            {field.label}
+                                          </option>
+                                        ))}
+                                    </Select>
+                                  </div>
+                                  <div>
+                                    <label
+                                      htmlFor={`${ruleId}-operator`}
+                                      className="mb-1 block text-[10px] font-semibold text-muted-foreground"
+                                    >
+                                      Condition
+                                    </label>
+                                    <Select
+                                      id={`${ruleId}-operator`}
+                                      className="h-7 text-xs"
+                                      value={rule.when.operator}
+                                      onChange={(event) =>
+                                        setRule({
+                                          when: {
+                                            ...rule.when,
+                                            operator: event.target.value as RuleOperator,
+                                          },
+                                        })
+                                      }
+                                    >
+                                      <option value="exists">Has a value</option>
+                                      <option value="eq">Equals</option>
+                                      <option value="neq">Does not equal</option>
+                                      <option value="in">Is one of</option>
+                                      <option value="not_in">Is not one of</option>
+                                    </Select>
+                                  </div>
+                                </div>
+                                {rule.when.operator !== 'exists' && (
+                                  <div>
+                                    <label
+                                      htmlFor={`${ruleId}-value`}
+                                      className="mb-1 block text-[10px] font-semibold text-muted-foreground"
+                                    >
+                                      Match Value
+                                    </label>
+                                    <Input
+                                      id={`${ruleId}-value`}
+                                      className="h-7 text-xs"
+                                      value={
+                                        Array.isArray(rule.when.value)
+                                          ? rule.when.value.join(', ')
+                                          : String(rule.when.value ?? '')
+                                      }
+                                      onChange={(event) =>
+                                        setRule({
+                                          when: {
+                                            ...rule.when,
+                                            value: ['in', 'not_in'].includes(rule.when.operator)
+                                              ? event.target.value
+                                                  .split(',')
+                                                  .map((value) => value.trim())
+                                                  .filter(Boolean)
+                                              : event.target.value,
+                                          },
+                                        })
+                                      }
+                                      placeholder={
+                                        ['in', 'not_in'].includes(rule.when.operator)
+                                          ? 'value1, value2'
+                                          : 'Enter value'
+                                      }
+                                    />
+                                  </div>
+                                )}
+                                <div className="flex flex-col gap-1.5 pt-1">
+                                  <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      className="rounded border-input text-primary"
+                                      checked={rule.show !== false}
+                                      onChange={(event) => setRule({ show: event.target.checked })}
+                                    />
+                                    Show when matched
+                                  </label>
+                                  <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      className="rounded border-input text-primary"
+                                      checked={rule.required ?? false}
+                                      onChange={(event) =>
+                                        setRule({ required: event.target.checked })
+                                      }
+                                    />
+                                    Require when matched
+                                  </label>
+                                  <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      className="rounded border-input text-primary"
+                                      checked={rule.enabled !== false}
+                                      onChange={(event) =>
+                                        setRule({ enabled: event.target.checked })
+                                      }
+                                    />
+                                    Editable when matched
+                                  </label>
+                                </div>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive h-6 text-xs w-full justify-center hover:bg-destructive/10"
+                                  onClick={() =>
+                                    updateRules(
+                                      (selectedField.rules ?? []).filter(
+                                        (_, itemIndex) => itemIndex !== index,
+                                      ),
+                                    )
+                                  }
+                                >
+                                  Remove Rule
+                                </Button>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {inspectorTab === 'governance' && (
-                    <div className="space-y-3 animate-fade-in text-xs">
-                      <label className="flex items-start gap-2.5 rounded-lg border border-border p-3 cursor-pointer hover:bg-muted/30">
-                        <input
-                          type="checkbox"
-                          className="rounded border-input text-primary mt-0.5"
-                          checked={selectedField.meta?.reportable ?? false}
-                          onChange={(event) =>
-                            updateField({
-                              meta: { ...selectedField.meta, reportable: event.target.checked },
-                            })
-                          }
-                        />
-                        <div>
-                          <p className="font-medium text-foreground">Expose in Reports</p>
-                          <p className="text-[10px] text-muted-foreground mt-0.5">
-                            Allows this field to appear as a dedicated column in fleet exports and
-                            BI charts.
-                          </p>
-                        </div>
-                      </label>
+                    {inspectorTab === 'governance' && (
+                      <div className="space-y-3 animate-fade-in text-xs">
+                        <label className="flex items-start gap-2.5 rounded-lg border border-border p-3 cursor-pointer hover:bg-muted/30">
+                          <input
+                            type="checkbox"
+                            className="rounded border-input text-primary mt-0.5"
+                            checked={selectedField.meta?.reportable ?? false}
+                            onChange={(event) =>
+                              updateField({
+                                meta: { ...selectedField.meta, reportable: event.target.checked },
+                              })
+                            }
+                          />
+                          <div>
+                            <p className="font-medium text-foreground">Expose in Reports</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">
+                              Allows this field to appear as a dedicated column in fleet exports and
+                              BI charts.
+                            </p>
+                          </div>
+                        </label>
 
-                      <label className="flex items-start gap-2.5 rounded-lg border border-border p-3 cursor-pointer hover:bg-muted/30">
-                        <input
-                          type="checkbox"
-                          className="rounded border-input text-primary mt-0.5"
-                          checked={selectedField.meta?.pii ?? false}
-                          onChange={(event) =>
-                            updateField({
-                              meta: { ...selectedField.meta, pii: event.target.checked },
-                            })
-                          }
-                        />
-                        <div>
-                          <p className="font-medium text-foreground">Personal Data (PII)</p>
-                          <p className="text-[10px] text-muted-foreground mt-0.5">
-                            Flags this field for GDPR/privacy audit masking and compliance policies.
-                          </p>
-                        </div>
-                      </label>
+                        <label className="flex items-start gap-2.5 rounded-lg border border-border p-3 cursor-pointer hover:bg-muted/30">
+                          <input
+                            type="checkbox"
+                            className="rounded border-input text-primary mt-0.5"
+                            checked={selectedField.meta?.pii ?? false}
+                            onChange={(event) =>
+                              updateField({
+                                meta: { ...selectedField.meta, pii: event.target.checked },
+                              })
+                            }
+                          />
+                          <div>
+                            <p className="font-medium text-foreground">Personal Data (PII)</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">
+                              Flags this field for GDPR/privacy audit masking and compliance
+                              policies.
+                            </p>
+                          </div>
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="p-6 text-center space-y-4 my-auto">
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                    <SlidersHorizontal className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold">No Field Selected</h3>
+                    <p className="text-xs text-muted-foreground mt-1 max-w-[200px] mx-auto">
+                      Click any field in the canvas to inspect its settings, or add a field from the
+                      library.
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-border/80 bg-muted/20 p-3 text-left text-xs space-y-1.5">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Form:</span>
+                      <span className="font-medium">{definition.name}</span>
                     </div>
-                  )}
-                </div>
-              </>
-            ) : (
-              <div className="p-6 text-center space-y-4 my-auto">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                  <SlidersHorizontal className="h-6 w-6" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold">No Field Selected</h3>
-                  <p className="text-xs text-muted-foreground mt-1 max-w-[200px] mx-auto">
-                    Click any field in the canvas to inspect its settings, or add a field from the
-                    library.
-                  </p>
-                </div>
-                <div className="rounded-lg border border-border/80 bg-muted/20 p-3 text-left text-xs space-y-1.5">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Form:</span>
-                    <span className="font-medium">{definition.name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Version:</span>
-                    <span className="font-medium">
-                      v{definition.version} ({definition.status})
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Sections:</span>
-                    <span className="font-medium">{definition.sections.length}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Total Fields:</span>
-                    <span className="font-medium">{fields.length}</span>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Version:</span>
+                      <span className="font-medium">
+                        v{definition.version ?? 'draft'} ({definition.status})
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Sections:</span>
+                      <span className="font-medium">{definition.sections.length}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Total Fields:</span>
+                      <span className="font-medium">{fields.length}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Workflow & Lifecycle Tab */}
