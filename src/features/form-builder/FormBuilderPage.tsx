@@ -1,5 +1,19 @@
-import React, { useEffect, useState } from 'react';
-import { Copy, Download, GripVertical, Eye, Save, Send, Trash2 } from 'lucide-react';
+import React, { useEffect, useReducer, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import {
+  Copy,
+  Download,
+  GripVertical,
+  Eye,
+  Save,
+  Send,
+  Trash2,
+  ChevronUp,
+  ChevronDown,
+  Upload,
+  Undo2,
+  Redo2,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -10,6 +24,7 @@ import { useLov } from '@/features/lov';
 import { useAuth } from '@/features/auth/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { validateFormDefinition, validateFormWorkflow } from './validation';
+import { projectFormForRoleStage } from './preview';
 import type {
   FieldType,
   FormDefinition,
@@ -18,6 +33,11 @@ import type {
   SystemStatusCategory,
 } from './types';
 import type { FieldRule, RuleOperator } from './rules';
+import { moveFieldWithinSections } from './reorder';
+import { parseFormDefinitionImport } from './importSchema';
+import { diffFormDefinitions } from './versionDiff';
+import { createEditorHistory, editorHistoryReducer } from './editorHistory';
+import { formatFieldOptions, parseFieldOptions } from './fieldConfiguration';
 
 const PALETTE: Array<{ type: FieldType; label: string }> = [
   { type: 'text', label: 'Text' },
@@ -25,6 +45,9 @@ const PALETTE: Array<{ type: FieldType; label: string }> = [
   { type: 'number', label: 'Number' },
   { type: 'date', label: 'Date' },
   { type: 'time', label: 'Time' },
+  { type: 'select', label: 'Select' },
+  { type: 'checkbox', label: 'Checkbox' },
+  { type: 'repeater', label: 'Repeater' },
   { type: 'lookup', label: 'LOV Lookup' },
   { type: 'entity_lookup', label: 'Fleet Vehicle' },
   { type: 'notice', label: 'Notice' },
@@ -70,15 +93,67 @@ function cloneDefinition(): FormDefinition {
 }
 
 export function FormBuilderPage() {
-  const [definition, setDefinition] = useState<FormDefinition>(cloneDefinition);
-  const [workflow, setWorkflow] = useState<FormWorkflow>(() => structuredClone(TSRF_WORKFLOW));
+  const {
+    version: routeVersion,
+    role: routeRole,
+    stage: routeStage,
+  } = useParams<{
+    version?: string;
+    role?: string;
+    stage?: string;
+  }>();
+  const navigate = useNavigate();
+  const [editorHistory, dispatchEditorHistory] = useReducer(
+    editorHistoryReducer,
+    {
+      definition: cloneDefinition(),
+      workflow: structuredClone(TSRF_WORKFLOW),
+    },
+    createEditorHistory,
+  );
+  const definition = editorHistory.present.definition;
+  const workflow = editorHistory.present.workflow;
+  const [editRevision, setEditRevision] = useState(0);
+  const [isDefinitionLoaded, setIsDefinitionLoaded] = useState(false);
+  const savedRevisionRef = useRef(0);
+  const autosaveErrorRevisionRef = useRef<number | null>(null);
+  const saveDraftRef = useRef<(automatic: boolean, revision: number) => Promise<void>>(
+    async () => undefined,
+  );
+  const setDefinition = (update: React.SetStateAction<FormDefinition>) => {
+    autosaveErrorRevisionRef.current = null;
+    setEditRevision((revision) => revision + 1);
+    dispatchEditorHistory({
+      type: 'update',
+      update: (snapshot) => ({
+        ...snapshot,
+        definition: typeof update === 'function' ? update(snapshot.definition) : update,
+      }),
+    });
+  };
+  const setWorkflow = (update: React.SetStateAction<FormWorkflow>) => {
+    autosaveErrorRevisionRef.current = null;
+    setEditRevision((revision) => revision + 1);
+    dispatchEditorHistory({
+      type: 'update',
+      update: (snapshot) => ({
+        ...snapshot,
+        workflow: typeof update === 'function' ? update(snapshot.workflow) : update,
+      }),
+    });
+  };
   const [selectedId, setSelectedId] = useState(definition.sections[1]?.fields[0]?.id ?? '');
   const [preview, setPreview] = useState(false);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [definitionId, setDefinitionId] = useState<string | null>(null);
   const [draftVersionId, setDraftVersionId] = useState<string | null>(null);
   const [publishedFieldIds, setPublishedFieldIds] = useState<Set<string>>(() => new Set());
+  const [publishedBaseline, setPublishedBaseline] = useState<FormDefinition | null>(null);
+  const [availableVersions, setAvailableVersions] = useState<
+    Array<{ version: number; status: string }>
+  >([]);
   const [saving, setSaving] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [permissionRole, setPermissionRole] = useState('department_requester');
   const [permissionStageId, setPermissionStageId] = useState('dispatch_assignment');
@@ -89,9 +164,54 @@ export function FormBuilderPage() {
   const permissionFields = flattenPermissionFields(fields);
   const selectedPermissionStage =
     workflow.stages.find((stage) => stage.id === permissionStageId) ?? workflow.stages[0];
+  const previewProjection = selectedPermissionStage
+    ? projectFormForRoleStage(definition, selectedPermissionStage, permissionRole)
+    : { definition, fieldAccess: {} };
+  const versionChanges =
+    definition.status === 'draft' && publishedBaseline
+      ? diffFormDefinitions(publishedBaseline, definition)
+      : [];
+  const previewUrl = (role: string, stageId: string) =>
+    `/form-builder/preview/${encodeURIComponent(role)}/${encodeURIComponent(stageId)}${routeVersion ? `/${encodeURIComponent(routeVersion)}` : ''}`;
+  const openPreview = () => {
+    const stageId = selectedPermissionStage?.id ?? workflow.initialStage;
+    navigate(previewUrl(permissionRole, stageId));
+  };
+  const leavePreview = () => {
+    setPreview(false);
+    navigate(routeVersion ? `/form-builder/versions/${routeVersion}` : '/form-builder');
+  };
+  const selectVersion = (version: string) => {
+    if (saving || editRevision > savedRevisionRef.current) {
+      setMessage('Save the current changes before switching versions.');
+      return;
+    }
+    navigate(version === 'working' ? '/form-builder' : `/form-builder/versions/${version}`);
+  };
+
+  useEffect(() => {
+    if (!isDefinitionLoaded) return;
+    if (!routeRole && !routeStage) {
+      setPreview(false);
+      return;
+    }
+    if (
+      !routeRole ||
+      !routeStage ||
+      !WORKFLOW_ROLES.includes(routeRole) ||
+      !workflow.stages.some((stage) => stage.id === routeStage)
+    ) {
+      navigate('/form-builder', { replace: true });
+      return;
+    }
+    setPermissionRole(routeRole);
+    setPermissionStageId(routeStage);
+    setPreview(true);
+  }, [isDefinitionLoaded, navigate, routeRole, routeStage, workflow.stages]);
 
   useEffect(() => {
     let cancelled = false;
+    setIsDefinitionLoaded(false);
     apiFetch(`/api/forms/${encodeURIComponent(definition.key)}`)
       .then(async (response) => {
         if (response.status === 404) return null;
@@ -99,10 +219,22 @@ export function FormBuilderPage() {
         return response.json();
       })
       .then((saved) => {
-        if (cancelled || !saved) return;
+        if (cancelled) return;
+        if (!saved) {
+          setIsDefinitionLoaded(true);
+          return;
+        }
         setDefinitionId(saved.id);
         const versions = [...saved.versions].sort((a, b) => b.version - a.version);
+        setAvailableVersions(
+          versions.map((version) => ({ version: version.version, status: version.status })),
+        );
         const published = versions.find((version) => version.status === 'published');
+        setPublishedBaseline(
+          published?.schema
+            ? { ...published.schema, version: published.version, status: 'published' }
+            : null,
+        );
         setPublishedFieldIds(
           published?.schema
             ? new Set(
@@ -115,28 +247,51 @@ export function FormBuilderPage() {
             : new Set(),
         );
         const activeDraft = versions.find((version) => version.status === 'draft');
-        const selected = activeDraft ?? versions.find((version) => version.status === 'published');
+        const requestedVersion = routeVersion
+          ? versions.find((version) => String(version.version) === routeVersion)
+          : undefined;
+        if (routeVersion && !requestedVersion)
+          setMessage(`Form version ${routeVersion} was not found.`);
+        const selected =
+          requestedVersion ??
+          activeDraft ??
+          versions.find((version) => version.status === 'published');
         if (selected?.schema) {
-          setDefinition({ ...selected.schema, version: selected.version, status: selected.status });
-          setWorkflow(
-            selected.workflow?.stages ? selected.workflow : structuredClone(TSRF_WORKFLOW),
-          );
+          savedRevisionRef.current = 0;
+          setEditRevision(0);
+          dispatchEditorHistory({
+            type: 'reset',
+            snapshot: {
+              definition: {
+                ...selected.schema,
+                version: selected.version,
+                status: selected.status,
+              },
+              workflow: selected.workflow?.stages
+                ? selected.workflow
+                : structuredClone(TSRF_WORKFLOW),
+            },
+          });
           setDraftVersionId(selected.status === 'draft' ? selected.id : null);
           setSelectedId(selected.schema.sections[1]?.fields[0]?.id ?? '');
         }
+        setIsDefinitionLoaded(true);
       })
       .catch((error: unknown) => {
-        if (!cancelled)
+        if (!cancelled) {
           setMessage(error instanceof Error ? error.message : 'Unable to load form definition.');
+          setIsDefinitionLoaded(true);
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [currentUser?.id, definition.key]);
+  }, [currentUser?.id, definition.key, routeVersion]);
 
-  const saveDraft = async () => {
+  const saveDraft = async (automatic = false, revision = editRevision) => {
+    if (saving) return;
     setSaving(true);
-    setMessage(null);
+    if (!automatic) setMessage(null);
     try {
       const draft = { ...definition, status: 'draft' as const };
       let response: Response;
@@ -165,14 +320,41 @@ export function FormBuilderPage() {
       if (resolvedDefId) setDefinitionId(resolvedDefId);
       const version = result.version ?? result;
       setDraftVersionId(version.id);
-      setDefinition({ ...draft, version: version.version, status: 'draft' });
-      setMessage(`Draft v${version.version} saved.`);
+      savedRevisionRef.current = Math.max(savedRevisionRef.current, revision);
+      autosaveErrorRevisionRef.current = null;
+      dispatchEditorHistory({
+        type: 'replace-present',
+        update: (snapshot) => ({
+          ...snapshot,
+          definition: { ...snapshot.definition, version: version.version, status: 'draft' },
+        }),
+      });
+      setMessage(`Draft v${version.version} ${automatic ? 'autosaved' : 'saved'}.`);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Unable to save draft.');
+      const detail = error instanceof Error ? error.message : 'Unable to save draft.';
+      if (automatic) autosaveErrorRevisionRef.current = revision;
+      setMessage(automatic ? `Autosave failed: ${detail} Use Save Draft to retry.` : detail);
     } finally {
       setSaving(false);
     }
   };
+  saveDraftRef.current = saveDraft;
+
+  useEffect(() => {
+    if (
+      !isDefinitionLoaded ||
+      saving ||
+      editRevision <= savedRevisionRef.current ||
+      autosaveErrorRevisionRef.current === editRevision
+    ) {
+      return;
+    }
+    const revision = editRevision;
+    const timer = window.setTimeout(() => {
+      void saveDraftRef.current(true, revision);
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [editRevision, isDefinitionLoaded, saving]);
 
   const publish = async () => {
     const errors = [
@@ -187,6 +369,10 @@ export function FormBuilderPage() {
       setMessage('Save a draft before publishing.');
       return;
     }
+    if (editRevision > savedRevisionRef.current) {
+      setMessage('Wait for the current draft changes to save before publishing.');
+      return;
+    }
     setSaving(true);
     setMessage(null);
     try {
@@ -196,7 +382,13 @@ export function FormBuilderPage() {
       );
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? 'Unable to publish form.');
-      setDefinition({ ...definition, version: result.version, status: 'published' });
+      const published = { ...definition, version: result.version, status: 'published' as const };
+      savedRevisionRef.current = editRevision;
+      dispatchEditorHistory({
+        type: 'reset',
+        snapshot: { definition: published, workflow },
+      });
+      setPublishedBaseline(published);
       setPublishedFieldIds(new Set(collectFieldIds(fields)));
       setDraftVersionId(null);
       setMessage(`Form v${result.version} published.`);
@@ -207,6 +399,18 @@ export function FormBuilderPage() {
     }
   };
 
+  const undoEdit = () => {
+    if (editorHistory.past.length === 0) return;
+    autosaveErrorRevisionRef.current = null;
+    setEditRevision((revision) => revision + 1);
+    dispatchEditorHistory({ type: 'undo' });
+  };
+  const redoEdit = () => {
+    if (editorHistory.future.length === 0) return;
+    autosaveErrorRevisionRef.current = null;
+    setEditRevision((revision) => revision + 1);
+    dispatchEditorHistory({ type: 'redo' });
+  };
   const updateField = (updates: Partial<FormField>) =>
     setDefinition((current) => ({
       ...current,
@@ -255,6 +459,21 @@ export function FormBuilderPage() {
       label: `New ${type} field`,
       section: 'trip-details',
       required: false,
+      ...(type === 'select' ? { options: [{ value: 'option_1', label: 'Option 1' }] } : {}),
+      ...(type === 'repeater'
+        ? {
+            minRows: 0,
+            rowFields: [
+              {
+                id: `field-${Date.now()}-row-1`,
+                key: 'item',
+                type: 'text' as const,
+                label: 'Item',
+                section: 'trip-details',
+              },
+            ],
+          }
+        : {}),
       ...(type === 'entity_lookup'
         ? {
             dataSource: {
@@ -292,6 +511,11 @@ export function FormBuilderPage() {
     }));
     setDraggedId(null);
   };
+  const moveFieldByOffset = (fieldId: string, offset: -1 | 1) =>
+    setDefinition((current) => ({
+      ...current,
+      sections: moveFieldWithinSections(current.sections, fieldId, offset),
+    }));
   const exportJson = () => {
     const url = URL.createObjectURL(
       new Blob([JSON.stringify(definition, null, 2)], { type: 'application/json' }),
@@ -302,18 +526,98 @@ export function FormBuilderPage() {
     link.click();
     URL.revokeObjectURL(url);
   };
+  const importJson = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+    if (!file) return;
+    try {
+      const result = parseFormDefinitionImport(
+        await file.text(),
+        new Set(lists.map((list) => list.code)),
+      );
+      if (!result.definition) {
+        setMessage(result.errors.join(' '));
+        return;
+      }
+      if (result.definition.key !== definition.key) {
+        setMessage(
+          `This file is for "${result.definition.key}"; the current form is "${definition.key}".`,
+        );
+        return;
+      }
+      const imported = {
+        ...result.definition,
+        version: definition.version,
+        status: 'draft' as const,
+      };
+      setDefinition(imported);
+      setSelectedId(
+        imported.sections.find((section) => section.fields.length > 0)?.fields[0].id ?? '',
+      );
+      setMessage('Schema imported locally. Save Draft to persist the changes.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Unable to read the JSON file.');
+    }
+  };
 
   if (preview)
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">Preview: {definition.name}</h1>
-          <Button variant="outline" onClick={() => setPreview(false)}>
+          <Button variant="outline" onClick={leavePreview}>
             <Eye className="mr-2 h-4 w-4" />
             Back to Design
           </Button>
         </div>
-        <FormRenderer definition={definition} onSubmit={() => undefined} />
+        <div className="flex flex-wrap items-end gap-3 rounded-md border border-border p-3">
+          <div className="min-w-48">
+            <label htmlFor="preview-stage" className="mb-1 block text-xs font-semibold">
+              Workflow stage
+            </label>
+            <Select
+              id="preview-stage"
+              value={selectedPermissionStage?.id ?? ''}
+              onChange={(event) => {
+                const stageId = event.target.value;
+                setPermissionStageId(stageId);
+                navigate(previewUrl(permissionRole, stageId));
+              }}
+            >
+              {workflow.stages.map((stage) => (
+                <option key={stage.id} value={stage.id}>
+                  {stage.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="min-w-48">
+            <label htmlFor="preview-role" className="mb-1 block text-xs font-semibold">
+              Role
+            </label>
+            <Select
+              id="preview-role"
+              value={permissionRole}
+              onChange={(event) => {
+                const role = event.target.value;
+                setPermissionRole(role);
+                navigate(previewUrl(role, selectedPermissionStage?.id ?? workflow.initialStage));
+              }}
+            >
+              {WORKFLOW_ROLES.map((role) => (
+                <option key={role} value={role}>
+                  {role.replaceAll('_', ' ')}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </div>
+        <FormRenderer
+          definition={previewProjection.definition}
+          fieldAccess={previewProjection.fieldAccess}
+          onSubmit={() => undefined}
+          submitLabel="Preview"
+        />
       </div>
     );
 
@@ -327,22 +631,81 @@ export function FormBuilderPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setPreview(true)}>
+          {availableVersions.length > 0 && (
+            <div>
+              <label htmlFor="form-version" className="sr-only">
+                Form version
+              </label>
+              <Select
+                id="form-version"
+                value={routeVersion ?? 'working'}
+                onChange={(event) => selectVersion(event.target.value)}
+              >
+                <option value="working">Current working version</option>
+                {availableVersions.map((item) => (
+                  <option key={item.version} value={item.version}>
+                    v{item.version} ({item.status})
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
+          <Button variant="outline" onClick={openPreview}>
             <Eye className="mr-2 h-4 w-4" />
             Preview
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            title="Undo"
+            aria-label="Undo"
+            disabled={editorHistory.past.length === 0}
+            onClick={undoEdit}
+          >
+            <Undo2 className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            title="Redo"
+            aria-label="Redo"
+            disabled={editorHistory.future.length === 0}
+            onClick={redoEdit}
+          >
+            <Redo2 className="h-4 w-4" />
           </Button>
           <Button variant="outline" onClick={exportJson}>
             <Download className="mr-2 h-4 w-4" />
             Export JSON
           </Button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            aria-label="Import form definition JSON"
+            onChange={importJson}
+          />
+          <Button variant="outline" onClick={() => importInputRef.current?.click()}>
+            <Upload className="mr-2 h-4 w-4" />
+            Import JSON
+          </Button>
           <Button onClick={() => void saveDraft()} disabled={saving}>
             <Save className="mr-2 h-4 w-4" />
-            {saving ? 'Saving...' : 'Save Draft'}
+            {saving
+              ? 'Saving...'
+              : editRevision > savedRevisionRef.current || !draftVersionId
+                ? 'Save Draft'
+                : 'Saved'}
           </Button>
           <Button
             variant="outline"
             onClick={() => void publish()}
-            disabled={saving || definition.status === 'published'}
+            disabled={
+              saving || definition.status === 'published' || editRevision > savedRevisionRef.current
+            }
           >
             <Send className="mr-2 h-4 w-4" />
             Publish
@@ -353,6 +716,33 @@ export function FormBuilderPage() {
         <p role="status" className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
           {message}
         </p>
+      )}
+      {definition.status === 'draft' && publishedBaseline && (
+        <details className="rounded-md border border-border px-3 py-2">
+          <summary className="cursor-pointer text-sm font-semibold">
+            Draft v{definition.version} compared with published v{publishedBaseline.version}
+            <span className="ml-2 font-normal text-muted-foreground">
+              {versionChanges.length} change(s)
+            </span>
+          </summary>
+          {versionChanges.length === 0 ? (
+            <p className="mt-2 text-sm text-muted-foreground">No schema changes.</p>
+          ) : (
+            <ul className="mt-2 space-y-1 text-sm">
+              {versionChanges.map((change, index) => (
+                <li key={`${change.kind}-${change.path}-${index}`}>
+                  <span className="font-medium capitalize">{change.action}</span>{' '}
+                  <span>
+                    {change.kind} {change.path}
+                  </span>
+                  {change.details && (
+                    <span className="text-muted-foreground"> ({change.details.join(', ')})</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </details>
       )}
       <div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)_280px]">
         <Card>
@@ -386,7 +776,7 @@ export function FormBuilderPage() {
                     <p className="text-xs text-muted-foreground">{section.description}</p>
                   )}
                 </div>
-                {section.fields.map((field) => (
+                {section.fields.map((field, fieldIndex) => (
                   <div
                     key={field.id}
                     draggable
@@ -404,6 +794,36 @@ export function FormBuilderPage() {
                       </p>
                     </div>
                     {field.required && <span className="text-xs text-destructive">Required</span>}
+                    <div className="flex shrink-0 items-center">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        title={`Move ${field.label} up`}
+                        aria-label={`Move ${field.label} up`}
+                        disabled={fieldIndex === 0}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          moveFieldByOffset(field.id, -1);
+                        }}
+                      >
+                        <ChevronUp className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        title={`Move ${field.label} down`}
+                        aria-label={`Move ${field.label} down`}
+                        disabled={fieldIndex === section.fields.length - 1}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          moveFieldByOffset(field.id, 1);
+                        }}
+                      >
+                        <ChevronDown className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -448,9 +868,11 @@ export function FormBuilderPage() {
                                 valueField: 'id',
                                 labelField: 'plateNumber',
                               }
-                            : type === 'lookup'
-                              ? undefined
-                              : selectedField.dataSource,
+                            : undefined,
+                        options: type === 'select' ? (selectedField.options ?? []) : undefined,
+                        rowFields:
+                          type === 'repeater' ? (selectedField.rowFields ?? []) : undefined,
+                        minRows: type === 'repeater' ? (selectedField.minRows ?? 0) : undefined,
                       });
                     }}
                   >
@@ -461,6 +883,152 @@ export function FormBuilderPage() {
                     ))}
                   </Select>
                 </div>
+                {['text', 'textarea', 'number', 'date', 'time'].includes(selectedField.type) && (
+                  <div>
+                    <label htmlFor="field-placeholder" className="mb-1 block text-xs font-semibold">
+                      Placeholder
+                    </label>
+                    <Input
+                      id="field-placeholder"
+                      value={selectedField.placeholder ?? ''}
+                      onChange={(event) => updateField({ placeholder: event.target.value })}
+                    />
+                  </div>
+                )}
+                {selectedField.type !== 'notice' && selectedField.type !== 'repeater' && (
+                  <div>
+                    <label htmlFor="field-width" className="mb-1 block text-xs font-semibold">
+                      Field width
+                    </label>
+                    <Select
+                      id="field-width"
+                      value={selectedField.width ?? 'half'}
+                      onChange={(event) =>
+                        updateField({ width: event.target.value as FormField['width'] })
+                      }
+                    >
+                      <option value="half">Half</option>
+                      <option value="full">Full</option>
+                    </Select>
+                  </div>
+                )}
+                {selectedField.type === 'select' && (
+                  <div>
+                    <label htmlFor="field-options" className="mb-1 block text-xs font-semibold">
+                      Options
+                    </label>
+                    <textarea
+                      id="field-options"
+                      rows={5}
+                      value={formatFieldOptions(selectedField.options)}
+                      onChange={(event) =>
+                        updateField({ options: parseFieldOptions(event.target.value) })
+                      }
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    />
+                  </div>
+                )}
+                {selectedField.type === 'repeater' && (
+                  <div className="space-y-3 border-t border-border pt-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label
+                          htmlFor="repeater-min-rows"
+                          className="mb-1 block text-xs font-semibold"
+                        >
+                          Minimum rows
+                        </label>
+                        <Input
+                          id="repeater-min-rows"
+                          type="number"
+                          min={0}
+                          value={selectedField.minRows ?? 0}
+                          onChange={(event) =>
+                            updateField({
+                              minRows: event.target.value === '' ? 0 : Number(event.target.value),
+                            })
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label
+                          htmlFor="repeater-max-rows"
+                          className="mb-1 block text-xs font-semibold"
+                        >
+                          Maximum rows
+                        </label>
+                        <Input
+                          id="repeater-max-rows"
+                          type="number"
+                          min={selectedField.minRows ?? 0}
+                          value={selectedField.maxRows ?? ''}
+                          onChange={(event) =>
+                            updateField({
+                              maxRows:
+                                event.target.value === '' ? undefined : Number(event.target.value),
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      {selectedField.rowFields?.map((rowField, index) => (
+                        <div key={rowField.id} className="flex items-center gap-2">
+                          <Input
+                            aria-label={`Repeater field ${index + 1} label`}
+                            value={rowField.label}
+                            onChange={(event) =>
+                              updateField({
+                                rowFields: selectedField.rowFields?.map((item, itemIndex) =>
+                                  itemIndex === index
+                                    ? { ...item, label: event.target.value }
+                                    : item,
+                                ),
+                              })
+                            }
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            title={`Remove ${rowField.label}`}
+                            aria-label={`Remove repeater field ${rowField.label}`}
+                            onClick={() =>
+                              updateField({
+                                rowFields: selectedField.rowFields?.filter(
+                                  (_, itemIndex) => itemIndex !== index,
+                                ),
+                              })
+                            }
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        updateField({
+                          rowFields: [
+                            ...(selectedField.rowFields ?? []),
+                            {
+                              id: `${selectedField.id}-row-${Date.now()}`,
+                              key: `item_${(selectedField.rowFields?.length ?? 0) + 1}`,
+                              type: 'text',
+                              label: 'New row field',
+                              section: selectedField.section,
+                            },
+                          ],
+                        })
+                      }
+                    >
+                      Add Row Field
+                    </Button>
+                  </div>
+                )}
                 {selectedField.type === 'lookup' && (
                   <div>
                     <label htmlFor="field-lov-source" className="mb-1 block text-xs font-semibold">

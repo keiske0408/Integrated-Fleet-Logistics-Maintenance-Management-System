@@ -15,8 +15,169 @@ import {
 import { choosePublishedDefinition, formatPrintableFieldValue } from '@/features/form-builder';
 import { fieldRegistry } from '@/features/form-builder';
 import { getWorkflowApprovalStamps } from '@/features/form-builder';
+import { moveFieldWithinSections } from '@/features/form-builder/reorder';
+import { projectFormForRoleStage } from '@/features/form-builder/preview';
+import { parseFormDefinitionImport } from '@/features/form-builder/importSchema';
+import { diffFormDefinitions } from '@/features/form-builder/versionDiff';
+import { createEditorHistory, editorHistoryReducer } from '@/features/form-builder/editorHistory';
+import { formatFieldOptions, parseFieldOptions } from '@/features/form-builder/fieldConfiguration';
 
 describe('TSRF form definition', () => {
+  it('reorders fields by keyboard action without moving them across sections', () => {
+    const sections = structuredClone(TSRF_V1.sections);
+    const section = sections[1];
+    const initialOrder = section.fields.map((field) => field.id);
+
+    const moved = moveFieldWithinSections(sections, initialOrder[1], -1);
+    expect(moved[1].fields.map((field) => field.id)).toEqual([
+      initialOrder[1],
+      initialOrder[0],
+      ...initialOrder.slice(2),
+    ]);
+    expect(moved[0]).toBe(sections[0]);
+    expect(moveFieldWithinSections(sections, initialOrder[0], -1)).toBe(sections);
+  });
+
+  it('projects the preview by role and stage, including nested field access', () => {
+    const stage = {
+      id: 'preview',
+      label: 'Preview',
+      statusCategory: 'in_review' as const,
+      fieldPermissions: {
+        projectName: { department_requester: 'edit' as const, admin: 'hidden' as const },
+        department: { department_requester: 'hidden' as const, admin: 'read' as const },
+        passengers: { department_requester: 'read' as const },
+        'passengers.name': { department_requester: 'edit' as const },
+      },
+    };
+
+    const requestor = projectFormForRoleStage(TSRF_V1, stage, 'department_requester');
+    const requestorFields = requestor.definition.sections.flatMap((section) => section.fields);
+    expect(requestorFields.some((field) => field.key === 'projectName')).toBe(true);
+    expect(requestorFields.some((field) => field.key === 'department')).toBe(false);
+    expect(requestor.fieldAccess.projectName).toBe('edit');
+    expect(requestor.fieldAccess['passengers.name']).toBe('edit');
+
+    const administrator = projectFormForRoleStage(TSRF_V1, stage, 'admin');
+    const administratorFields = administrator.definition.sections.flatMap(
+      (section) => section.fields,
+    );
+    expect(administratorFields.some((field) => field.key === 'projectName')).toBe(false);
+    expect(administrator.fieldAccess.department).toBe('read');
+    expect(administrator.fieldAccess.origin).toBe('read');
+  });
+
+  it('validates imported form JSON and rejects malformed schemas or missing LOVs', () => {
+    const valid = parseFormDefinitionImport(
+      JSON.stringify(TSRF_V1),
+      new Set(['DEPARTMENTS', 'VEHICLE_TYPES']),
+    );
+    expect(valid.definition?.key).toBe(TSRF_V1.key);
+    expect(valid.errors).toEqual([]);
+
+    expect(parseFormDefinitionImport('{', new Set()).errors).toContain(
+      'Import file must contain valid JSON.',
+    );
+    const invalid = structuredClone(TSRF_V1);
+    invalid.sections[1].fields[0].dataSource = { kind: 'lov', listCode: 'MISSING' };
+    expect(
+      parseFormDefinitionImport(JSON.stringify(invalid), new Set(['DEPARTMENTS'])).errors,
+    ).toContain('Field "Project Name" references unknown LOV list "MISSING".');
+  });
+
+  it('diffs versioned schemas by section, field, and nested field properties', () => {
+    const previous = structuredClone(TSRF_V1);
+    const next = structuredClone(TSRF_V1);
+    next.sections[0].title = 'Updated notice';
+    const projectName = next.sections[1].fields.find((field) => field.key === 'projectName')!;
+    projectName.label = 'Updated Project Name';
+    const passengers = next.sections
+      .flatMap((section) => section.fields)
+      .find((field) => field.key === 'passengers')!;
+    passengers.rowFields![0].required = !passengers.rowFields![0].required;
+    next.sections[1].fields.push({
+      id: 'new-field',
+      key: 'newField',
+      type: 'text',
+      label: 'New Field',
+      section: 'trip-details',
+    });
+
+    expect(diffFormDefinitions(previous, next)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'section', action: 'changed', path: 'TSRF Intake' }),
+        expect.objectContaining({
+          kind: 'field',
+          action: 'changed',
+          path: 'projectName',
+          details: expect.arrayContaining(['label']),
+        }),
+        expect.objectContaining({
+          kind: 'field',
+          action: 'changed',
+          path: 'passengers.name',
+          details: expect.arrayContaining(['required']),
+        }),
+        expect.objectContaining({ kind: 'field', action: 'added', path: 'newField' }),
+      ]),
+    );
+    expect(diffFormDefinitions(previous, previous)).toEqual([]);
+  });
+
+  it('supports undo, redo, and a new edit branch in editor history', () => {
+    const initial = {
+      definition: structuredClone(TSRF_V1),
+      workflow: structuredClone(TSRF_WORKFLOW),
+    };
+    const changed = structuredClone(initial);
+    changed.definition.name = 'Renamed TSRF';
+    const branched = structuredClone(initial);
+    branched.definition.name = 'Branched TSRF';
+
+    const edited = editorHistoryReducer(createEditorHistory(initial), {
+      type: 'edit',
+      snapshot: changed,
+    });
+    expect(edited.present.definition.name).toBe('Renamed TSRF');
+    const undone = editorHistoryReducer(edited, { type: 'undo' });
+    expect(undone.present.definition.name).toBe(TSRF_V1.name);
+    const redone = editorHistoryReducer(undone, { type: 'redo' });
+    expect(redone.present.definition.name).toBe('Renamed TSRF');
+    const undoThenBranch = editorHistoryReducer(undone, { type: 'edit', snapshot: branched });
+    expect(undoThenBranch.future).toHaveLength(0);
+    expect(editorHistoryReducer(undoThenBranch, { type: 'redo' })).toBe(undoThenBranch);
+  });
+
+  it('round-trips select options with optional explicit labels', () => {
+    const options = parseFieldOptions('fleet_asset:Fleet Asset\nthird_party_trucker');
+    expect(options).toEqual([
+      { value: 'fleet_asset', label: 'Fleet Asset' },
+      { value: 'third_party_trucker', label: 'third_party_trucker' },
+    ]);
+    expect(parseFieldOptions(formatFieldOptions(options))).toEqual(options);
+  });
+
+  it('validates select options and repeater row limits before publishing', () => {
+    const invalid = structuredClone(TSRF_V1);
+    const select = invalid.sections[1].fields.find((field) => field.key === 'allocationType')!;
+    select.options = [
+      { value: 'fleet_asset', label: 'Fleet Asset' },
+      { value: 'fleet_asset', label: 'Duplicate' },
+    ];
+    const repeater = invalid.sections
+      .flatMap((section) => section.fields)
+      .find((field) => field.type === 'repeater')!;
+    repeater.minRows = 4;
+    repeater.maxRows = 2;
+
+    expect(validateFormDefinition(invalid, new Set(['DEPARTMENTS', 'VEHICLE_TYPES']))).toEqual(
+      expect.arrayContaining([
+        'Select field "Allocation Type" has duplicate option value "fleet_asset".',
+        `Repeater field "${repeater.label}" maximum rows cannot be below minimum rows.`,
+      ]),
+    );
+  });
+
   it('contains published intake fields bound to the expected LOVs', () => {
     const fields = TSRF_V1.sections.flatMap((section) => section.fields);
     const department = fields.find((field) => field.key === 'department');

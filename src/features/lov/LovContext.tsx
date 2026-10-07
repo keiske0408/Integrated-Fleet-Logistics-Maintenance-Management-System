@@ -447,6 +447,10 @@ interface LovContextValue {
   deleteAttribute: (id: string) => Promise<void>;
 
   addItem: (listCode: string, data: LovItemFormData) => Promise<void>;
+  importItems: (
+    listCode: string,
+    items: Array<Pick<LovItem, 'code' | 'label' | 'status' | 'attrs'>>,
+  ) => Promise<boolean>;
   updateItem: (id: string, updates: Partial<LovItemFormData>) => Promise<void>;
   deactivateItem: (id: string) => Promise<void>;
   deleteItem: (id: string, permanent?: boolean) => Promise<void>;
@@ -716,6 +720,41 @@ export function LovProvider({ children }: { children: React.ReactNode }) {
     [apiAvailable, request],
   );
 
+  const importItems = useCallback(
+    async (
+      listCode: string,
+      items: Array<Pick<LovItem, 'code' | 'label' | 'status' | 'attrs'>>,
+    ) => {
+      if (!apiAvailable) {
+        setSyncError('CSV import requires the reference data API to be available.');
+        return false;
+      }
+      const result = await request<{
+        items: Array<Omit<LovItem, 'listCode'>>;
+      }>(`/lists/${encodeURIComponent(listCode)}/items/import`, 'POST', { items });
+      if (!result) return false;
+
+      setItems((previous) => {
+        const importedByCode = new Map(result.items.map((item) => [item.code, item]));
+        const existingCodes = new Set<string>();
+        const updated = previous.map((item) => {
+          if (item.listCode !== listCode || !importedByCode.has(item.code)) return item;
+          existingCodes.add(item.code);
+          return { ...importedByCode.get(item.code)!, listCode };
+        });
+        return [
+          ...updated,
+          ...result.items
+            .filter((item) => !existingCodes.has(item.code))
+            .map((item) => ({ ...item, listCode })),
+        ];
+      });
+      setSyncError(null);
+      return true;
+    },
+    [apiAvailable, request],
+  );
+
   const updateItem = useCallback(
     async (id: string, updates: Partial<LovItemFormData>) => {
       if (apiAvailable) {
@@ -817,6 +856,7 @@ export function LovProvider({ children }: { children: React.ReactNode }) {
         updateAttribute,
         deleteAttribute,
         addItem,
+        importItems,
         updateItem,
         deactivateItem,
         deleteItem,

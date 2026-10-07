@@ -439,6 +439,86 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/lov/lists/{code}/items/import': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Atomically import or update LOV items by code */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          code: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': {
+            items: {
+              code: string;
+              label: string;
+              /** @enum {string} */
+              status: 'active' | 'inactive';
+              attrs: {
+                [key: string]: unknown;
+              };
+            }[];
+          };
+        };
+      };
+      responses: {
+        /** @description Atomically import or update LOV items by code response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              imported: number;
+              items: {
+                /** Format: uuid */
+                id: string;
+                /** Format: uuid */
+                listId: string;
+                /** Format: uuid */
+                parentId: string | null;
+                code: string;
+                label: string;
+                sortOrder: number;
+                /** @enum {string} */
+                status: 'active' | 'inactive';
+                /** Format: date-time */
+                effectiveFrom: string | null;
+                /** Format: date-time */
+                effectiveTo: string | null;
+                attrs: {
+                  [key: string]: unknown;
+                };
+                /** Format: uuid */
+                approvalUserId: string | null;
+                /** Format: date-time */
+                createdAt: string;
+                /** Format: date-time */
+                updatedAt: string;
+              }[];
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/lov/items/{id}': {
     parameters: {
       query?: never;

@@ -146,17 +146,18 @@ This roadmap replaces the week-based proposal below as the active plan for the d
    - Apply the global API write limit plus stricter form/TSRF/procurement policies. Production fails closed with 503 when required Arcjet protection is unavailable or errors; development/test behavior is documented.
    - **Exit checks:** backend tests/build pass; non-admin role mutations are denied and admin catalog writes remain explicitly disabled; cross-owner submission access is denied; hidden fields are absent from details; published keys cannot change; generated paths/types are current; production Arcjet is configured and verified in staging.
 
-2. **Phase 2: LOV Completion and Backward-Compatible Migration — In Progress**
-   - Retain the existing generic LOV engine. First-run backfill of Departments, Vehicle Types, Maintenance Categories, and Vendors now occurs after legacy seed inserts; keep migration idempotent and avoid catalog divergence between legacy and LOV APIs.
-   - Attribute definitions, hierarchy parent integrity, effective-date ordering, and effective-window checks on active lookups/submissions are implemented. Continue with legacy/generic catalog parity, referenced-item deactivation behavior, and complete admin/import/export consumer verification.
-   - Keep legacy tables/routes until compatibility and data integrity are verified; no destructive migration without approval.
-   - **Exit checks:** migration tests prove existing rows are preserved and copied consistently; inactive items are unavailable for new submissions but historical snapshots remain displayable.
+2. **Phase 2: LOV Completion and Backward-Compatible Migration — Complete (2026-10-07)**
+   - Generic LOV items are canonical for Departments, Vehicle Types, Maintenance Categories, and Vendors. Startup backfill runs after legacy seeds, copies active/inactive state, is idempotent, and preserves existing LOV edits when legacy rows are stale.
+   - Legacy reference-data URLs and response field names remain available as adapters over LOV. Legacy deletes deactivate items instead of removing referenced catalog data; inactive items are excluded from new active lookups and submissions.
+   - The admin Reference Data Hub exports stable attribute-key CSV files and imports validated CSV batches. Imports upsert by code in one transaction, reject invalid or duplicate rows without partial writes, and preserve optional attributes omitted from an update.
+   - Historical form submissions continue displaying their saved LOV label snapshots after an item is deactivated. Legacy tables remain in place; no destructive migration was performed.
+   - **Verified exit checks:** backend integration tests cover backfill repeatability and precedence, legacy/generic parity, authorization, atomic import/upsert, deactivation, and historical snapshots; frontend CSV tests cover round-trip, legacy export compatibility, quoting, and validation errors. Backend and frontend builds pass.
 
-3. **Phase 3: Form Schema, Runtime, and Builder UX**
-   - Extend the existing schema, renderer, and registry only for missing requirements. Complete schema validation, field configuration, accessible drag/reorder, preview by role/stage, version diff, autosave/undo, and import/export as needed.
-   - Add `react-router-dom` for builder subroutes, previews, and version deep links; preserve existing pages and navigation behavior during migration.
-   - Seed and maintain one shared GVE/HULMA TSRF definition with entity-driven letterhead/print behavior. Existing submissions remain pinned to their original form version.
-   - **Exit checks:** an administrator can configure, preview, and publish a form without code changes; existing intake behavior remains available during rollout.
+3. **Phase 3: Form Schema, Runtime, and Builder UX — Complete (2026-10-07)**
+   - The builder supports schema validation, field configuration (including select options and repeater row fields/limits), keyboard-accessible reorder, role/stage preview using runtime access defaults, and JSON import/export. Imports are validated and restricted to the current form key.
+   - Drafts autosave after edits, editor history supports undo/redo, draft changes can be compared with the latest published version, and version/preview subroutes preserve direct links without changing the existing builder entry point.
+   - Existing submissions remain pinned to their original form version; the current seeded GVE/HULMA definition and intake route remain available during rollout.
+   - **Verified exit checks:** frontend tests cover field configuration validation, reorder, role/stage projection, JSON import validation, schema version differences, and undo/redo; frontend build passes.
 
 4. **Phase 4: Rules, Workflow, Permissions, and Approvals**
    - Complete the configurable workflow: Draft → Submitted → Endorsement → Finance Verification when applicable → Approval → Dispatch Assignment → Confirmed → In Progress → Completed, with Returned, Rejected, and Cancelled paths and a Returned → edit → resubmit loop.

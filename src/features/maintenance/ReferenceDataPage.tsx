@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useLov } from '@/features/lov';
 import type {
   LovItem,
@@ -27,6 +27,7 @@ import {
   Settings2,
   Search,
   Download,
+  Upload,
   Database,
   ChevronUp,
   ChevronDown,
@@ -40,6 +41,7 @@ import {
 import { useToast } from '@/components/ui/toast';
 import { Dialog } from '@/components/ui/dialog';
 import { Pagination } from '@/components/ui/pagination';
+import { parseReferenceDataCsv, serializeReferenceDataCsv } from './referenceDataCsv';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -395,6 +397,7 @@ export function ReferenceDataPage() {
     addList,
     deleteList,
     addItem,
+    importItems,
     updateItem,
     deleteItem,
     addAttribute,
@@ -406,6 +409,9 @@ export function ReferenceDataPage() {
     if (!apiAvailable) addLog(event);
   };
   const { success: toastSuccess, error: toastError } = useToast();
+  const csvInputRef = useRef<HTMLInputElement>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importErrors, setImportErrors] = useState<Array<{ row: number; message: string }>>([]);
 
   const activeLists = lists.filter((l) => l.status === 'active');
   const [activeTabCode, setActiveTabCode] = useState<string>(activeLists[0]?.code || '');
@@ -838,15 +844,9 @@ export function ReferenceDataPage() {
   // ── CSV Export ──────────────────────────────────────────────────────────
 
   const exportCSV = () => {
-    const visibleAttrs = activeAttrs.filter((a) => tweak.attrVisibility[a.key] !== false);
-    const header = ['Code', 'Name', ...visibleAttrs.map((a) => a.label), 'Active'].join(',');
-    const rows = filteredItems.map((item) => {
-      const attrValues = visibleAttrs.map((a) => `"${String(item.attrs[a.key] ?? '')}"`);
-      return [`"${item.code}"`, `"${item.label}"`, ...attrValues, item.status === 'active'].join(
-        ',',
-      );
+    const blob = new Blob([serializeReferenceDataCsv(activeAttrs, filteredItems)], {
+      type: 'text/csv',
     });
-    const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -854,6 +854,32 @@ export function ReferenceDataPage() {
     a.click();
     URL.revokeObjectURL(url);
     showToast('Exported to CSV.');
+  };
+
+  const importCSV = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+    if (!file) return;
+
+    setIsImporting(true);
+    setImportErrors([]);
+    try {
+      const result = parseReferenceDataCsv(await file.text(), activeAttrs);
+      if (result.errors.length > 0) {
+        setImportErrors(result.errors);
+        toastError(`CSV import found ${result.errors.length} error(s). No items were imported.`);
+        return;
+      }
+      if (!(await importItems(activeTabCode, result.rows))) {
+        toastError('CSV import failed. No items were imported.');
+        return;
+      }
+      showToast(`Imported ${result.rows.length} item(s).`);
+    } catch (error) {
+      toastError(error instanceof Error ? error.message : 'Unable to read the CSV file.');
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   // ── Visible attribute columns ───────────────────────────────────────────
@@ -873,6 +899,22 @@ export function ReferenceDataPage() {
         >
           {syncError}
         </p>
+      )}
+      {importErrors.length > 0 && (
+        <section
+          role="alert"
+          className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+        >
+          <p>CSV import was not applied. Fix these rows and try again:</p>
+          <ul className="mt-1 list-inside list-disc">
+            {importErrors.slice(0, 10).map((error, index) => (
+              <li key={`${error.row}-${index}`}>
+                Row {error.row}: {error.message}
+              </li>
+            ))}
+          </ul>
+          {importErrors.length > 10 && <p>And {importErrors.length - 10} more error(s).</p>}
+        </section>
       )}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/40 pb-4">
@@ -917,6 +959,26 @@ export function ReferenceDataPage() {
           <Button variant="outline" size="sm" onClick={exportCSV} className="gap-1.5">
             <Download className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Export</span>
+          </Button>
+          <input
+            ref={csvInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={importCSV}
+            aria-label="Import reference data CSV"
+          />
+          <Button
+            id="btn-import-ref"
+            variant="outline"
+            size="sm"
+            onClick={() => csvInputRef.current?.click()}
+            disabled={!apiAvailable || isImporting}
+            className="gap-1.5"
+            title={!apiAvailable ? 'Import requires the reference data API.' : 'Import CSV'}
+          >
+            <Upload className="h-3.5 w-3.5" />
+            <span>{isImporting ? 'Importing' : 'Import'}</span>
           </Button>
           <Button id="btn-add-ref" size="sm" onClick={openAddItem} className="gap-1.5">
             <Plus className="h-3.5 w-3.5" />

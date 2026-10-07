@@ -47,6 +47,40 @@ export function validateFormDefinition(
     else keys.add(scopedKey);
 
     if (!field.label.trim()) errors.push(`Field "${field.key}" is missing a label.`);
+    if (field.type === 'select') {
+      const options = Array.isArray(field.options) ? (field.options as unknown[]) : [];
+      if (options.length === 0)
+        errors.push(`Select field "${field.label}" needs at least one option.`);
+      const optionValues = new Set<string>();
+      options.forEach((option) => {
+        if (
+          typeof option !== 'object' ||
+          option === null ||
+          typeof (option as { value?: unknown }).value !== 'string' ||
+          typeof (option as { label?: unknown }).label !== 'string' ||
+          !(option as { value: string }).value.trim() ||
+          !(option as { label: string }).label.trim()
+        ) {
+          errors.push(`Select field "${field.label}" has an invalid option.`);
+          return;
+        }
+        const value = (option as { value: string }).value;
+        if (optionValues.has(value))
+          errors.push(`Select field "${field.label}" has duplicate option value "${value}".`);
+        optionValues.add(value);
+      });
+    }
+    if (field.minRows !== undefined && (!Number.isInteger(field.minRows) || field.minRows < 0))
+      errors.push(`Repeater field "${field.label}" minimum rows must be a non-negative integer.`);
+    if (field.maxRows !== undefined && (!Number.isInteger(field.maxRows) || field.maxRows < 0))
+      errors.push(`Repeater field "${field.label}" maximum rows must be a non-negative integer.`);
+    if (
+      field.minRows !== undefined &&
+      field.maxRows !== undefined &&
+      field.maxRows < field.minRows
+    ) {
+      errors.push(`Repeater field "${field.label}" maximum rows cannot be below minimum rows.`);
+    }
     if (field.dataSource?.kind === 'lov' && !availableLovCodes.has(field.dataSource.listCode)) {
       errors.push(
         `Field "${field.label}" references unknown LOV list "${field.dataSource.listCode}".`,

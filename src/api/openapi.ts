@@ -225,6 +225,23 @@ registerJsonEndpoint({
   status: 201,
 });
 registerJsonEndpoint({
+  method: 'post',
+  path: '/api/lov/lists/{code}/items/import',
+  summary: 'Atomically import or update LOV items by code',
+  params: codeParamsSchema,
+  body: z.object({
+    items: z.array(
+      z.object({
+        code: z.string(),
+        label: z.string(),
+        status: z.enum(['active', 'inactive']),
+        attrs: jsonObjectSchema,
+      }),
+    ),
+  }),
+  response: z.object({ imported: z.number().int(), items: z.array(lovItemSchema) }),
+});
+registerJsonEndpoint({
   method: 'put',
   path: '/api/lov/items/{id}',
   summary: 'Update an LOV item',

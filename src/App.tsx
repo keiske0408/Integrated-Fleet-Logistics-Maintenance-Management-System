@@ -726,6 +726,22 @@ function InnerApp() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path={`${PAGE_ROUTES.form_builder}/versions/:version`}
+            element={
+              <ProtectedRoute permission="manage:reference_data">
+                <FormBuilderPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={`${PAGE_ROUTES.form_builder}/preview/:role/:stage/:version?`}
+            element={
+              <ProtectedRoute permission="manage:reference_data">
+                <FormBuilderPage />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Reports */}
           <Route
