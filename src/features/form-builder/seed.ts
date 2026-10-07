@@ -43,6 +43,10 @@ function withEntityReadAccess(stages: FormWorkflow['stages']): FormWorkflow['sta
       fieldPermissions: {
         ...otherFieldPermissions,
         entity: { ...ENTITY_READ_ACCESS, ...entity },
+        endingKm: {
+          department_requester: 'hidden',
+          ...stage.fieldPermissions?.endingKm,
+        },
       },
     };
   });

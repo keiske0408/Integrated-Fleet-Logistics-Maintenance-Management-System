@@ -309,6 +309,17 @@ describe('TSRF form definition', () => {
     );
   });
 
+  it('keeps the odometer requestor-hidden and fleet-editable until trip completion', () => {
+    const submitted = TSRF_WORKFLOW.stages.find((stage) => stage.id === 'submitted')!;
+    const inProgress = TSRF_WORKFLOW.stages.find((stage) => stage.id === 'in_progress')!;
+    expect(submitted.fieldPermissions?.endingKm?.department_requester).toBe('hidden');
+    expect(inProgress.fieldPermissions?.endingKm).toMatchObject({
+      department_requester: 'hidden',
+      fleet_team: 'edit',
+      admin: 'edit',
+    });
+  });
+
   it('passes disabled rule state to registered field controls', () => {
     const field = TSRF_V1.sections[1].fields[0];
     const element = fieldRegistry.text({
