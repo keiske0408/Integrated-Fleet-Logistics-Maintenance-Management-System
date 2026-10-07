@@ -47,6 +47,7 @@ export interface TSRFFormData {
   vehicleType: string;
   allocationType?: 'fleet_asset' | 'third_party_trucker';
   assignedVehicleId?: string;
+  endingKm?: number;
   truckerName?: string;
   stops: RouteStop[];
   passengers: Passenger[];

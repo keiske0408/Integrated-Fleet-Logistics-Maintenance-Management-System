@@ -59,6 +59,15 @@ const SEED_LISTS: LovList[] = [
     supportsHierarchy: false,
     status: 'active',
   },
+  {
+    id: 'lov-l5',
+    code: 'ENTITIES',
+    name: 'Entities',
+    description: 'Organization entities for TSRF letterheads',
+    isSystem: true,
+    supportsHierarchy: false,
+    status: 'active',
+  },
 ];
 
 // ─── Seed Data: Attributes ────────────────────────────────────────────────────
@@ -424,6 +433,26 @@ const SEED_ITEMS: LovItem[] = [
     sortOrder: 2,
     status: 'active',
     attrs: { contact_person: 'Fleet Team', phone: 'Internal', specialization: 'All categories' },
+  },
+  {
+    id: 'lov-ent1',
+    listCode: 'ENTITIES',
+    parentId: null,
+    code: 'GVE',
+    label: 'GVE',
+    sortOrder: 0,
+    status: 'active',
+    attrs: {},
+  },
+  {
+    id: 'lov-ent2',
+    listCode: 'ENTITIES',
+    parentId: null,
+    code: 'HULMA',
+    label: 'HULMA',
+    sortOrder: 1,
+    status: 'active',
+    attrs: {},
   },
 ];
 

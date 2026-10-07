@@ -30,9 +30,27 @@ const returnedRequestorFieldAccess = Object.fromEntries(
   ].map((path) => [path, { department_requester: 'edit' }]),
 ) as NonNullable<FormWorkflow['stages'][number]['fieldPermissions']>;
 
+const ENTITY_READ_ACCESS = {
+  department_requester: 'read',
+  procurement: 'read',
+} as const;
+
+function withEntityReadAccess(stages: FormWorkflow['stages']): FormWorkflow['stages'] {
+  return stages.map((stage) => {
+    const { entity, ...otherFieldPermissions } = stage.fieldPermissions ?? {};
+    return {
+      ...stage,
+      fieldPermissions: {
+        ...otherFieldPermissions,
+        entity: { ...ENTITY_READ_ACCESS, ...entity },
+      },
+    };
+  });
+}
+
 export const TSRF_WORKFLOW: FormWorkflow = {
   initialStage: 'submitted',
-  stages: [
+  stages: withEntityReadAccess([
     { id: 'draft', label: 'Draft', statusCategory: 'draft' },
     { id: 'submitted', label: 'Submitted', statusCategory: 'in_review' },
     { id: 'endorsement', label: 'Endorsement', statusCategory: 'in_review' },
@@ -40,7 +58,12 @@ export const TSRF_WORKFLOW: FormWorkflow = {
     { id: 'approval', label: 'Approval', statusCategory: 'approved' },
     { id: 'dispatch_assignment', label: 'Dispatch Assignment', statusCategory: 'approved' },
     { id: 'confirmed', label: 'Confirmed', statusCategory: 'approved' },
-    { id: 'in_progress', label: 'In Progress', statusCategory: 'in_progress' },
+    {
+      id: 'in_progress',
+      label: 'In Progress',
+      statusCategory: 'in_progress',
+      fieldPermissions: { endingKm: { fleet_team: 'edit', admin: 'edit' } },
+    },
     { id: 'completed', label: 'Completed', statusCategory: 'completed' },
     {
       id: 'returned',
@@ -50,7 +73,7 @@ export const TSRF_WORKFLOW: FormWorkflow = {
     },
     { id: 'rejected', label: 'Rejected', statusCategory: 'rejected' },
     { id: 'cancelled', label: 'Cancelled', statusCategory: 'cancelled' },
-  ],
+  ]),
   transitions: [
     { from: 'draft', to: 'submitted', roles: ['department_requester', 'admin'] },
     { from: 'submitted', to: 'endorsement', roles: ['approver', 'admin'] },
@@ -75,6 +98,20 @@ export const TSRF_WORKFLOW: FormWorkflow = {
       to: 'cancelled',
       roles: ['department_requester', 'admin'],
       reasonRequired: true,
+    },
+    {
+      from: 'submitted',
+      to: 'cancelled',
+      roles: ['department_requester', 'admin'],
+      reasonRequired: true,
+      action: 'cancelled',
+    },
+    {
+      from: 'returned',
+      to: 'cancelled',
+      roles: ['department_requester', 'admin'],
+      reasonRequired: true,
+      action: 'cancelled',
     },
   ],
   cutoff: {
@@ -110,6 +147,16 @@ export const TSRF_V1: FormDefinition = {
       title: '1. Transportation Service Request',
       description: 'Specify the project, schedule, and vehicle allocation requirements.',
       fields: [
+        {
+          id: 'entity',
+          key: 'entity',
+          type: 'lookup',
+          label: 'Entity',
+          section: 'trip-details',
+          required: true,
+          dataSource: { kind: 'lov', listCode: 'ENTITIES' },
+          meta: { reportable: true, pii: false },
+        },
         {
           id: 'project-name',
           key: 'projectName',
@@ -196,6 +243,21 @@ export const TSRF_V1: FormDefinition = {
           rules: [
             {
               when: { field: 'allocationType', operator: 'eq', value: 'third_party_trucker' },
+              show: false,
+            },
+          ],
+        },
+        {
+          id: 'ending-km',
+          key: 'endingKm',
+          type: 'number',
+          label: 'Ending Odometer (km)',
+          section: 'trip-details',
+          required: false,
+          meta: { reportable: true, pii: false },
+          rules: [
+            {
+              when: { field: 'allocationType', operator: 'neq', value: 'fleet_asset' },
               show: false,
             },
           ],
@@ -441,6 +503,9 @@ export function serializeTsrfValues(values: FormValues): TSRFFormData {
       values.allocationType ?? 'fleet_asset',
     ) as TSRFFormData['allocationType'],
     ...(values.assignedVehicleId ? { assignedVehicleId: String(values.assignedVehicleId) } : {}),
+    ...(values.endingKm !== undefined && values.endingKm !== ''
+      ? { endingKm: Number(values.endingKm) }
+      : {}),
     ...(values.truckerName ? { truckerName: String(values.truckerName) } : {}),
     stops: rowsFor(values, 'stops').map((row, index) => ({
       stopOrder: Number(row.stopOrder ?? index + 1),

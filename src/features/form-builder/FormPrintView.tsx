@@ -62,6 +62,16 @@ function displayStatus(value: string | undefined): string {
     .join(' ');
 }
 
+export function resolveEntityLetterhead(
+  values: FormValues,
+  labelSnapshots: FormPrintViewProps['labelSnapshots'],
+): string {
+  const snapshot = labelSnapshots.entity?.label;
+  if (snapshot?.trim()) return snapshot.trim();
+  const value = values.entity;
+  return typeof value === 'string' && value.trim() ? value.trim() : 'FLEET LOGISTICS';
+}
+
 export function formatPrintableFieldValue(
   field: FormField,
   value: unknown,
@@ -159,11 +169,12 @@ export function FormPrintView({
       ? `${currentResponsibleRoles.map(displayStatus).join(', ')} queue`
       : 'No active assignee';
   const approvalStamps = getWorkflowApprovalStamps(workflowEvents);
+  const entityLetterhead = resolveEntityLetterhead(values, labelSnapshots);
   return (
     <main className="form-print-sheet" aria-label="Printable form">
       <header className="form-print-header">
         <div>
-          <p>FLEET LOGISTICS</p>
+          <p>{entityLetterhead}</p>
           <h1>{definition.name}</h1>
         </div>
         <div className="form-print-number">

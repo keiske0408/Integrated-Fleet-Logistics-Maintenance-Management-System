@@ -159,14 +159,18 @@ This roadmap replaces the week-based proposal below as the active plan for the d
    - Existing submissions remain pinned to their original form version; the current seeded GVE/HULMA definition and intake route remain available during rollout.
    - **Verified exit checks:** frontend tests cover field configuration validation, reorder, role/stage projection, JSON import validation, schema version differences, and undo/redo; frontend build passes.
 
-4. **Phase 4: Rules, Workflow, Permissions, and Approvals**
+4. **Phase 4: Rules, Workflow, Permissions, and Approvals — Complete (2026-10-07)**
    - Complete the configurable workflow: Draft → Submitted → Endorsement → Finance Verification when applicable → Approval → Dispatch Assignment → Confirmed → In Progress → Completed, with Returned, Rejected, and Cancelled paths and a Returned → edit → resubmit loop.
+   - Default owner cancellation is now available from Submitted and Returned, with a required reason. The API permits it only for the request owner when the pinned workflow explicitly allows the requestor role; other-owner reads remain hidden. Late dynamic submissions are flagged and routed to their configured exception stage.
+   - **Verified slices:** API tests cover owner-only cancellation, required cancellation reasons, and late exception-stage routing/event records.
+   - **Verified exit checks:** workflow authorization, required reasons, returned edit/resubmit, department-head assignment, field projection, and configured cutoff routing are covered by tests; frontend/backend builds pass.
    - Resolve approvers by role with department-head resolution from the Departments LOV. Rejection and cancellation require a reason. After the configurable 4:00 PM Asia/Manila cutoff, flag the request and require the configured exception approval.
    - Enforce field edit/read/hidden permissions on both UI and API. Add approval stamps and focused transition/denial tests.
    - **Exit checks:** tampered payloads and unauthorized transitions are rejected server-side; workflow edits require no code deployment.
 
-5. **Phase 5: Fleet Integrations, Repeaters, Reporting, and Print**
-   - Complete conditional Fleet Asset/3rd Party Trucking fields, normalized driver lookup, route/passenger/material repeaters, reportable-field exposure, dynamic-submission odometer integration, approval/signature blocks, and paper-form print parity.
+5. **Phase 5: Fleet Integrations, Repeaters, Reporting, and Print — In Progress (2026-10-07)**
+   - Conditional Fleet Asset/3rd Party Trucking fields, normalized driver lookup, route/passenger/material repeaters, reportable-field exposure, print approval stamps, and an ENTITIES LOV-driven GVE/HULMA letterhead are present. Dynamic TSRF completion now records ending odometer readings to the assigned vehicle using the existing monotonic/PMS rules.
+   - Remaining work: verify entity-specific paper-form parity/signatures against the approved sample and complete activity-history linkage across all LOV/workflow changes.
    - Link builder, LOV, and workflow changes to Activity History. Keep passenger names, mobile numbers, and signatures classified as PII and out of unauthorized exports/logs.
    - **Exit checks:** representative TSRF requests pass end-to-end API/UI tests; reports exclude PII; print output matches the approved paper form; vehicle mileage updates follow existing validation rules.
 

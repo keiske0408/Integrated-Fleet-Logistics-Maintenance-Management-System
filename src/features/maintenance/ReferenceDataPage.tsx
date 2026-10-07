@@ -447,7 +447,8 @@ export function ReferenceDataPage() {
 
   // List classification
   const CORE_LIST_CODES = useMemo(
-    () => new Set(['DEPARTMENTS', 'VEHICLE_TYPES', 'MAINTENANCE_CATEGORIES', 'VENDORS']),
+    () =>
+      new Set(['DEPARTMENTS', 'VEHICLE_TYPES', 'MAINTENANCE_CATEGORIES', 'VENDORS', 'ENTITIES']),
     [],
   );
 

@@ -12,7 +12,11 @@ import {
   validateFormValues,
   validateFormWorkflow,
 } from '@/features/form-builder';
-import { choosePublishedDefinition, formatPrintableFieldValue } from '@/features/form-builder';
+import {
+  choosePublishedDefinition,
+  formatPrintableFieldValue,
+  resolveEntityLetterhead,
+} from '@/features/form-builder';
 import { fieldRegistry } from '@/features/form-builder';
 import { getWorkflowApprovalStamps } from '@/features/form-builder';
 import { moveFieldWithinSections } from '@/features/form-builder/reorder';
@@ -70,7 +74,7 @@ describe('TSRF form definition', () => {
   it('validates imported form JSON and rejects malformed schemas or missing LOVs', () => {
     const valid = parseFormDefinitionImport(
       JSON.stringify(TSRF_V1),
-      new Set(['DEPARTMENTS', 'VEHICLE_TYPES']),
+      new Set(['DEPARTMENTS', 'VEHICLE_TYPES', 'ENTITIES']),
     );
     expect(valid.definition?.key).toBe(TSRF_V1.key);
     expect(valid.errors).toEqual([]);
@@ -79,9 +83,13 @@ describe('TSRF form definition', () => {
       'Import file must contain valid JSON.',
     );
     const invalid = structuredClone(TSRF_V1);
-    invalid.sections[1].fields[0].dataSource = { kind: 'lov', listCode: 'MISSING' };
+    invalid.sections[1].fields.find((field) => field.key === 'projectName')!.dataSource = {
+      kind: 'lov',
+      listCode: 'MISSING',
+    };
     expect(
-      parseFormDefinitionImport(JSON.stringify(invalid), new Set(['DEPARTMENTS'])).errors,
+      parseFormDefinitionImport(JSON.stringify(invalid), new Set(['DEPARTMENTS', 'ENTITIES']))
+        .errors,
     ).toContain('Field "Project Name" references unknown LOV list "MISSING".');
   });
 
@@ -170,7 +178,9 @@ describe('TSRF form definition', () => {
     repeater.minRows = 4;
     repeater.maxRows = 2;
 
-    expect(validateFormDefinition(invalid, new Set(['DEPARTMENTS', 'VEHICLE_TYPES']))).toEqual(
+    expect(
+      validateFormDefinition(invalid, new Set(['DEPARTMENTS', 'VEHICLE_TYPES', 'ENTITIES'])),
+    ).toEqual(
       expect.arrayContaining([
         'Select field "Allocation Type" has duplicate option value "fleet_asset".',
         `Repeater field "${repeater.label}" maximum rows cannot be below minimum rows.`,
@@ -180,10 +190,12 @@ describe('TSRF form definition', () => {
 
   it('contains published intake fields bound to the expected LOVs', () => {
     const fields = TSRF_V1.sections.flatMap((section) => section.fields);
+    const entity = fields.find((field) => field.key === 'entity');
     const department = fields.find((field) => field.key === 'department');
     const vehicleType = fields.find((field) => field.key === 'vehicleType');
 
     expect(TSRF_V1.status).toBe('published');
+    expect(entity?.dataSource).toEqual({ kind: 'lov', listCode: 'ENTITIES' });
     expect(department?.dataSource).toEqual({ kind: 'lov', listCode: 'DEPARTMENTS' });
     expect(vehicleType?.dataSource).toEqual({ kind: 'lov', listCode: 'VEHICLE_TYPES' });
     expect(fields.some((field) => field.key === 'origin')).toBe(true);
@@ -193,10 +205,13 @@ describe('TSRF form definition', () => {
     expect(fields.find((field) => field.key === 'cargo')?.type).toBe('repeater');
     const allocationType = fields.find((field) => field.key === 'allocationType');
     const fleetVehicle = fields.find((field) => field.key === 'assignedVehicleId');
+    const endingOdometer = fields.find((field) => field.key === 'endingKm');
     const thirdParty = fields.find((field) => field.key === 'truckerName');
     expect(allocationType?.type).toBe('select');
     expect(fleetVehicle?.type).toBe('entity_lookup');
     expect(fleetVehicle?.dataSource).toMatchObject({ kind: 'entity', entity: 'vehicles' });
+    expect(endingOdometer?.type).toBe('number');
+    expect(endingOdometer?.rules?.[0].when.value).toBe('fleet_asset');
     expect(fleetVehicle?.rules?.[0].when.value).toBe('third_party_trucker');
     expect(thirdParty?.rules?.[0].when.value).toBe('fleet_asset');
   });
@@ -236,9 +251,9 @@ describe('TSRF form definition', () => {
       },
     });
 
-    expect(validateFormDefinition(definition, new Set(['DEPARTMENTS', 'VEHICLE_TYPES']))).toEqual(
-      [],
-    );
+    expect(
+      validateFormDefinition(definition, new Set(['DEPARTMENTS', 'VEHICLE_TYPES', 'ENTITIES'])),
+    ).toEqual([]);
   });
 
   it('validates workflow stages, transition roles, and cutoff configuration', () => {
@@ -275,6 +290,25 @@ describe('TSRF form definition', () => {
     );
   });
 
+  it('allows owners to cancel submitted or returned TSRFs with a reason', () => {
+    expect(TSRF_WORKFLOW.transitions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          from: 'submitted',
+          to: 'cancelled',
+          roles: ['department_requester', 'admin'],
+          reasonRequired: true,
+        }),
+        expect.objectContaining({
+          from: 'returned',
+          to: 'cancelled',
+          roles: ['department_requester', 'admin'],
+          reasonRequired: true,
+        }),
+      ]),
+    );
+  });
+
   it('passes disabled rule state to registered field controls', () => {
     const field = TSRF_V1.sections[1].fields[0];
     const element = fieldRegistry.text({
@@ -297,6 +331,8 @@ describe('TSRF form definition', () => {
       callTime: '08:00',
       vehicleType: 'VAN',
       allocationType: 'fleet_asset',
+      assignedVehicleId: 'vehicle-id',
+      endingKm: 5200,
       stops: [{ locationName: 'Origin', address: 'Address', waitingTimeMinutes: 10 }],
       passengers: [{ name: 'Passenger', department: 'IT', role: 'Tech' }],
       cargo: [{ description: 'Tools', quantity: 2, isFragile: false }],
@@ -311,6 +347,8 @@ describe('TSRF form definition', () => {
       callTime: '08:00',
       vehicleType: 'VAN',
       allocationType: 'fleet_asset',
+      assignedVehicleId: 'vehicle-id',
+      endingKm: 5200,
       stops: [{ stopOrder: 1, locationName: 'Origin', address: 'Address', waitingTimeMinutes: 10 }],
       passengers: [{ name: 'Passenger', department: 'IT', role: 'Tech' }],
       cargo: [{ description: 'Tools', quantity: 2, isFragile: false }],
@@ -362,6 +400,17 @@ describe('TSRF form definition', () => {
     ).toBe('Information Technology');
   });
 
+  it('uses the saved entity label for print letterhead and falls back safely', () => {
+    expect(
+      resolveEntityLetterhead(
+        { entity: 'GVE' },
+        { entity: { code: 'GVE', label: 'Global Ventures Enterprise' } },
+      ),
+    ).toBe('Global Ventures Enterprise');
+    expect(resolveEntityLetterhead({ entity: 'HULMA' }, {})).toBe('HULMA');
+    expect(resolveEntityLetterhead({}, {})).toBe('FLEET LOGISTICS');
+  });
+
   it('projects the latest finance verification and approval events for printing', () => {
     const stamps = getWorkflowApprovalStamps([
       {
@@ -408,7 +457,7 @@ describe('TSRF form definition', () => {
   });
 
   it('accepts seeded nested keys and rejects duplicate root keys and missing LOVs', () => {
-    const codes = new Set(['DEPARTMENTS', 'VEHICLE_TYPES']);
+    const codes = new Set(['DEPARTMENTS', 'VEHICLE_TYPES', 'ENTITIES']);
     expect(validateFormDefinition(TSRF_V1, codes)).toEqual([]);
 
     const nestedRule = structuredClone(TSRF_V1);
@@ -420,8 +469,13 @@ describe('TSRF form definition', () => {
     expect(validateFormDefinition(nestedRule, codes)).toEqual([]);
 
     const invalid = structuredClone(TSRF_V1);
-    invalid.sections[1].fields[0].key = 'department';
-    invalid.sections[1].fields[1].dataSource = { kind: 'lov', listCode: 'MISSING' };
+    invalid.sections[1].fields.find((field) => field.key === 'entity')!.key = 'department';
+    invalid.sections[1].fields.find(
+      (field) => field.label === 'Requesting Department',
+    )!.dataSource = {
+      kind: 'lov',
+      listCode: 'MISSING',
+    };
     expect(validateFormDefinition(invalid, codes)).toEqual(
       expect.arrayContaining([
         'Field key "department" is duplicated.',
@@ -432,7 +486,7 @@ describe('TSRF form definition', () => {
 
   it('rejects rules with missing field references and required fields hidden without defaults', () => {
     const invalid = structuredClone(TSRF_V1);
-    const projectName = invalid.sections[1].fields[0];
+    const projectName = invalid.sections[1].fields.find((field) => field.key === 'projectName')!;
     projectName.required = true;
     projectName.defaultValue = undefined;
     projectName.rules = [
@@ -440,7 +494,9 @@ describe('TSRF form definition', () => {
       { when: { field: 'department', operator: 'exists' }, show: false },
     ];
 
-    expect(validateFormDefinition(invalid, new Set(['DEPARTMENTS', 'VEHICLE_TYPES']))).toEqual(
+    expect(
+      validateFormDefinition(invalid, new Set(['DEPARTMENTS', 'VEHICLE_TYPES', 'ENTITIES'])),
+    ).toEqual(
       expect.arrayContaining([
         'Field "Project Name" rule references unknown field "missing_field".',
         'Required field "Project Name" is hidden by a rule and has no default.',
