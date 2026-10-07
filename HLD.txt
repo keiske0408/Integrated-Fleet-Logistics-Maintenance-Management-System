@@ -169,7 +169,7 @@ This roadmap replaces the week-based proposal below as the active plan for the d
    - **Exit checks:** tampered payloads and unauthorized transitions are rejected server-side; workflow edits require no code deployment.
 
 5. **Phase 5: Fleet Integrations, Repeaters, Reporting, and Print — In Progress (2026-10-07)**
-   - Conditional Fleet Asset/3rd Party Trucking fields, normalized driver lookup, route/passenger/material repeaters, reportable-field exposure, print approval stamps, and an ENTITIES LOV-driven GVE/HULMA letterhead are present. Dynamic TSRF completion now records ending odometer readings to the assigned vehicle using the existing monotonic/PMS rules.
+   - Conditional Fleet Asset/3rd Party Trucking fields, normalized driver lookup, route/passenger/material repeaters, reportable-field exposure, print approval stamps/signature lines, and an ENTITIES LOV-driven GVE/HULMA letterhead are present. Dynamic TSRF completion now records ending odometer readings to the assigned vehicle using the existing monotonic/PMS rules.
    - Builder changes have scoped Activity History records; successful LOV/workflow mutations are audit-logged with actor/path metadata only. Workflow audit labels distinguish returned, rejected, cancelled, completed, resubmitted, and approved transitions without storing request bodies or comments.
    - Remaining work: verify entity-specific paper-form parity/signatures against the approved sample. Keep passenger names, mobile numbers, and signatures classified as PII and out of unauthorized exports/logs.
    - **Exit checks:** representative TSRF requests pass end-to-end API/UI tests; reports exclude PII; print output matches the approved paper form; vehicle mileage updates follow existing validation rules.

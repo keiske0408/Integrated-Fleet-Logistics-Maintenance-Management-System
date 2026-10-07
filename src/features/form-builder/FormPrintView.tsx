@@ -221,8 +221,11 @@ export function FormPrintView({
           </div>
         </section>
       ))}
-      <section className="form-print-approvals" aria-label="Finance and approval stamps">
-        <h2>Finance and Approval Stamps</h2>
+      <section
+        className="form-print-approvals"
+        aria-label="Finance and approval stamps and signatures"
+      >
+        <h2>Finance and Approval Stamps and Signatures</h2>
         <div className="form-print-approval-grid">
           <div>
             <h3>Finance Verification</h3>
@@ -230,6 +233,8 @@ export function FormPrintView({
             <strong>{approvalStamps.finance?.actorName ?? ' '}</strong>
             <span>Role</span>
             <strong>{approvalStamps.finance?.actorRole ?? ' '}</strong>
+            <span>Signature</span>
+            <strong aria-label="Finance verification signature"> </strong>
             <span>Date</span>
             <strong>
               {approvalStamps.finance
@@ -243,6 +248,8 @@ export function FormPrintView({
             <strong>{approvalStamps.approval?.actorName ?? ' '}</strong>
             <span>Role</span>
             <strong>{approvalStamps.approval?.actorRole ?? ' '}</strong>
+            <span>Signature</span>
+            <strong aria-label="Approval signature"> </strong>
             <span>Date</span>
             <strong>
               {approvalStamps.approval
