@@ -13,6 +13,7 @@ import {
   Upload,
   Undo2,
   Redo2,
+  Plus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -451,13 +452,17 @@ export function FormBuilderPage() {
     else delete nextFieldPermissions[fieldKey];
     updateStage(stageIndex, { fieldPermissions: nextFieldPermissions });
   };
-  const addField = (type: FieldType) => {
+  const addField = (type: FieldType, targetSectionId?: string) => {
+    let sectionId = targetSectionId;
+    if (!sectionId) {
+      sectionId = selectedField ? selectedField.section : definition.sections[0]?.id;
+    }
     const field: FormField = {
       id: `field-${Date.now()}`,
       key: `new_field_${fields.length + 1}`,
       type,
       label: `New ${type} field`,
-      section: 'trip-details',
+      section: sectionId || 'trip-details',
       required: false,
       ...(type === 'select' ? { options: [{ value: 'option_1', label: 'Option 1' }] } : {}),
       ...(type === 'repeater'
@@ -469,7 +474,7 @@ export function FormBuilderPage() {
                 key: 'item',
                 type: 'text' as const,
                 label: 'Item',
-                section: 'trip-details',
+                section: sectionId || 'trip-details',
               },
             ],
           }
@@ -488,27 +493,68 @@ export function FormBuilderPage() {
     setDefinition((current) => ({
       ...current,
       sections: current.sections.map((section) =>
-        section.id === 'trip-details'
-          ? { ...section, fields: [...section.fields, field] }
-          : section,
+        section.id === sectionId ? { ...section, fields: [...section.fields, field] } : section,
       ),
     }));
     setSelectedId(field.id);
   };
-  const moveField = (targetId: string) => {
+  const moveField = (targetId: string, toSectionId?: string) => {
     if (!draggedId || draggedId === targetId) return;
-    setDefinition((current) => ({
-      ...current,
-      sections: current.sections.map((section) => {
-        const from = section.fields.findIndex((field) => field.id === draggedId);
-        const to = section.fields.findIndex((field) => field.id === targetId);
-        if (from < 0 || to < 0) return section;
-        const next = [...section.fields];
-        const [moved] = next.splice(from, 1);
-        next.splice(to, 0, moved);
-        return { ...section, fields: next };
-      }),
-    }));
+    setDefinition((current) => {
+      let sourceSectionIndex = -1;
+      let sourceFieldIndex = -1;
+      let targetSectionIndex = -1;
+      let targetFieldIndex = -1;
+
+      current.sections.forEach((s, sIdx) => {
+        const fIdx = s.fields.findIndex((f) => f.id === draggedId);
+        if (fIdx >= 0) {
+          sourceSectionIndex = sIdx;
+          sourceFieldIndex = fIdx;
+        }
+        if (toSectionId) {
+          if (s.id === toSectionId) {
+            targetSectionIndex = sIdx;
+          }
+        } else {
+          const tIdx = s.fields.findIndex((f) => f.id === targetId);
+          if (tIdx >= 0) {
+            targetSectionIndex = sIdx;
+            targetFieldIndex = tIdx;
+          }
+        }
+      });
+
+      if (sourceSectionIndex < 0 || targetSectionIndex < 0) return current;
+
+      const newSections = [...current.sections];
+      const sourceSection = { ...newSections[sourceSectionIndex] };
+      sourceSection.fields = [...sourceSection.fields];
+
+      const [movedField] = sourceSection.fields.splice(sourceFieldIndex, 1);
+      movedField.section = newSections[targetSectionIndex].id;
+
+      if (sourceSectionIndex === targetSectionIndex) {
+        if (toSectionId && targetFieldIndex === -1) {
+          sourceSection.fields.push(movedField);
+        } else {
+          sourceSection.fields.splice(targetFieldIndex, 0, movedField);
+        }
+        newSections[sourceSectionIndex] = sourceSection;
+      } else {
+        const targetSection = { ...newSections[targetSectionIndex] };
+        targetSection.fields = [...targetSection.fields];
+        if (toSectionId && targetFieldIndex === -1) {
+          targetSection.fields.push(movedField);
+        } else {
+          targetSection.fields.splice(targetFieldIndex, 0, movedField);
+        }
+        newSections[sourceSectionIndex] = sourceSection;
+        newSections[targetSectionIndex] = targetSection;
+      }
+
+      return { ...current, sections: newSections };
+    });
     setDraggedId(null);
   };
   const moveFieldByOffset = (fieldId: string, offset: -1 | 1) =>
@@ -516,6 +562,62 @@ export function FormBuilderPage() {
       ...current,
       sections: moveFieldWithinSections(current.sections, fieldId, offset),
     }));
+
+  const addSection = () => {
+    const newSectionId = `section-${Date.now()}`;
+    setDefinition((current) => ({
+      ...current,
+      sections: [
+        ...current.sections,
+        {
+          id: newSectionId,
+          title: 'New Section',
+          fields: [],
+        },
+      ],
+    }));
+  };
+
+  const updateSection = (id: string, updates: Partial<{ title: string; description: string }>) => {
+    setDefinition((current) => ({
+      ...current,
+      sections: current.sections.map((section) =>
+        section.id === id ? { ...section, ...updates } : section,
+      ),
+    }));
+  };
+
+  const removeSection = (id: string) => {
+    setDefinition((current) => ({
+      ...current,
+      sections: current.sections.filter((section) => section.id !== id),
+    }));
+  };
+
+  const moveSectionByOffset = (sectionId: string, offset: -1 | 1) => {
+    setDefinition((current) => {
+      const idx = current.sections.findIndex((s) => s.id === sectionId);
+      if (idx < 0 || idx + offset < 0 || idx + offset >= current.sections.length) return current;
+      const next = [...current.sections];
+      const [moved] = next.splice(idx, 1);
+      next.splice(idx + offset, 0, moved);
+      return { ...current, sections: next };
+    });
+  };
+
+  const handleDragOverScroll = (e: React.DragEvent) => {
+    e.preventDefault();
+    const buffer = 80;
+    const maxScrollSpeed = 20;
+    const y = e.clientY;
+    const height = window.innerHeight;
+
+    if (y < buffer) {
+      window.scrollBy(0, -maxScrollSpeed);
+    } else if (height - y < buffer) {
+      window.scrollBy(0, maxScrollSpeed);
+    }
+  };
   const exportJson = () => {
     const url = URL.createObjectURL(
       new Blob([JSON.stringify(definition, null, 2)], { type: 'application/json' }),
@@ -755,6 +857,10 @@ export function FormBuilderPage() {
                 key={item.type}
                 variant="outline"
                 className="w-full justify-start"
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('field-type', item.type);
+                }}
                 onClick={() => addField(item.type)}
               >
                 <Copy className="mr-2 h-4 w-4" />
@@ -764,68 +870,160 @@ export function FormBuilderPage() {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-base">Canvas</CardTitle>
+            <Button variant="outline" size="sm" onClick={addSection}>
+              Add Section
+            </Button>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {definition.sections.map((section) => (
-              <div key={section.id} className="space-y-2">
-                <div>
-                  <h3 className="font-semibold">{section.title}</h3>
-                  {section.description && (
-                    <p className="text-xs text-muted-foreground">{section.description}</p>
-                  )}
-                </div>
-                {section.fields.map((field, fieldIndex) => (
-                  <div
-                    key={field.id}
-                    draggable
-                    onDragStart={() => setDraggedId(field.id)}
-                    onDragOver={(event) => event.preventDefault()}
-                    onDrop={() => moveField(field.id)}
-                    onClick={() => setSelectedId(field.id)}
-                    className={`flex cursor-pointer items-center gap-2 rounded-md border p-3 ${selectedId === field.id ? 'border-primary bg-primary/5' : 'border-border'}`}
-                  >
-                    <GripVertical className="h-4 w-4 text-muted-foreground" />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">{field.label}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {field.key} · {field.type}
-                      </p>
-                    </div>
-                    {field.required && <span className="text-xs text-destructive">Required</span>}
-                    <div className="flex shrink-0 items-center">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        title={`Move ${field.label} up`}
-                        aria-label={`Move ${field.label} up`}
-                        disabled={fieldIndex === 0}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          moveFieldByOffset(field.id, -1);
-                        }}
-                      >
-                        <ChevronUp className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        title={`Move ${field.label} down`}
-                        aria-label={`Move ${field.label} down`}
-                        disabled={fieldIndex === section.fields.length - 1}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          moveFieldByOffset(field.id, 1);
-                        }}
-                      >
-                        <ChevronDown className="h-4 w-4" />
-                      </Button>
-                    </div>
+          <CardContent className="space-y-6">
+            {definition.sections.map((section, sectionIndex) => (
+              <div
+                key={section.id}
+                className="space-y-3 rounded-lg border border-border p-4 bg-muted/10 transition-colors hover:border-primary/50"
+                onDragOver={(e) => {
+                  handleDragOverScroll(e);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const type = e.dataTransfer.getData('field-type') as FieldType;
+                  if (type) {
+                    addField(type, section.id);
+                  } else if (draggedId) {
+                    moveField(draggedId, section.id);
+                  }
+                }}
+              >
+                <div className="flex items-start justify-between gap-2 group">
+                  <div className="flex-1 space-y-1">
+                    <Input
+                      value={section.title}
+                      onChange={(e) => updateSection(section.id, { title: e.target.value })}
+                      className="font-semibold bg-transparent border-transparent hover:border-input focus-visible:border-input text-base h-8 px-2 -ml-2"
+                    />
+                    <Input
+                      value={section.description ?? ''}
+                      onChange={(e) => updateSection(section.id, { description: e.target.value })}
+                      placeholder="Add a description..."
+                      className="text-xs text-muted-foreground bg-transparent border-transparent hover:border-input focus-visible:border-input h-6 px-2 -ml-2"
+                    />
                   </div>
-                ))}
+                  <div className="flex shrink-0 items-center opacity-0 group-hover:opacity-100 transition-opacity gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      disabled={sectionIndex === 0}
+                      onClick={() => moveSectionByOffset(section.id, -1)}
+                      title="Move section up"
+                    >
+                      <ChevronUp className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      disabled={sectionIndex === definition.sections.length - 1}
+                      onClick={() => moveSectionByOffset(section.id, 1)}
+                      title="Move section down"
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeSection(section.id)}
+                      title="Remove section"
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-2 min-h-8">
+                  {section.fields.map((field, fieldIndex) => (
+                    <div
+                      key={field.id}
+                      draggable
+                      onDragStart={(e) => {
+                        e.stopPropagation();
+                        setDraggedId(field.id);
+                      }}
+                      onDragOver={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const type = e.dataTransfer.getData('field-type') as FieldType;
+                        if (type) {
+                          // We could insert before/after based on position, but for now add to section
+                          addField(type, section.id);
+                        } else {
+                          moveField(field.id);
+                        }
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedId(field.id);
+                      }}
+                      className={`flex cursor-pointer items-center gap-2 rounded-md border p-3 bg-card ${selectedId === field.id ? 'border-primary bg-primary/5 shadow-sm' : 'border-border'}`}
+                    >
+                      <GripVertical className="h-4 w-4 text-muted-foreground" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">{field.label}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {field.key} · {field.type}
+                        </p>
+                      </div>
+                      {field.required && <span className="text-xs text-destructive">Required</span>}
+                      <div className="flex shrink-0 items-center">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          title={`Move ${field.label} up`}
+                          aria-label={`Move ${field.label} up`}
+                          disabled={fieldIndex === 0}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            moveFieldByOffset(field.id, -1);
+                          }}
+                        >
+                          <ChevronUp className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          title={`Move ${field.label} down`}
+                          aria-label={`Move ${field.label} down`}
+                          disabled={fieldIndex === section.fields.length - 1}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            moveFieldByOffset(field.id, 1);
+                          }}
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  {section.fields.length === 0 && (
+                    <div className="flex items-center justify-center rounded-md border border-dashed border-border py-6 text-sm text-muted-foreground bg-muted/5">
+                      Drag fields here
+                    </div>
+                  )}
+                  <div className="pt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full border-dashed"
+                      onClick={() => addField('text', section.id)}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Field
+                    </Button>
+                  </div>
+                </div>
               </div>
             ))}
           </CardContent>
