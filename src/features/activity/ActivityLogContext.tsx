@@ -161,7 +161,7 @@ export function ActivityLogProvider({ children }: { children: React.ReactNode })
   const [logs, setLogs] = useState<ActivityLogEntry[]>([]);
 
   const refreshLogs = useCallback(async () => {
-    if (!currentUser) {
+    if (!currentUser || !['system_admin', 'auditor'].includes(currentUser.role)) {
       setLogs((previous) => previous.filter((log) => log.id.startsWith('local-')));
       return;
     }
@@ -177,7 +177,7 @@ export function ActivityLogProvider({ children }: { children: React.ReactNode })
     } catch {
       return;
     }
-  }, [currentUser?.id]);
+  }, [currentUser?.id, currentUser?.role]);
 
   useEffect(() => {
     void refreshLogs();

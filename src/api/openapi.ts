@@ -4,6 +4,10 @@ import {
   extendZodWithOpenApi,
 } from '@asteasolutions/zod-to-openapi';
 import { z } from 'zod';
+import {
+  createReportFilterSchema,
+  createReportSchemas,
+} from '../../../fleet-backend/src/domain/reporting';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
@@ -18,6 +22,13 @@ import {
 } from '../db/validation';
 
 extendZodWithOpenApi(z);
+const {
+  reportMetaSchema,
+  submissionReportSchema,
+  activityReportSchema,
+  reportEventSchema,
+  reportFormsSchema,
+} = createReportSchemas(z);
 
 export const registry = new OpenAPIRegistry();
 
@@ -95,6 +106,54 @@ registry.register('FormVersionInput', formVersionInputSchema);
 registry.register('FormSubmissionInput', formSubmissionInputSchema);
 registry.register('FormTransitionInput', formTransitionInputSchema);
 registry.register('FormDataPatch', formDataPatchSchema);
+registry.register('ReportMetadata', reportMetaSchema);
+registry.register('SubmissionReport', submissionReportSchema);
+registry.register('ActivityReport', activityReportSchema);
+
+const reportingQuery = createReportFilterSchema(z);
+registerJsonEndpoint({
+  method: 'get',
+  path: '/api/reports/forms',
+  summary: 'List forms with accessible persisted submissions',
+  response: reportFormsSchema,
+});
+registerJsonEndpoint({
+  method: 'get',
+  path: '/api/reports/submissions',
+  summary: 'Paginated privacy-projected submission register with matching totals',
+  query: reportingQuery,
+  response: submissionReportSchema,
+});
+registerJsonEndpoint({
+  method: 'get',
+  path: '/api/reports/activity',
+  summary: 'Administrator/auditor persistent audit history',
+  query: reportingQuery,
+  response: activityReportSchema,
+});
+registerJsonEndpoint({
+  method: 'get',
+  path: '/api/reports/submissions/{id}/events',
+  summary: 'Read-only workflow evidence without comments or payloads',
+  params: z.object({ id: z.string().uuid() }),
+  response: z.array(reportEventSchema),
+});
+for (const kind of ['submissions', 'activity']) {
+  registry.registerPath({
+    method: 'post',
+    path: `/api/reports/${kind}/export`,
+    summary: 'Audited privacy-safe CSV export; maximum 10,000 records',
+    request: { body: { content: { 'application/json': { schema: reportingQuery } } } },
+    responses: {
+      200: {
+        description: 'Filtered CSV with generation context',
+        content: { 'text/csv': { schema: z.string() } },
+      },
+      403: { description: 'Forbidden' },
+      422: { description: 'Narrow filters to export at most 10,000 records' },
+    },
+  });
+}
 
 type ApiMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
 interface JsonEndpoint {

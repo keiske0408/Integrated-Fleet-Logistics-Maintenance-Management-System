@@ -4,6 +4,447 @@
  */
 
 export interface paths {
+  '/api/reports/forms': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List forms with accessible persisted submissions */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description List forms with accessible persisted submissions response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              key: string;
+              name: string;
+            }[];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/reports/submissions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Paginated privacy-projected submission register with matching totals */
+    get: {
+      parameters: {
+        query?: {
+          formKey?: string;
+          from?: string;
+          to?: string;
+          status?:
+            | 'draft'
+            | 'in_review'
+            | 'returned'
+            | 'approved'
+            | 'in_progress'
+            | 'completed'
+            | 'rejected'
+            | 'cancelled';
+          stage?: string;
+          late?: 'true' | 'false';
+          reference?: string;
+          module?: string;
+          action?: string;
+          actorId?: string;
+          actorRole?: string;
+          severity?: 'info' | 'warning' | 'critical' | 'success';
+          page?: number;
+          pageSize?: number;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Paginated privacy-projected submission register with matching totals response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              meta: {
+                generatedAt: string;
+                /** @enum {string} */
+                timezone: 'Asia/Manila';
+                /** @enum {string} */
+                scope: 'own' | 'organization';
+                filters: {
+                  [key: string]: string | number;
+                };
+                total: number;
+                page: number;
+                pageSize: number;
+              };
+              summary: {
+                pending: number;
+                completed: number;
+                returned: number;
+                rejected: number;
+                cancelled: number;
+                late: number;
+              };
+              rows: {
+                id: string;
+                submissionNumber: string;
+                formKey: string;
+                formName: string;
+                version: number;
+                status: string;
+                stage: string;
+                isLate: boolean;
+                createdAt: string;
+                updatedAt: string;
+                currentAssignee: {
+                  name: string;
+                  role: string;
+                } | null;
+                currentResponsibleRoles: string[];
+                data: {
+                  [key: string]: unknown;
+                };
+                labels: {
+                  [key: string]: string;
+                };
+              }[];
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/reports/activity': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Administrator/auditor persistent audit history */
+    get: {
+      parameters: {
+        query?: {
+          formKey?: string;
+          from?: string;
+          to?: string;
+          status?:
+            | 'draft'
+            | 'in_review'
+            | 'returned'
+            | 'approved'
+            | 'in_progress'
+            | 'completed'
+            | 'rejected'
+            | 'cancelled';
+          stage?: string;
+          late?: 'true' | 'false';
+          reference?: string;
+          module?: string;
+          action?: string;
+          actorId?: string;
+          actorRole?: string;
+          severity?: 'info' | 'warning' | 'critical' | 'success';
+          page?: number;
+          pageSize?: number;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Administrator/auditor persistent audit history response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              meta: {
+                generatedAt: string;
+                /** @enum {string} */
+                timezone: 'Asia/Manila';
+                /** @enum {string} */
+                scope: 'own' | 'organization';
+                filters: {
+                  [key: string]: string | number;
+                };
+                total: number;
+                page: number;
+                pageSize: number;
+              };
+              rows: {
+                id: string;
+                createdAt: string;
+                userName: string;
+                userRole: string;
+                action: string;
+                module: string;
+                severity: string;
+                actorId: string | null;
+                recordId: string | null;
+                submissionId: string | null;
+              }[];
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/reports/submissions/{id}/events': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read-only workflow evidence without comments or payloads */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Read-only workflow evidence without comments or payloads response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              id: string;
+              submissionId: string;
+              fromStage: string | null;
+              toStage: string;
+              action: string;
+              actorName: string;
+              actorRole: string;
+              createdAt: string;
+            }[];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/reports/submissions/export': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Audited privacy-safe CSV export; maximum 10,000 records */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': {
+            /** @default tsrf */
+            formKey?: string;
+            from?: string;
+            to?: string;
+            /** @enum {string} */
+            status?:
+              | 'draft'
+              | 'in_review'
+              | 'returned'
+              | 'approved'
+              | 'in_progress'
+              | 'completed'
+              | 'rejected'
+              | 'cancelled';
+            stage?: string;
+            /** @enum {string} */
+            late?: 'true' | 'false';
+            reference?: string;
+            module?: string;
+            action?: string;
+            actorId?: string;
+            actorRole?: string;
+            /** @enum {string} */
+            severity?: 'info' | 'warning' | 'critical' | 'success';
+            /** @default 1 */
+            page?: number;
+            /** @default 25 */
+            pageSize?: number;
+          };
+        };
+      };
+      responses: {
+        /** @description Filtered CSV with generation context */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'text/csv': string;
+          };
+        };
+        /** @description Forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Narrow filters to export at most 10,000 records */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/reports/activity/export': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Audited privacy-safe CSV export; maximum 10,000 records */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': {
+            /** @default tsrf */
+            formKey?: string;
+            from?: string;
+            to?: string;
+            /** @enum {string} */
+            status?:
+              | 'draft'
+              | 'in_review'
+              | 'returned'
+              | 'approved'
+              | 'in_progress'
+              | 'completed'
+              | 'rejected'
+              | 'cancelled';
+            stage?: string;
+            /** @enum {string} */
+            late?: 'true' | 'false';
+            reference?: string;
+            module?: string;
+            action?: string;
+            actorId?: string;
+            actorRole?: string;
+            /** @enum {string} */
+            severity?: 'info' | 'warning' | 'critical' | 'success';
+            /** @default 1 */
+            page?: number;
+            /** @default 25 */
+            pageSize?: number;
+          };
+        };
+      };
+      responses: {
+        /** @description Filtered CSV with generation context */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'text/csv': string;
+          };
+        };
+        /** @description Forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Narrow filters to export at most 10,000 records */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/roles': {
     parameters: {
       query?: never;
@@ -1847,6 +2288,92 @@ export interface components {
       data: {
         [key: string]: unknown;
       };
+    };
+    ReportMetadata: {
+      generatedAt: string;
+      /** @enum {string} */
+      timezone: 'Asia/Manila';
+      /** @enum {string} */
+      scope: 'own' | 'organization';
+      filters: {
+        [key: string]: string | number;
+      };
+      total: number;
+      page: number;
+      pageSize: number;
+    };
+    SubmissionReport: {
+      meta: {
+        generatedAt: string;
+        /** @enum {string} */
+        timezone: 'Asia/Manila';
+        /** @enum {string} */
+        scope: 'own' | 'organization';
+        filters: {
+          [key: string]: string | number;
+        };
+        total: number;
+        page: number;
+        pageSize: number;
+      };
+      summary: {
+        pending: number;
+        completed: number;
+        returned: number;
+        rejected: number;
+        cancelled: number;
+        late: number;
+      };
+      rows: {
+        id: string;
+        submissionNumber: string;
+        formKey: string;
+        formName: string;
+        version: number;
+        status: string;
+        stage: string;
+        isLate: boolean;
+        createdAt: string;
+        updatedAt: string;
+        currentAssignee: {
+          name: string;
+          role: string;
+        } | null;
+        currentResponsibleRoles: string[];
+        data: {
+          [key: string]: unknown;
+        };
+        labels: {
+          [key: string]: string;
+        };
+      }[];
+    };
+    ActivityReport: {
+      meta: {
+        generatedAt: string;
+        /** @enum {string} */
+        timezone: 'Asia/Manila';
+        /** @enum {string} */
+        scope: 'own' | 'organization';
+        filters: {
+          [key: string]: string | number;
+        };
+        total: number;
+        page: number;
+        pageSize: number;
+      };
+      rows: {
+        id: string;
+        createdAt: string;
+        userName: string;
+        userRole: string;
+        action: string;
+        module: string;
+        severity: string;
+        actorId: string | null;
+        recordId: string | null;
+        submissionId: string | null;
+      }[];
     };
   };
   responses: never;

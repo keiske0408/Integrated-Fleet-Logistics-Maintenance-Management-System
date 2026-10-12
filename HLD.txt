@@ -126,7 +126,7 @@ By consolidating dispatch requests, mileage tracking, maintenance validation, an
 
 ## 7. Strategic Implementation Roadmap
 
-This roadmap replaces the week-based proposal below as the active plan for the dynamic TSRF form, LOV, authentication, and rollout work. Documentation status was reconciled against the repository notes on 2026-10-12; this is not a fresh test run or production verification. Existing capabilities are identified so implementation extends them rather than rebuilding them. Complete one phase at a time and verify its exit criteria before beginning the next phase.
+This roadmap replaces the week-based proposal below as the active plan for the dynamic TSRF form, LOV, authentication, reporting, and rollout work. Implementation and reporting verification were refreshed on 2026-10-12; local tests and development-header browser checks do not establish production readiness. Existing capabilities are identified so implementation extends them rather than rebuilding them. Complete one phase at a time and verify its exit criteria before beginning the next phase.
 
 ### Verified Baseline
 
@@ -177,13 +177,22 @@ This roadmap replaces the week-based proposal below as the active plan for the d
    - **Implementation checks:** representative TSRF requests pass end-to-end API/UI tests; reports exclude PII; vehicle mileage updates follow existing validation rules.
    - **Acceptance gate:** fleet/business owners approve print parity for both entities.
 
-6. **Phase 6: Production Readiness and Controlled Rollout — Not verified**
+6. **Phase 6: Submission Reporting and Audit Evidence — Implemented (2026-10-12); operational acceptance pending**
+   - Reports now provides a server-backed submission register and restricted persistent audit history. Submission rows include reference, pinned form version, submission date, status/stage, cutoff flag, current responsibility, and safe reportable fields with historical lookup labels.
+   - Server-side filters, pagination, and complete matching counts replace capped-list analytics. Counts and rows use one repeatable-read database snapshot. Calendar date filters use Asia/Manila; exported timestamps use UTC ISO format.
+   - Administrators and administrator-assigned read-only auditors can access organization audit history. Other submission readers retain existing organization/owner scope. Auditors cannot approve, edit forms, or read raw submission details; public signup cannot request the auditor role.
+   - Report data intersects the pinned schema's reportable/non-PII metadata with role/stage visibility. Workflow evidence omits comments and payloads; audit reports expose allowlisted identifiers rather than arbitrary metadata. Local UI demo events are not report evidence.
+   - CSV exports apply the same filters and projection, neutralize spreadsheet formulas, record export context, and refuse more than 10,000 records rather than truncate. Export requests use existing authentication, CSRF and write-rate protection.
+   - **Verified checks:** backend build and serial regression suite (49 passed, 1 environment-dependent skip); frontend full suite (58 passed), focused lint and production build. The full frontend typecheck had 16 baseline diagnostics and 17 at final verification, all outside the reporting feature; unrelated working-tree changes were preserved.
+   - **Acceptance gate:** approve the reporting permission matrix and KPI definitions, designate auditors, define retention/access-review procedures, and verify real identities and export controls in staging. Persisted database history is not tamper-evident or a compliance certification.
+
+7. **Phase 7: Production Readiness and Controlled Rollout — Not verified**
    - Configure the production database, HTTPS origins/CORS, session secret, Entra app registrations and role map, SMTP delivery, and Arcjet. Keep development identity headers and demo accounts disabled.
    - Run the secure one-time first-admin bootstrap; verify admin sign-in and account recovery without exposing bootstrap credentials or reset tokens.
    - Exercise signup/approval, local and Entra login, logout/CSRF, password reset, role denial, owner scoping, audit logging, and protected write limits in staging. Verify database migration, backup/restore, and operational alert/retention procedures before live use.
    - **Exit checks:** staging smoke/UAT results are recorded; production secrets and identity settings are validated; backup restore and rollback are rehearsed; no development-only authentication path is enabled.
 
-7. **Phase 7: Dynamic Server-Backed Role Policies — Deferred; decision required**
+8. **Phase 8: Dynamic Server-Backed Role Policies — Deferred; decision required**
    - Confirm whether role and permission changes must be configurable by administrators at runtime. Until approved, retain fixed CASL authorization and the read-only role catalog; catalog edits must not imply access grants.
    - If approved, define the supported permission vocabulary and role-to-policy mapping, migrate/seed mappings, make policy evaluation server-authoritative, and add deny-by-default tests for every protected API family before enabling role writes in the UI.
    - **Exit checks:** API authorization uses persisted policy mappings; unsupported permissions and privilege escalation are rejected; policy changes are audited; tests prove both grants and denials; generated OpenAPI/types are current.
@@ -191,9 +200,10 @@ This roadmap replaces the week-based proposal below as the active plan for the d
 ### Recommended Next Steps
 
 1. **Close paper-form parity first.** Obtain the approved GVE and HULMA samples, create a field-by-field/signature checklist, adjust the versioned definition and print layout, then get fleet/business sign-off. This is the remaining user-facing acceptance item in the current TSRF delivery.
-2. **Run production-readiness work in parallel with that review.** Provision staging integrations and secrets, bootstrap the first administrator securely, and verify Entra, SMTP, Arcjet, CSRF, backups, and audit operations. Do not enable live use until Phase 6 exit checks pass.
-3. **Make the RBAC decision before building it.** If runtime permission administration is not a business requirement, keep fixed CASL and close the phase as intentionally deferred. If it is required, implement Phase 7 as a server-side authorization change; do not treat the UI role matrix or catalog as enforcement.
-4. **Complete end-to-end UAT and controlled rollout.** Test requestor, department approver, finance, fleet, procurement, and administrator paths using representative trip/maintenance scenarios; record defects and acceptance, then roll out with monitoring and a rollback plan.
+2. **Accept reporting and audit operations.** Review Phase 6 using representative submissions, verify KPI/filter/export results, assign auditors through administrator-managed accounts, and approve retention and access-review policy. Maintenance/procurement analytics and legacy TSRF aggregation remain separate follow-up scope.
+3. **Run production-readiness work in parallel with paper review.** Provision staging integrations and secrets, bootstrap the first administrator securely, and verify Entra, SMTP, Arcjet, CSRF, backups, and audit operations. Do not enable live use until Phase 7 exit checks pass.
+4. **Make the RBAC decision before building it.** If runtime permission administration is not a business requirement, keep fixed CASL and close the phase as intentionally deferred. If it is required, implement Phase 8 as a server-side authorization change; do not treat the UI role matrix or catalog as enforcement.
+5. **Complete end-to-end UAT and controlled rollout.** Test requestor, department approver, finance, fleet, procurement, auditor, and administrator paths using representative trip/maintenance scenarios; record defects and acceptance, then roll out with monitoring and a rollback plan.
 
 **Immediate implementation order:** paper sample/parity review → staging integration and security verification → role-policy decision → UAT and controlled rollout. Production configuration and security verification are release blockers, even if they proceed alongside print work.
 

@@ -101,19 +101,22 @@ When adding a new capability (e.g. `reports` or `gps-tracking`):
 3. Export public components via an `index.ts` barrel file.
 4. Mount the navigation item in `src/components/layout/SidebarLayout.tsx` with its required permission.
 
-### 3. Dynamic RBAC Integration
+### 3. Server-Authoritative Permissions
 
-- All permissions are typed via `Permission` (e.g., `'fleet:view'`, `'fleet:create'`, `'maintenance:manage'`, `'theme:edit'`).
+- Frontend page permissions (e.g., `view:reports`, `view:audit`, `create:vehicle`) are navigation controls, not authorization grants. Fixed backend CASL policies are authoritative; the role catalog is read-only until dynamic server policy enforcement is separately implemented.
+- Administrators assign the fixed `auditor` role. It has read-only reporting/audit access, no workflow mutations or raw submission detail access. Finance/approver `read all` grants explicitly exclude global audit history.
 - Check access in components with `hasPermission(perm)` from `useAuth()`:
 
 ```tsx
 const { hasPermission } = useAuth();
 {
-  hasPermission('fleet:create') && <Button onClick={handleCreate}>Add Vehicle</Button>;
+  hasPermission('create:vehicle') && <Button onClick={handleCreate}>Add Vehicle</Button>;
 }
 ```
 
 ### 4. Live Activity Logging
+
+`addLog` below creates a local UI event, not persisted audit evidence. Successful backend mutations use audit middleware/dedicated helpers; versioned workflows retain per-submission events. Reports reads persisted data directly and never merges local events. Form Builder operations already have semantic backend audit records.
 
 When any domain action occurs (vehicle registration, mileage update, role edit, PR approval):
 
@@ -133,3 +136,10 @@ addLog({
 - Switching between Light Mode and Dark Mode is managed reactively via `ThemeContext`.
 - Switching mode in the Theme Editor (`handleModeChange`) switches the active mode in `ThemeContext` and updates `document.documentElement.classList`, giving instant real-time preview across the app.
 - Custom HSL variables and selected fonts are persisted in `localStorage` and automatically injected on application startup.
+
+### 6. Reporting Ownership
+
+- `src/features/reports/ReportsPage.tsx` owns the report workspace; `src/App.tsx` lazy-loads it. The submission register and organization audit tab use generated API types and the shared authenticated `apiFetch` client.
+- Backend `src/routes/reports.routes.ts` owns query filters, owner/organization scope, snapshot-consistent counts, bounded pagination, safe workflow evidence and audited CSV exports. Existing form visibility/responsibility functions are reused; pinned reportable/non-PII projection applies before rendering or exporting.
+- Reporting response shapes are defined in backend `src/domain/reporting.ts`. OpenAPI generation builds those schemas using the frontend Zod instance, then generates client types. Both project directories are required for `npm run api:spec`; response DTOs are not duplicated manually.
+- See [report definitions and audit boundaries](docs/PHASE_1_IMPLEMENTATION_AND_DEMO.md) for scope, permissions, timestamp semantics, KPIs, limitations and operational acceptance.

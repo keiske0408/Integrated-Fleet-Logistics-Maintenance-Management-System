@@ -88,7 +88,7 @@ const SETTINGS_ITEMS: NavItem[] = [
     icon: Database,
     permission: 'view:maintenance_ref',
   },
-  { id: 'history', label: 'Activity History', icon: History, permission: 'view:dashboard' },
+  { id: 'history', label: 'Activity History', icon: History, permission: 'view:audit' },
   { id: 'theme_editor', label: 'Theme Editor', icon: Paintbrush, permission: 'view:dashboard' },
   { id: 'form_builder', label: 'Form Builder', icon: Copy, permission: 'manage:reference_data' },
 ];

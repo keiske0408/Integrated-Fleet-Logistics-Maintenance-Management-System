@@ -18,6 +18,9 @@ const DashboardOverview = React.lazy(() =>
     default: m.DashboardOverview || m.default,
   })),
 );
+const ReportsPage = React.lazy(() =>
+  import('@/features/reports/ReportsPage').then((module) => ({ default: module.ReportsPage })),
+);
 const UserManagementPage = React.lazy(() =>
   import('@/features/auth/UserManagementPage').then((m) => ({
     default: m.UserManagementPage || m.default,
@@ -231,25 +234,6 @@ const TsrfPage = React.memo(function TsrfPage({
 });
 
 // ─── Reports Page ─────────────────────────────────────────────────────────────
-
-const ReportsPage = React.memo(function ReportsPage() {
-  return (
-    <div className="space-y-4 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Reports</h1>
-        <p className="text-muted-foreground text-sm mt-0.5">
-          Fleet analytics and reports — coming soon.
-        </p>
-      </div>
-      <div className="bg-card border border-border rounded-xl p-12 text-center">
-        <p className="text-4xl mb-3">📊</p>
-        <p className="text-muted-foreground text-sm">
-          Advanced reporting module coming in the next phase.
-        </p>
-      </div>
-    </div>
-  );
-});
 
 // ─── Inner App ────────────────────────────────────────────────────────────────
 
@@ -615,7 +599,15 @@ function InnerApp() {
         {/* Layout route — SidebarLayout wraps all child routes via <Outlet> */}
         <Route element={<SidebarLayout notifications={notifications} />}>
           {/* Default redirect */}
-          <Route index element={<Navigate to={PAGE_ROUTES.dashboard} replace />} />
+          <Route
+            index
+            element={
+              <Navigate
+                to={currentUser?.role === 'auditor' ? PAGE_ROUTES.reports : PAGE_ROUTES.dashboard}
+                replace
+              />
+            }
+          />
 
           {/* Dashboard */}
           <Route
@@ -712,7 +704,14 @@ function InnerApp() {
           />
 
           {/* Activity History */}
-          <Route path={PAGE_ROUTES.history} element={<ActivityLogPage />} />
+          <Route
+            path={PAGE_ROUTES.history}
+            element={
+              <ProtectedRoute permission="view:audit">
+                <ActivityLogPage />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Theme Editor */}
           <Route path={PAGE_ROUTES.theme_editor} element={<ThemeEditorPage />} />
@@ -754,7 +753,15 @@ function InnerApp() {
           />
 
           {/* Catch-all → redirect to dashboard */}
-          <Route path="*" element={<Navigate to={PAGE_ROUTES.dashboard} replace />} />
+          <Route
+            path="*"
+            element={
+              <Navigate
+                to={currentUser?.role === 'auditor' ? PAGE_ROUTES.reports : PAGE_ROUTES.dashboard}
+                replace
+              />
+            }
+          />
         </Route>
       </Routes>
     </Suspense>
