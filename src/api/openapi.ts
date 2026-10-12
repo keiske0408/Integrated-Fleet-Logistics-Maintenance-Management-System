@@ -4,6 +4,8 @@ import {
   extendZodWithOpenApi,
 } from '@asteasolutions/zod-to-openapi';
 import { z } from 'zod';
+import { createRoleRedirectSchemas } from '../../../fleet-backend/src/domain/role-navigation';
+import { createAdminPasswordSchema } from '../../../fleet-backend/src/domain/admin-account';
 import {
   createReportFilterSchema,
   createReportSchemas,
@@ -22,6 +24,7 @@ import {
 } from '../db/validation';
 
 extendZodWithOpenApi(z);
+const roleRedirectSchemas = createRoleRedirectSchemas(z);
 const {
   reportMetaSchema,
   submissionReportSchema,
@@ -106,6 +109,40 @@ registry.register('FormVersionInput', formVersionInputSchema);
 registry.register('FormSubmissionInput', formSubmissionInputSchema);
 registry.register('FormTransitionInput', formTransitionInputSchema);
 registry.register('FormDataPatch', formDataPatchSchema);
+registerJsonEndpoint({
+  method: 'get',
+  path: '/api/roles/login-redirects',
+  summary: 'Admin role landing-page configuration and permitted options',
+  response: roleRedirectSchemas.settings,
+});
+registerJsonEndpoint({
+  method: 'get',
+  path: '/api/roles/login-redirects/me',
+  summary: 'Resolve current authenticated role landing page',
+  response: roleRedirectSchemas.current,
+});
+registerJsonEndpoint({
+  method: 'patch',
+  path: '/api/roles/login-redirects/{role}',
+  summary: 'Admin-only permitted internal role landing-page update',
+  params: z.object({ role: z.string() }),
+  body: roleRedirectSchemas.input,
+  response: roleRedirectSchemas.current,
+});
+registry.registerPath({
+  method: 'post',
+  path: '/api/auth/local/password',
+  summary:
+    'Admin-only password change for existing Fleet-local credentials; revokes sessions and reset links',
+  request: { body: { content: { 'application/json': { schema: createAdminPasswordSchema(z) } } } },
+  responses: {
+    204: { description: 'Password updated' },
+    400: { description: 'Invalid password input' },
+    403: { description: 'Admin permission or CSRF denied' },
+    404: { description: 'Active user not found' },
+    409: { description: 'No existing Fleet-local credential' },
+  },
+});
 registry.register('ReportMetadata', reportMetaSchema);
 registry.register('SubmissionReport', submissionReportSchema);
 registry.register('ActivityReport', activityReportSchema);

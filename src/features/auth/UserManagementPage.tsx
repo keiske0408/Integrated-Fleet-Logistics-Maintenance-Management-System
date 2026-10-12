@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import type { paths } from '@/api/generated-types';
 import { useAuth, type User } from './AuthContext';
 import { useRoles } from '@/features/roles/RolesContext';
 import { Button } from '@/components/ui/button';
@@ -19,7 +21,17 @@ import { useToast } from '@/components/ui/toast';
 import { Dialog } from '@/components/ui/dialog';
 import { Pagination } from '@/components/ui/pagination';
 import { apiFetch } from '@/lib/api';
-import { UserPlus, Pencil, Trash2, X, Check, ShieldCheck, ShieldOff, Search } from 'lucide-react';
+import {
+  UserPlus,
+  Pencil,
+  Trash2,
+  X,
+  Check,
+  ShieldCheck,
+  ShieldOff,
+  Search,
+  KeyRound,
+} from 'lucide-react';
 import { SignupApprovalQueue } from './SignupApprovalQueue';
 import { FLEET_DEPARTMENTS } from './departments';
 import { toBackendRole } from './backendRole';
@@ -34,6 +46,7 @@ interface BackendUser {
   department: string;
   status: string;
   createdAt: string;
+  hasLocalPassword: boolean;
 }
 
 const FRONTEND_ROLE_ALIASES: Record<string, string> = {
@@ -58,6 +71,7 @@ function toFrontendUser(user: BackendUser): User {
       .slice(0, 2),
     createdAt: user.createdAt.slice(0, 10),
     isActive: user.status === 'active',
+    hasLocalPassword: user.hasLocalPassword,
   };
 }
 
@@ -80,7 +94,7 @@ const EMPTY_FORM: UserFormData = {
 };
 
 export function UserManagementPage() {
-  const { currentUser } = useAuth();
+  const { currentUser, logout } = useAuth();
   const { roles } = useRoles();
   const { success: toastSuccess } = useToast();
   const [users, setUsers] = useState<User[]>([]);
@@ -92,6 +106,51 @@ export function UserManagementPage() {
   const [form, setForm] = useState<UserFormData>(EMPTY_FORM);
   const [search, setSearch] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [passwordUser, setPasswordUser] = useState<User | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [passwordConfirmation, setPasswordConfirmation] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordBusy, setPasswordBusy] = useState(false);
+
+  function closePasswordDialog() {
+    setPasswordUser(null);
+    setNewPassword('');
+    setPasswordConfirmation('');
+    setPasswordError('');
+  }
+
+  async function changePassword(event: React.FormEvent) {
+    event.preventDefault();
+    if (!passwordUser || currentUser?.role !== 'system_admin' || passwordBusy) return;
+    if (newPassword !== passwordConfirmation) {
+      setPasswordError('Passwords do not match.');
+      return;
+    }
+    setPasswordBusy(true);
+    setPasswordError('');
+    try {
+      const body: NonNullable<
+        paths['/api/auth/local/password']['post']['requestBody']
+      >['content']['application/json'] = { userId: passwordUser.id, password: newPassword };
+      const response = await apiFetch('/api/auth/local/password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error ?? 'Unable to change password.');
+      }
+      toastSuccess(`Local password updated for ${passwordUser.name}.`);
+      const changedSelf = passwordUser.id === currentUser.id;
+      closePasswordDialog();
+      if (changedSelf) logout();
+    } catch (cause) {
+      setPasswordError(cause instanceof Error ? cause.message : 'Unable to change password.');
+    } finally {
+      setPasswordBusy(false);
+    }
+  }
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -394,6 +453,25 @@ export function UserManagementPage() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
+                      {currentUser?.role === 'system_admin' && (
+                        <button
+                          type="button"
+                          aria-label={`Change local password for ${user.name}`}
+                          title={
+                            user.hasLocalPassword
+                              ? 'Change Fleet-local password'
+                              : 'No Fleet-local password; Microsoft or unprovisioned account'
+                          }
+                          disabled={!user.isActive || !user.hasLocalPassword}
+                          onClick={() => {
+                            closePasswordDialog();
+                            setPasswordUser(user);
+                          }}
+                          className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          <KeyRound className="h-4 w-4" />
+                        </button>
+                      )}
                       <button
                         title={user.isActive ? 'Deactivate' : 'Activate'}
                         onClick={() => toggleActive(user)}
@@ -461,6 +539,78 @@ export function UserManagementPage() {
           </div>
         </>
       )}
+
+      {passwordUser &&
+        currentUser?.role === 'system_admin' &&
+        createPortal(
+          <Dialog
+            open
+            onClose={() => {
+              if (!passwordBusy) closePasswordDialog();
+            }}
+            closeOnBackdropClick={!passwordBusy}
+            closeOnEscape={!passwordBusy}
+            showCloseButton={!passwordBusy}
+            className="max-w-md"
+          >
+            <h2 className="text-lg font-semibold mb-1">Change Local Password</h2>
+            <p className="text-sm text-muted-foreground mb-4">{passwordUser.name}</p>
+            <form
+              aria-label="Change local password"
+              onSubmit={(event) => void changePassword(event)}
+              className="space-y-4"
+            >
+              <div>
+                <Label htmlFor="admin-new-password">New Password</Label>
+                <Input
+                  id="admin-new-password"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  minLength={12}
+                  maxLength={256}
+                  disabled={passwordBusy}
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="admin-confirm-password">Confirm Password</Label>
+                <Input
+                  id="admin-confirm-password"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  minLength={12}
+                  maxLength={256}
+                  disabled={passwordBusy}
+                  value={passwordConfirmation}
+                  onChange={(event) => setPasswordConfirmation(event.target.value)}
+                />
+              </div>
+              {passwordError && (
+                <p role="alert" className="text-sm text-destructive">
+                  {passwordError}
+                </p>
+              )}
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={passwordBusy}
+                  onClick={closePasswordDialog}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={passwordBusy}>
+                  <KeyRound className="h-4 w-4 mr-2" />
+                  {passwordBusy ? 'Updating...' : 'Update Password'}
+                </Button>
+              </div>
+            </form>
+          </Dialog>,
+          document.body,
+        )}
 
       {/* Form Modal */}
       <Dialog

@@ -5,7 +5,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const principal = vi.hoisted(() => ({ role: 'system_admin', id: 'report-test' }));
 vi.mock('@/features/auth', () => ({ useAuth: () => ({ currentUser: principal }) }));
 vi.mock('@/lib/api', () => ({ apiFetch: vi.fn() }));
-import { ReportsPage, reportQuery } from '../src/features/reports/ReportsPage';
+import {
+  ReportsPage,
+  SearchableFormSelect,
+  reportQuery,
+} from '../src/features/reports/ReportsPage';
 import { DEFAULT_ROLES } from '../src/features/roles/RolesContext';
 
 describe('Reporting workspace', () => {
@@ -25,6 +29,19 @@ describe('Reporting workspace', () => {
     expect(query.get('page')).toBe('3');
     expect(query.get('pageSize')).toBe('25');
     expect(query.has('action')).toBe(false);
+  });
+
+  it('renders SearchableFormSelect with combobox and accessible options', () => {
+    const mockForms = [
+      { key: 'tsrf', name: 'Transportation Service Request Form' },
+      { key: 'maintenance_check', name: 'Fleet Maintenance Checklist' },
+    ];
+    const html = renderToStaticMarkup(
+      <SearchableFormSelect forms={mockForms} value="tsrf" onChange={() => {}} />,
+    );
+    expect(html).toContain('role="combobox"');
+    expect(html).toContain('Transportation Service Request Form');
+    expect(html).toContain('Fleet Maintenance Checklist');
   });
 
   it.each(['system_admin', 'auditor'])('shows audit reporting to %s', (role) => {

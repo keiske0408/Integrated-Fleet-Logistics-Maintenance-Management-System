@@ -603,7 +603,10 @@ function InnerApp() {
             index
             element={
               <Navigate
-                to={currentUser?.role === 'auditor' ? PAGE_ROUTES.reports : PAGE_ROUTES.dashboard}
+                to={
+                  currentUser?.landingPage ??
+                  (currentUser?.role === 'auditor' ? PAGE_ROUTES.reports : PAGE_ROUTES.dashboard)
+                }
                 replace
               />
             }
@@ -757,7 +760,10 @@ function InnerApp() {
             path="*"
             element={
               <Navigate
-                to={currentUser?.role === 'auditor' ? PAGE_ROUTES.reports : PAGE_ROUTES.dashboard}
+                to={
+                  currentUser?.landingPage ??
+                  (currentUser?.role === 'auditor' ? PAGE_ROUTES.reports : PAGE_ROUTES.dashboard)
+                }
                 replace
               />
             }

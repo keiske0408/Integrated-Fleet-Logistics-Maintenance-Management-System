@@ -876,6 +876,9 @@
                 "version": {
                   "type": "number"
                 },
+                "versionName": {
+                  "type": "string"
+                },
                 "status": {
                   "type": "string"
                 },
@@ -1046,6 +1049,171 @@
     "parameters": {}
   },
   "paths": {
+    "/api/roles/login-redirects": {
+      "get": {
+        "summary": "Admin role landing-page configuration and permitted options",
+        "responses": {
+          "200": {
+            "description": "Admin role landing-page configuration and permitted options response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "role": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "landingPage": {
+                        "type": "string"
+                      },
+                      "options": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "label": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["path", "label"]
+                        }
+                      }
+                    },
+                    "required": ["role", "label", "landingPage", "options"]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/roles/login-redirects/me": {
+      "get": {
+        "summary": "Resolve current authenticated role landing page",
+        "responses": {
+          "200": {
+            "description": "Resolve current authenticated role landing page response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "landingPage": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["landingPage"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/roles/login-redirects/{role}": {
+      "patch": {
+        "summary": "Admin-only permitted internal role landing-page update",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "role",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "landingPage": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  }
+                },
+                "required": ["landingPage"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Admin-only permitted internal role landing-page update response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "landingPage": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["landingPage"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/local/password": {
+      "post": {
+        "summary": "Admin-only password change for existing Fleet-local credentials; revokes sessions and reset links",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "userId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 12,
+                    "maxLength": 256
+                  }
+                },
+                "required": ["userId", "password"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Password updated"
+          },
+          "400": {
+            "description": "Invalid password input"
+          },
+          "403": {
+            "description": "Admin permission or CSRF denied"
+          },
+          "404": {
+            "description": "Active user not found"
+          },
+          "409": {
+            "description": "No existing Fleet-local credential"
+          }
+        }
+      }
+    },
     "/api/reports/forms": {
       "get": {
         "summary": "List forms with accessible persisted submissions",
@@ -1326,6 +1494,9 @@
                           },
                           "version": {
                             "type": "number"
+                          },
+                          "versionName": {
+                            "type": "string"
                           },
                           "status": {
                             "type": "string"

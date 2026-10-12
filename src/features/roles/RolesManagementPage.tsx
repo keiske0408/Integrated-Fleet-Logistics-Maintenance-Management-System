@@ -1,4 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import type { paths } from '@/api/generated-types';
+import { apiFetch } from '@/lib/api';
+import { useAuth } from '@/features/auth/AuthContext';
+import { Select } from '@/components/ui/select';
 import { useRoles, type Permission, type RoleDefinition } from './RolesContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,7 +28,139 @@ import {
   ChevronLeft,
   Lock,
   Sparkles,
+  Save,
 } from 'lucide-react';
+
+type LandingSettings =
+  paths['/api/roles/login-redirects']['get']['responses'][200]['content']['application/json'];
+
+export function RoleLandingPageSettings() {
+  const { currentUser } = useAuth();
+  const { success: toastSuccess } = useToast();
+  const [settings, setSettings] = useState<LandingSettings>([]);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [error, setError] = useState('');
+  const [revision, setRevision] = useState(0);
+  const isAdmin = currentUser?.role === 'system_admin';
+  useEffect(() => {
+    if (!isAdmin) return;
+    const controller = new AbortController();
+    setLoading(true);
+    setError('');
+    apiFetch('/api/roles/login-redirects', { signal: controller.signal })
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? 'Unable to load landing pages.');
+        if (controller.signal.aborted) return;
+        const rows: LandingSettings = result;
+        setSettings(rows);
+        setDrafts(Object.fromEntries(rows.map((row) => [row.role, row.landingPage])));
+      })
+      .catch((cause: unknown) => {
+        if (!controller.signal.aborted)
+          setError(cause instanceof Error ? cause.message : 'Unable to load landing pages.');
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [isAdmin, currentUser?.id, revision]);
+
+  async function save(row: LandingSettings[number]) {
+    setSaving(row.role);
+    setError('');
+    try {
+      const body: NonNullable<
+        paths['/api/roles/login-redirects/{role}']['patch']['requestBody']
+      >['content']['application/json'] = { landingPage: drafts[row.role] };
+      const response = await apiFetch(
+        `/api/roles/login-redirects/${encodeURIComponent(row.role)}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        },
+      );
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? 'Unable to save landing page.');
+      setSettings((previous) =>
+        previous.map((setting) =>
+          setting.role === row.role ? { ...setting, landingPage: result.landingPage } : setting,
+        ),
+      );
+      toastSuccess(`Landing page saved for ${row.label}.`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to save landing page.');
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  if (!isAdmin) return null;
+  return (
+    <section
+      aria-labelledby="role-landing-heading"
+      className="border-y border-border py-4 space-y-3"
+    >
+      <h2 id="role-landing-heading" className="text-lg font-semibold">
+        Post-Login Landing Pages
+      </h2>
+      {error && (
+        <div role="alert" className="text-sm text-destructive">
+          {error}
+          <Button variant="ghost" size="sm" onClick={() => setRevision((value) => value + 1)}>
+            Retry
+          </Button>
+        </div>
+      )}
+      {loading ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          Loading landing pages...
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-3">
+          {settings.map((row) => (
+            <div
+              key={row.role}
+              className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_36px] items-center gap-2"
+            >
+              <label htmlFor={`landing-${row.role}`} className="text-sm capitalize break-words">
+                {row.label}
+              </label>
+              <Select
+                id={`landing-${row.role}`}
+                aria-label={`${row.label} landing page`}
+                value={drafts[row.role] ?? row.landingPage}
+                disabled={Boolean(saving)}
+                onChange={(event) =>
+                  setDrafts((previous) => ({ ...previous, [row.role]: event.target.value }))
+                }
+              >
+                {row.options.map((page) => (
+                  <option key={page.path} value={page.path}>
+                    {page.label}
+                  </option>
+                ))}
+              </Select>
+              <Button
+                size="sm"
+                variant="outline"
+                aria-label={`Save landing page for ${row.label}`}
+                title={`Save landing page for ${row.label}`}
+                disabled={Boolean(saving) || drafts[row.role] === row.landingPage}
+                onClick={() => void save(row)}
+              >
+                <Save className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
 
 const BADGE_COLOR_OPTIONS = [
   { label: 'Violet', value: 'bg-violet-500/20 text-violet-400 border-violet-500/30' },
@@ -226,10 +362,12 @@ export function RolesManagementPage() {
         >
           <Lock className="mt-0.5 h-4 w-4 shrink-0" />
           <p>
-            Role changes are temporarily disabled. Server access uses fixed policies and is not
-            changed by this local catalog.
+            Role and permission policy edits are disabled. Landing-page settings do not change
+            server access permissions.
           </p>
         </div>
+
+        <RoleLandingPageSettings />
 
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">

@@ -141,6 +141,7 @@ This roadmap replaces the week-based proposal below as the active plan for the d
 ### Delivery Phases
 
 1. **Phase 1: Security and API Contract Foundations — Implemented; staging verification pending**
+   - Administrator-only Fleet-local password editing and server-persisted role landing-page settings were added on 2026-10-12. Password changes revoke sessions/reset links and audit actor/target identifiers; redirects accept only permitted internal pages and do not grant permissions. Both sign-in providers consume the effective destination.
    - Keep fixed CASL policies as the authoritative server permission source. Dynamic role catalog writes and UI editing are disabled until the role catalog can safely drive backend policy evaluation.
    - Enforce owner-scoped submission reads, reports, events, and edits while preserving reviewer access. Filter detail data and label snapshots according to the pinned version's current-stage field visibility.
    - Published field-key immutability is implemented in the publish API and builder UI. LOV, form lifecycle, and role-read paths are registered in the generated API contract.

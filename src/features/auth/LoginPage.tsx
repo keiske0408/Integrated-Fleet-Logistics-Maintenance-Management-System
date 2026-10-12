@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { developmentDemoAuthEnabled, useAuth } from './AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +15,7 @@ interface SignupOptions {
 }
 
 export function LoginPage() {
+  const navigate = useNavigate();
   const { login, signup, verifySignupEmail, loginWithEntra, requestPasswordReset, resetPassword } =
     useAuth();
   const [email, setEmail] = useState('');
@@ -99,6 +101,7 @@ export function LoginPage() {
       } else {
         const result = await login(email, password);
         if (!result.success) setError(result.error || 'Login failed.');
+        else navigate('/', { replace: true });
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to complete the request.');
@@ -113,6 +116,7 @@ export function LoginPage() {
     const result = await loginWithEntra();
     setLoading(false);
     if (!result.success) setError(result.error ?? 'Microsoft sign-in failed.');
+    else navigate('/', { replace: true });
   };
 
   const handlePasswordResetRequest = async () => {

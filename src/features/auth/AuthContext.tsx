@@ -26,6 +26,8 @@ export interface User {
   avatarInitials: string;
   createdAt: string;
   isActive: boolean;
+  landingPage?: string;
+  hasLocalPassword?: boolean;
 }
 
 const DEFAULT_USERS: User[] = developmentDemoAuthEnabled
@@ -99,6 +101,7 @@ interface AuthApiUser {
   email?: string;
   role: string;
   department?: string;
+  landingPage?: string;
 }
 
 function fromApiUser(user: AuthApiUser): User {
@@ -122,6 +125,7 @@ function fromApiUser(user: AuthApiUser): User {
       .slice(0, 2),
     createdAt: new Date().toISOString().slice(0, 10),
     isActive: true,
+    landingPage: user.landingPage,
   };
 }
 
@@ -182,13 +186,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (developmentDemoAuthEnabled && USER_PASSWORDS[email.toLowerCase()] === password) {
       const demoUser = allUsers.find((user) => user.email.toLowerCase() === email.toLowerCase());
       if (demoUser) {
+        msalInstance.setActiveAccount(null);
         setDevelopmentPrincipal({
           id: demoUser.id,
           name: demoUser.name,
           role: demoUser.role,
           department: demoUser.department,
         });
-        setCurrentUser(demoUser);
+        try {
+          const response = await apiFetch('/api/roles/login-redirects/me');
+          if (!response.ok) throw new Error('Unable to load role landing page.');
+          const settings = await response.json();
+          setCurrentUser({ ...demoUser, landingPage: settings.landingPage });
+        } catch {
+          setDevelopmentPrincipal(null);
+          return { success: false, error: 'Unable to load role landing page. Please retry.' };
+        }
         return { success: true };
       }
     }

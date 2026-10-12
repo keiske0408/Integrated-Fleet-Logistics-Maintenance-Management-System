@@ -1,12 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  Check,
   ChevronLeft,
   ChevronRight,
+  ChevronsUpDown,
   Download,
   Eye,
   FileText,
   RefreshCw,
+  Search,
   ShieldCheck,
   X,
 } from 'lucide-react';
@@ -16,6 +19,7 @@ import { apiFetch } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 
 type SubmissionReport = components['schemas']['SubmissionReport'];
 type ActivityReport = components['schemas']['ActivityReport'];
@@ -41,6 +45,154 @@ const dateFormat = new Intl.DateTimeFormat('en-PH', {
   timeStyle: 'short',
 });
 const readable = (value: string) => value.replace(/_/g, ' ');
+
+export function SearchableFormSelect({
+  forms,
+  value,
+  onChange,
+}: {
+  forms: Forms;
+  value?: string;
+  onChange: (value: string) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handlePointerDown = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsOpen(false);
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen]);
+
+  const allForms = useMemo(() => {
+    const list = [...forms];
+    if (!list.some((f) => f.key === 'tsrf')) {
+      list.unshift({ key: 'tsrf', name: 'Transportation Service Request Form' });
+    }
+    return list;
+  }, [forms]);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return allForms;
+    const q = search.toLowerCase();
+    return allForms.filter(
+      (f) => f.name.toLowerCase().includes(q) || f.key.toLowerCase().includes(q),
+    );
+  }, [allForms, search]);
+
+  const currentForm = allForms.find((f) => f.key === value);
+
+  return (
+    <div ref={containerRef} className="relative w-full">
+      <button
+        type="button"
+        role="combobox"
+        aria-label="Form"
+        aria-expanded={isOpen}
+        onClick={() => setIsOpen(!isOpen)}
+        className={cn(
+          selectClass,
+          'flex items-center justify-between text-left cursor-pointer hover:border-primary/50 transition-colors bg-background',
+        )}
+      >
+        <span className="truncate font-normal">
+          {currentForm ? currentForm.name : value || 'Select form'}
+        </span>
+        <ChevronsUpDown className="ml-1 h-3.5 w-3.5 text-muted-foreground shrink-0 opacity-70" />
+      </button>
+
+      {/* Accessible native select fallback for testing & screen readers */}
+      <select
+        aria-hidden="true"
+        tabIndex={-1}
+        className="sr-only"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {allForms.map((f) => (
+          <option key={f.key} value={f.key}>
+            {f.name}
+          </option>
+        ))}
+      </select>
+
+      {isOpen && (
+        <div className="absolute left-0 top-full mt-1 w-full min-w-[260px] max-w-[340px] z-50 rounded-xl border border-border bg-popover shadow-xl animate-fade-in overflow-hidden">
+          <div className="p-2 border-b border-border/80 bg-muted/30">
+            <div className="relative flex items-center">
+              <Search className="absolute left-2.5 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+              <Input
+                type="text"
+                placeholder="Search forms..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-8 pl-8 pr-7 text-xs bg-background"
+                autoFocus
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch('')}
+                  className="absolute right-2 text-muted-foreground hover:text-foreground p-0.5"
+                  aria-label="Clear search"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="max-h-56 overflow-y-auto p-1 space-y-0.5 overscroll-contain">
+            {filtered.length === 0 ? (
+              <div className="py-5 text-center text-xs text-muted-foreground">
+                No forms found matching &quot;{search}&quot;
+              </div>
+            ) : (
+              filtered.map((form) => {
+                const isSelected = form.key === value;
+                return (
+                  <button
+                    key={form.key}
+                    type="button"
+                    onClick={() => {
+                      onChange(form.key);
+                      setIsOpen(false);
+                      setSearch('');
+                    }}
+                    className={cn(
+                      'w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs text-left transition-colors',
+                      isSelected
+                        ? 'bg-primary/10 text-primary font-semibold'
+                        : 'text-foreground hover:bg-muted/70',
+                    )}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-medium">{form.name}</div>
+                      <div className="text-[10px] text-muted-foreground font-mono">{form.key}</div>
+                    </div>
+                    {isSelected && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function reportQuery(filters: Filters, page: number): string {
   const query = new URLSearchParams();
@@ -272,22 +424,14 @@ export function ReportsPage() {
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3">
         {tab === 'submissions' && (
-          <label className="text-xs font-medium space-y-1">
-            Form
-            <select
-              aria-label="Form"
-              className={selectClass}
+          <div className="text-xs font-medium space-y-1">
+            <span>Form</span>
+            <SearchableFormSelect
+              forms={forms}
               value={filters.formKey}
-              onChange={(event) => filter('formKey', event.target.value)}
-            >
-              {!forms.some((form) => form.key === 'tsrf') && <option value="tsrf">TSRF</option>}
-              {forms.map((form) => (
-                <option key={form.key} value={form.key}>
-                  {form.name}
-                </option>
-              ))}
-            </select>
-          </label>
+              onChange={(value) => filter('formKey', value)}
+            />
+          </div>
         )}
         <label className="text-xs font-medium space-y-1">
           From (Manila)
@@ -503,7 +647,7 @@ export function ReportsPage() {
                       <td className="p-3 font-medium">
                         <span className="block">{row.submissionNumber}</span>
                         <span className="text-xs text-muted-foreground">
-                          {row.formName} / v{row.version}
+                          {row.formName} / {(row as any).versionName || `v${row.version}`}
                         </span>
                       </td>
                       <td className="p-3 whitespace-nowrap text-xs">

@@ -65,6 +65,28 @@ npm run auth:bootstrap-admin
 
 The command adopts the matching active seeded administrator row when possible, hashes the password with Argon2id, creates its local identity, and refuses to run if an active administrator identity already exists. It does not print or store the plaintext password. Remove the `BOOTSTRAP_ADMIN_*` values from the environment after success; do not put them in migrations or source control. Do not solve bootstrap by enabling production identity headers.
 
+## Administrator Password Editing And Role Landing Pages
+
+Administrators can use the key icon in User Management to change an active user's existing Fleet-local password, including another administrator's password. The form requires matching passwords of 12 to 256 characters. `POST /api/auth/local/password` requires server-side administrator permission, CSRF for local sessions, and authentication rate protection. Accounts without local credentials are disabled in this action: Microsoft passwords stay Microsoft-managed; intentionally provisioning a new local identity uses the existing separate provisioning endpoint.
+
+Changes use Argon2id, revoke every existing local session and outstanding reset token for that user, and write an actor/target audit event without passwords. Changing the signed-in local administrator's own password also clears cookies and signs that administrator out. User-list responses expose only `hasLocalPassword`, not credential hashes. This is an administrator-set password, not an automatic forced-change or emailed-reset flow.
+
+In Roles Management, **Post-Login Landing Pages** lets administrators select and save a permitted internal app page for each supported backend role. These settings are persisted in `role_login_redirects`, use canonical role keys (aliases share the same setting), and do not modify permissions. Role/permission catalog editing remains disabled.
+
+| Role                            | Default Landing Page |
+| ------------------------------- | -------------------- |
+| Administrator                   | `/dashboard`         |
+| Fleet Team / Driver             | `/fleet`             |
+| Finance / Procurement           | `/procurement`       |
+| Approver / Department Requestor | `/tsrf`              |
+| Auditor                         | `/reports`           |
+
+`GET /api/roles/login-redirects` and `PATCH /api/roles/login-redirects/:role` are administrator-only. `GET /api/roles/login-redirects/me` returns only the authenticated role's effective page. External URLs, unknown paths, query/hash redirect payloads and pages unavailable to the role are rejected; stale invalid saved values resolve to a permitted default. Local login and Entra account resolution include the effective page, and successful sign-in navigates through the root route to it. Existing authenticated deep links remain intact; changes apply at the next sign-in or account reload, not by forcibly moving active users.
+
+Startup migration creates the settings table idempotently; unset roles use the defaults above. No seeded passwords, environment secrets or production identity-header allowances were added. Validate real Entra sign-in and organization authentication controls in staging before rollout.
+
+Admin-feature verification on 2026-10-12: backend build and serial API/auth/form-definition suite pass (51 passed, 1 environment-dependent skip); frontend full suite passes (68 tests), focused lint, generated contracts and Vite build pass. Tests cover admin/non-admin authorization, CSRF denial, old-password rejection, session/reset-token revocation, self-admin cookie clearing, local-credential availability, permitted redirects, canonical aliases and external/forbidden path rejection. A built local preview verified real Fleet-local admin/requestor sessions, password mismatch/update, rejection of the old password, the configured `/reports` login destination, and 390px layout. Temporary accounts were deleted and the tested role destination restored. Full frontend TypeScript remains blocked by unrelated baseline/working-tree errors; real Entra round trips and production identity/rate-limit controls still require staging validation.
+
 ## Configuration
 
 Set values through the hosting environment or an untracked local environment file. Never commit tenant secrets, SMTP passwords, session secrets, access tokens, or reset links.

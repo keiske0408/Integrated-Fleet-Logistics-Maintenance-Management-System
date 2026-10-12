@@ -12,6 +12,7 @@ export function toBackendRole(role: string | undefined): string {
     case 'department_requester':
     case 'driver':
     case 'approver':
+    case 'auditor':
       return role;
     default:
       return 'department_requester';

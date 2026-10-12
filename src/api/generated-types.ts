@@ -4,6 +4,204 @@
  */
 
 export interface paths {
+  '/api/roles/login-redirects': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Admin role landing-page configuration and permitted options */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Admin role landing-page configuration and permitted options response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              role: string;
+              label: string;
+              landingPage: string;
+              options: {
+                path: string;
+                label: string;
+              }[];
+            }[];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/roles/login-redirects/me': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Resolve current authenticated role landing page */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Resolve current authenticated role landing page response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              landingPage: string;
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/roles/login-redirects/{role}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Admin-only permitted internal role landing-page update */
+    patch: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          role: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': {
+            landingPage: string;
+          };
+        };
+      };
+      responses: {
+        /** @description Admin-only permitted internal role landing-page update response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              landingPage: string;
+            };
+          };
+        };
+      };
+    };
+    trace?: never;
+  };
+  '/api/auth/local/password': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Admin-only password change for existing Fleet-local credentials; revokes sessions and reset links */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': {
+            /** Format: uuid */
+            userId: string;
+            password: string;
+          };
+        };
+      };
+      responses: {
+        /** @description Password updated */
+        204: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Invalid password input */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Admin permission or CSRF denied */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Active user not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description No existing Fleet-local credential */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/reports/forms': {
     parameters: {
       query?: never;
@@ -117,6 +315,7 @@ export interface paths {
                 formKey: string;
                 formName: string;
                 version: number;
+                versionName?: string;
                 status: string;
                 stage: string;
                 isLate: boolean;
@@ -2330,6 +2529,7 @@ export interface components {
         formKey: string;
         formName: string;
         version: number;
+        versionName?: string;
         status: string;
         stage: string;
         isLate: boolean;

@@ -45,6 +45,7 @@ export interface FormDefinition {
   key: string;
   name: string;
   version: number;
+  versionName?: string;
   status: 'draft' | 'published' | 'archived';
   sections: FormSection[];
 }

@@ -143,3 +143,10 @@ addLog({
 - Backend `src/routes/reports.routes.ts` owns query filters, owner/organization scope, snapshot-consistent counts, bounded pagination, safe workflow evidence and audited CSV exports. Existing form visibility/responsibility functions are reused; pinned reportable/non-PII projection applies before rendering or exporting.
 - Reporting response shapes are defined in backend `src/domain/reporting.ts`. OpenAPI generation builds those schemas using the frontend Zod instance, then generates client types. Both project directories are required for `npm run api:spec`; response DTOs are not duplicated manually.
 - See [report definitions and audit boundaries](docs/PHASE_1_IMPLEMENTATION_AND_DEMO.md) for scope, permissions, timestamp semantics, KPIs, limitations and operational acceptance.
+
+### 7. Admin Account And Navigation Controls
+
+- User Management has an administrator-only existing-local-password action. The backend auth route validates/hashes changes, revokes sessions/reset links and audits actor/target identifiers. Password fields are transient, confirmation is client-side, and credential hashes never enter user-list responses.
+- Role landing-page policy lives in backend `src/domain/role-navigation.ts`; persistence/resolution uses `role_login_redirects` and `src/services/role-navigation.service.ts`. Roles Management edits only this navigation setting, not authorization policies. Only allowlisted role-permitted app paths can be saved.
+- Both sign-in providers resolve an effective landing page server-side. AuthContext retains it; LoginPage navigates to `/` after success and App's root route selects the saved destination. Existing authenticated deep links are preserved. Development demo sign-in uses the authenticated current-role resolver rather than hardcoded frontend redirect settings.
+- New request/response contracts use backend schema factories and generated client types. See [hybrid authentication guidance](docs/HYBRID_AUTH.md) for endpoints, defaults, password boundaries and migration details.

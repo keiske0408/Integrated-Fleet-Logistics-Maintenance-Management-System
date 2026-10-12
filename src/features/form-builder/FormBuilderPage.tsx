@@ -34,6 +34,7 @@ import {
   Lock,
   ArrowLeft,
   AlertTriangle,
+  Edit3,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -247,8 +248,11 @@ export function FormBuilderPage() {
     [publishedBaseline],
   );
   const [availableVersions, setAvailableVersions] = useState<
-    Array<{ version: number; status: string }>
+    Array<{ version: number; status: string; versionName?: string | null }>
   >([]);
+  const [showEditNamesModal, setShowEditNamesModal] = useState(false);
+  const [editingFormName, setEditingFormName] = useState(definition.name);
+  const [editingVersionName, setEditingVersionName] = useState(definition.versionName ?? '');
   const [saving, setSaving] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
   const [permissionRole, setPermissionRole] = useState('department_requester');
@@ -323,12 +327,22 @@ export function FormBuilderPage() {
         setDefinitionId(saved.id);
         const versions = [...saved.versions].sort((a, b) => b.version - a.version);
         setAvailableVersions(
-          versions.map((version) => ({ version: version.version, status: version.status })),
+          versions.map((version) => ({
+            version: version.version,
+            status: version.status,
+            versionName: version.versionName ?? version.schema?.versionName ?? null,
+          })),
         );
         const published = versions.find((version) => version.status === 'published');
         setPublishedBaseline(
           published?.schema
-            ? { ...published.schema, version: published.version, status: 'published' }
+            ? {
+                ...published.schema,
+                name: saved.name || published.schema.name,
+                version: published.version,
+                versionName: published.versionName ?? published.schema.versionName ?? null,
+                status: 'published',
+              }
             : null,
         );
         setPublishedFieldIds(
@@ -356,12 +370,15 @@ export function FormBuilderPage() {
         if (selected?.schema) {
           savedRevisionRef.current = 0;
           setEditRevision(0);
+          const resolvedVersionName = selected.versionName ?? selected.schema?.versionName ?? null;
           dispatchEditorHistory({
             type: 'reset',
             snapshot: {
               definition: {
                 ...selected.schema,
+                name: saved.name || selected.schema.name,
                 version: selected.version,
+                versionName: resolvedVersionName,
                 status: selected.status,
               },
               workflow: selected.workflow?.stages
@@ -395,19 +412,35 @@ export function FormBuilderPage() {
         response = await apiFetch('/api/forms', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key: draft.key, name: draft.name, schema: draft, workflow }),
+          body: JSON.stringify({
+            key: draft.key,
+            name: draft.name,
+            versionName: draft.versionName,
+            schema: draft,
+            workflow,
+          }),
         });
       } else if (draftVersionId) {
         response = await apiFetch(`/api/forms/versions/${encodeURIComponent(draftVersionId)}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ schema: draft, workflow }),
+          body: JSON.stringify({
+            name: draft.name,
+            versionName: draft.versionName,
+            schema: draft,
+            workflow,
+          }),
         });
       } else {
         response = await apiFetch(`/api/forms/${encodeURIComponent(definitionId)}/versions`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ schema: draft, workflow }),
+          body: JSON.stringify({
+            name: draft.name,
+            versionName: draft.versionName,
+            schema: draft,
+            workflow,
+          }),
         });
       }
       const result = await response.json();
@@ -446,11 +479,16 @@ export function FormBuilderPage() {
       setAvailableVersions((prev) => {
         const exists = prev.some((v) => v.version === versionNum);
         if (exists) {
-          return prev.map((v) => (v.version === versionNum ? { ...v, status: 'draft' } : v));
+          return prev.map((v) =>
+            v.version === versionNum
+              ? { ...v, status: 'draft', versionName: draft.versionName }
+              : v,
+          );
         }
-        return [{ version: versionNum, status: 'draft' }, ...prev].sort(
-          (a, b) => b.version - a.version,
-        );
+        return [
+          { version: versionNum, status: 'draft', versionName: draft.versionName },
+          ...prev,
+        ].sort((a, b) => b.version - a.version);
       });
 
       if (!automatic) {
@@ -563,7 +601,12 @@ export function FormBuilderPage() {
         }
         throw new Error(result.error ?? 'Unable to publish form.');
       }
-      const published = { ...definition, version: result.version, status: 'published' as const };
+      const published = {
+        ...definition,
+        version: result.version,
+        versionName: result.versionName ?? definition.versionName,
+        status: 'published' as const,
+      };
       savedRevisionRef.current = editRevision;
       dispatchEditorHistory({
         type: 'reset',
@@ -577,7 +620,8 @@ export function FormBuilderPage() {
       setAvailableVersions((prev) =>
         prev
           .map((v) => {
-            if (v.version === result.version) return { ...v, status: 'published' };
+            if (v.version === result.version)
+              return { ...v, status: 'published', versionName: published.versionName };
             if (v.status === 'published') return { ...v, status: 'archived' };
             return v;
           })
@@ -1034,9 +1078,33 @@ export function FormBuilderPage() {
     <div className="space-y-4 animate-fade-in">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Form Builder</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold">{definition.name}</h1>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                setEditingFormName(definition.name);
+                setEditingVersionName(definition.versionName ?? '');
+                setShowEditNamesModal(true);
+              }}
+              title="Edit Form & Version Names"
+            >
+              <Edit3 className="mr-1.5 h-3.5 w-3.5 text-primary" />
+              Edit Names
+            </Button>
+          </div>
           <p className="text-sm text-muted-foreground">
-            Design {definition.name} v{definition.version ?? 'draft'} · {definition.status}
+            {definition.versionName ? (
+              <span className="font-semibold text-foreground mr-1.5">
+                {definition.versionName} ·
+              </span>
+            ) : null}
+            <span>
+              v{definition.version ?? 'draft'} · {definition.status}
+            </span>
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -1053,7 +1121,10 @@ export function FormBuilderPage() {
                 <option value="working">Current working version</option>
                 {availableVersions.map((item) => (
                   <option key={item.version} value={item.version}>
-                    v{item.version} ({item.status})
+                    {item.versionName
+                      ? `${item.versionName} (v${item.version})`
+                      : `v${item.version}`}{' '}
+                    ({item.status})
                   </option>
                 ))}
               </Select>
@@ -1253,6 +1324,78 @@ export function FormBuilderPage() {
                 fields.
               </span>
             </div>
+          </div>
+        </div>
+      </ConfirmDialog>
+
+      {/* Edit Form & Version Names Modal */}
+      <ConfirmDialog
+        open={showEditNamesModal}
+        onOpenChange={setShowEditNamesModal}
+        onCancel={() => setShowEditNamesModal(false)}
+        onConfirm={() => {
+          const nextFormName = editingFormName.trim() || definition.name;
+          const nextVersionName = editingVersionName.trim() || undefined;
+
+          dispatchEditorHistory({
+            type: 'apply',
+            snapshot: {
+              definition: {
+                ...definition,
+                name: nextFormName,
+                versionName: nextVersionName,
+              },
+              workflow,
+            },
+          });
+          setEditRevision((rev) => rev + 1);
+          setShowEditNamesModal(false);
+          toastSuccess('Form and version names updated.');
+        }}
+        variant="primary"
+        icon={Edit3}
+        title="Edit Form & Version Names"
+        badge={
+          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary border border-primary/20">
+            v{definition.version ?? 'draft'}
+          </span>
+        }
+        description="Update the display name of this form and the release name for this version. These changes will be reflected in Form Builder and dynamically across reports."
+        confirmText="Save Names"
+        cancelText="Cancel"
+        className="max-w-md sm:max-w-lg"
+      >
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <label htmlFor="edit-form-name" className="text-xs font-semibold text-foreground">
+              Form Name
+            </label>
+            <Input
+              id="edit-form-name"
+              value={editingFormName}
+              onChange={(e) => setEditingFormName(e.target.value)}
+              placeholder="e.g. Technical Service Request Form"
+              className="h-9 text-sm"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Overall template name for this form.
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="edit-version-name" className="text-xs font-semibold text-foreground">
+              Version / Release Name
+            </label>
+            <Input
+              id="edit-version-name"
+              value={editingVersionName}
+              onChange={(e) => setEditingVersionName(e.target.value)}
+              placeholder="e.g. Q4 2026 Fleet Maintenance Release"
+              className="h-9 text-sm"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Descriptive release label for this version. Submissions and reports will display this
+              name.
+            </p>
           </div>
         </div>
       </ConfirmDialog>
