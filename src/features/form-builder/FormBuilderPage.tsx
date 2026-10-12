@@ -37,6 +37,7 @@ import {
   Edit3,
   FolderKanban,
   Check,
+  Tag,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -692,11 +693,15 @@ export function FormBuilderPage() {
     [publishedBaseline],
   );
   const [availableVersions, setAvailableVersions] = useState<
-    Array<{ version: number; status: string; versionName?: string | null }>
+    Array<{ id?: string; version: number; status: string; versionName?: string | null }>
   >([]);
-  const [showEditNamesModal, setShowEditNamesModal] = useState(false);
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  const [showRenameFormModal, setShowRenameFormModal] = useState(false);
+  const [showEditVersionNameModal, setShowEditVersionNameModal] = useState(false);
   const [editingFormName, setEditingFormName] = useState(definition.name);
   const [editingVersionName, setEditingVersionName] = useState(definition.versionName ?? '');
+  const [isUpdatingFormName, setIsUpdatingFormName] = useState(false);
+  const [isUpdatingVersionName, setIsUpdatingVersionName] = useState(false);
   const [saving, setSaving] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
   const [permissionRole, setPermissionRole] = useState('department_requester');
@@ -772,6 +777,7 @@ export function FormBuilderPage() {
         const versions = [...saved.versions].sort((a, b) => b.version - a.version);
         setAvailableVersions(
           versions.map((version) => ({
+            id: version.id,
             version: version.version,
             status: version.status,
             versionName: version.versionName ?? version.schema?.versionName ?? null,
@@ -830,6 +836,7 @@ export function FormBuilderPage() {
                 : structuredClone(TSRF_WORKFLOW),
             },
           });
+          setSelectedVersionId(selected.id ?? null);
           setDraftVersionId(selected.status === 'draft' ? selected.id : null);
           setSelectedId(
             selected.schema.sections[1]?.fields[0]?.id ??
@@ -1122,6 +1129,102 @@ export function FormBuilderPage() {
       toastError(error instanceof Error ? error.message : 'Unable to delete draft.');
     } finally {
       setIsDeletingDraft(false);
+    }
+  };
+
+  const publishedVersionsList = React.useMemo(
+    () => availableVersions.filter((v) => v.status === 'published'),
+    [availableVersions],
+  );
+  const draftVersionsList = React.useMemo(
+    () => availableVersions.filter((v) => v.status === 'draft'),
+    [availableVersions],
+  );
+  const archivedVersionsList = React.useMemo(
+    () => availableVersions.filter((v) => v.status === 'archived'),
+    [availableVersions],
+  );
+
+  const handleRenameForm = async () => {
+    const trimmed = editingFormName.trim();
+    if (!trimmed) {
+      toastWarning('Form template name cannot be empty.');
+      return;
+    }
+    setIsUpdatingFormName(true);
+    try {
+      if (definitionId || activeFormKey) {
+        const targetId = definitionId || activeFormKey;
+        const response = await apiFetch(`/api/forms/${encodeURIComponent(targetId)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: trimmed }),
+        });
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.error || 'Failed to rename form template.');
+        }
+      }
+      dispatchEditorHistory({
+        type: 'apply',
+        snapshot: {
+          definition: {
+            ...definition,
+            name: trimmed,
+          },
+          workflow,
+        },
+      });
+      setEditRevision((rev) => rev + 1);
+      setShowRenameFormModal(false);
+      await loadAvailableForms();
+      toastSuccess(`Form renamed to "${trimmed}".`);
+    } catch (error) {
+      toastError(error instanceof Error ? error.message : 'Unable to rename form.');
+    } finally {
+      setIsUpdatingFormName(false);
+    }
+  };
+
+  const handleEditVersionName = async () => {
+    const trimmed = editingVersionName.trim() || null;
+    setIsUpdatingVersionName(true);
+    try {
+      const currentVerId = draftVersionId || selectedVersionId;
+      if (currentVerId) {
+        const response = await apiFetch(`/api/forms/versions/${encodeURIComponent(currentVerId)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ versionName: trimmed }),
+        });
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.error || 'Failed to update release label.');
+        }
+      }
+      dispatchEditorHistory({
+        type: 'apply',
+        snapshot: {
+          definition: {
+            ...definition,
+            versionName: trimmed,
+          },
+          workflow,
+        },
+      });
+      setEditRevision((rev) => rev + 1);
+      setAvailableVersions((prev) =>
+        prev.map((v) => (v.version === definition.version ? { ...v, versionName: trimmed } : v)),
+      );
+      setShowEditVersionNameModal(false);
+      await loadAvailableForms();
+      toastSuccess(
+        trimmed ? `Version release label set to "${trimmed}".` : 'Version release label cleared.',
+      );
+    } catch (error) {
+      toastError(error instanceof Error ? error.message : 'Unable to update release label.');
+    } finally {
+      setIsUpdatingVersionName(false);
     }
   };
 
@@ -1582,13 +1685,12 @@ export function FormBuilderPage() {
               className="h-7 px-2.5 text-xs text-muted-foreground hover:text-foreground"
               onClick={() => {
                 setEditingFormName(definition.name);
-                setEditingVersionName(definition.versionName ?? '');
-                setShowEditNamesModal(true);
+                setShowRenameFormModal(true);
               }}
-              title="Edit Form & Version Names"
+              title="Rename Master Form Template"
             >
               <Edit3 className="mr-1.5 h-3.5 w-3.5 text-primary" />
-              Edit Names
+              Rename Form
             </Button>
             {definition.key !== 'tsrf' && (
               <Button
@@ -1616,16 +1718,32 @@ export function FormBuilderPage() {
               </Button>
             )}
           </div>
-          <p className="text-sm text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground mt-0.5">
+            <span>
+              v{definition.version ?? 'draft'} ·{' '}
+              <span className="capitalize">{definition.status}</span>
+            </span>
             {definition.versionName ? (
-              <span className="font-semibold text-foreground mr-1.5">
-                {definition.versionName} ·
+              <span className="inline-flex items-center gap-1 font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full text-xs border border-primary/20">
+                <Tag className="h-3 w-3" />
+                {definition.versionName}
               </span>
             ) : null}
-            <span>
-              v{definition.version ?? 'draft'} · {definition.status}
-            </span>
-          </p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs text-muted-foreground hover:text-primary gap-1"
+              onClick={() => {
+                setEditingVersionName(definition.versionName ?? '');
+                setShowEditVersionNameModal(true);
+              }}
+              title="Set friendly release name for this version"
+            >
+              <Tag className="h-3 w-3" />
+              {definition.versionName ? 'Edit Release Label' : 'Tag Release Name'}
+            </Button>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {availableVersions.length > 0 && (
@@ -1637,16 +1755,48 @@ export function FormBuilderPage() {
                 id="form-version"
                 value={routeVersion ?? 'working'}
                 onChange={(event) => selectVersion(event.target.value)}
+                className="text-xs h-9 min-w-[210px]"
               >
                 <option value="working">Current working version</option>
-                {availableVersions.map((item) => (
-                  <option key={item.version} value={item.version}>
-                    {item.versionName
-                      ? `${item.versionName} (v${item.version})`
-                      : `v${item.version}`}{' '}
-                    ({item.status})
-                  </option>
-                ))}
+
+                {publishedVersionsList.length > 0 && (
+                  <optgroup label="Live Published Release">
+                    {publishedVersionsList.map((item) => (
+                      <option key={item.version} value={item.version}>
+                        {item.versionName
+                          ? `${item.versionName} (v${item.version})`
+                          : `v${item.version}`}{' '}
+                        [Live]
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+
+                {draftVersionsList.length > 0 && (
+                  <optgroup label="Working Drafts">
+                    {draftVersionsList.map((item) => (
+                      <option key={item.version} value={item.version}>
+                        {item.versionName
+                          ? `${item.versionName} (v${item.version})`
+                          : `v${item.version}`}{' '}
+                        [Draft]
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+
+                {archivedVersionsList.length > 0 && (
+                  <optgroup label="Archived Releases">
+                    {archivedVersionsList.map((item) => (
+                      <option key={item.version} value={item.version}>
+                        {item.versionName
+                          ? `${item.versionName} (v${item.version})`
+                          : `v${item.version}`}{' '}
+                        [Archived]
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </Select>
             </div>
           )}
@@ -1848,59 +1998,80 @@ export function FormBuilderPage() {
         </div>
       </ConfirmDialog>
 
-      {/* Edit Form & Version Names Modal */}
+      {/* Rename Form Template Modal */}
       <ConfirmDialog
-        open={showEditNamesModal}
-        onOpenChange={setShowEditNamesModal}
-        onCancel={() => setShowEditNamesModal(false)}
-        onConfirm={() => {
-          const nextFormName = editingFormName.trim() || definition.name;
-          const nextVersionName = editingVersionName.trim() || undefined;
-
-          dispatchEditorHistory({
-            type: 'apply',
-            snapshot: {
-              definition: {
-                ...definition,
-                name: nextFormName,
-                versionName: nextVersionName,
-              },
-              workflow,
-            },
-          });
-          setEditRevision((rev) => rev + 1);
-          setShowEditNamesModal(false);
-          toastSuccess('Form and version names updated.');
-        }}
+        open={showRenameFormModal}
+        onOpenChange={setShowRenameFormModal}
+        onCancel={() => setShowRenameFormModal(false)}
+        onConfirm={() => void handleRenameForm()}
         variant="primary"
         icon={Edit3}
-        title="Edit Form & Version Names"
+        title="Rename Form Template"
         badge={
-          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary border border-primary/20">
-            v{definition.version ?? 'draft'}
+          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary border border-primary/20 font-mono">
+            {definition.key}
           </span>
         }
-        description="Update the display name of this form and the release name for this version. These changes will be reflected in Form Builder and dynamically across reports."
-        confirmText="Save Names"
+        description="Update the master form template title. This change updates the name across system navigation, forms directories, and all versions."
+        confirmText={isUpdatingFormName ? 'Saving...' : 'Save Form Name'}
         cancelText="Cancel"
+        isLoading={isUpdatingFormName}
         className="max-w-md sm:max-w-lg"
       >
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
             <label htmlFor="edit-form-name" className="text-xs font-semibold text-foreground">
-              Form Name
+              Form Template Name
             </label>
             <Input
               id="edit-form-name"
               value={editingFormName}
               onChange={(e) => setEditingFormName(e.target.value)}
-              placeholder="e.g. Technical Service Request Form"
+              placeholder="e.g. Transportation Service Request Form"
               className="h-9 text-sm"
+              autoFocus
             />
             <p className="text-[11px] text-muted-foreground">
-              Overall template name for this form.
+              Master title for this form definition across the application.
             </p>
           </div>
+
+          <div className="rounded-xl border border-border/70 bg-muted/40 p-3 text-xs text-muted-foreground space-y-1">
+            <div className="flex justify-between">
+              <span>Form Identifier (Key):</span>
+              <span className="font-mono font-semibold text-foreground">{definition.key}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Active Version:</span>
+              <span className="font-semibold text-foreground">
+                v{definition.version ?? 'draft'} ({definition.status})
+              </span>
+            </div>
+          </div>
+        </div>
+      </ConfirmDialog>
+
+      {/* Edit Version Release Label Modal */}
+      <ConfirmDialog
+        open={showEditVersionNameModal}
+        onOpenChange={setShowEditVersionNameModal}
+        onCancel={() => setShowEditVersionNameModal(false)}
+        onConfirm={() => void handleEditVersionName()}
+        variant="primary"
+        icon={Tag}
+        title={`Release Label for v${definition.version ?? 'draft'}`}
+        badge={
+          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary border border-primary/20">
+            v{definition.version ?? 'draft'} · {definition.status}
+          </span>
+        }
+        description="Give this specific version snapshot a friendly release tag (e.g. 'Standard', 'Q4 2026 Audit Revision'). This helps identify this release in audit logs, diffs, and reports."
+        confirmText={isUpdatingVersionName ? 'Saving...' : 'Save Release Label'}
+        cancelText="Cancel"
+        isLoading={isUpdatingVersionName}
+        className="max-w-md sm:max-w-lg"
+      >
+        <div className="space-y-4 py-2">
           <div className="space-y-1.5">
             <label htmlFor="edit-version-name" className="text-xs font-semibold text-foreground">
               Version / Release Name
@@ -1909,13 +2080,27 @@ export function FormBuilderPage() {
               id="edit-version-name"
               value={editingVersionName}
               onChange={(e) => setEditingVersionName(e.target.value)}
-              placeholder="e.g. Q4 2026 Fleet Maintenance Release"
+              placeholder="e.g. Standard, Q4 2026 Audit Revision, Phase 2"
               className="h-9 text-sm"
+              autoFocus
             />
             <p className="text-[11px] text-muted-foreground">
-              Descriptive release label for this version. Submissions and reports will display this
-              name.
+              Descriptive release tag for this version snapshot. Leave empty to use default version
+              number.
             </p>
+          </div>
+
+          <div className="rounded-xl border border-border/70 bg-muted/40 p-3 text-xs text-muted-foreground space-y-1">
+            <div className="flex justify-between">
+              <span>Form Template:</span>
+              <span className="font-semibold text-foreground">{definition.name}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Target Version:</span>
+              <span className="font-mono font-semibold text-foreground">
+                v{definition.version ?? 'draft'}
+              </span>
+            </div>
           </div>
         </div>
       </ConfirmDialog>
