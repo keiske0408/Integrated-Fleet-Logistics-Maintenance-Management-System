@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -36,7 +37,7 @@ export function Dialog({
     if (!open) return;
 
     activeModalCount++;
-    if (activeModalCount === 1) {
+    if (activeModalCount === 1 && typeof document !== 'undefined') {
       document.body.style.overflow = 'hidden';
     }
 
@@ -49,7 +50,7 @@ export function Dialog({
 
     return () => {
       activeModalCount = Math.max(0, activeModalCount - 1);
-      if (activeModalCount === 0) {
+      if (activeModalCount === 0 && typeof document !== 'undefined') {
         document.body.style.overflow = '';
       }
       window.removeEventListener('keydown', handleKeyDown);
@@ -58,11 +59,8 @@ export function Dialog({
 
   if (!open) return null;
 
-  return (
-    <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto"
-      role="presentation"
-    >
+  const content = (
+    <div className="fixed inset-0 z-[9999] overflow-y-auto" role="presentation">
       {/* Standardized Dark Tint Backdrop with Blur Effect */}
       <div
         className="fixed inset-0 bg-slate-900/60 dark:bg-black/75 backdrop-blur-sm transition-opacity animate-fade-in"
@@ -70,31 +68,39 @@ export function Dialog({
         aria-hidden="true"
       />
 
-      {/* Modal Dialog Card */}
-      <div
-        role="dialog"
-        aria-modal="true"
-        className={cn(
-          'relative w-full max-w-lg rounded-2xl border border-border bg-card p-5 sm:p-6 md:p-7 shadow-2xl text-card-foreground',
-          'animate-fade-in focus:outline-none my-auto sm:my-8 max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100vh-4rem)] overflow-y-auto overscroll-contain',
-          className,
-        )}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {showCloseButton && (
-          <button
-            type="button"
-            onClick={handleClose}
-            className="absolute right-3.5 top-3.5 sm:right-4 sm:top-4 rounded-lg p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20"
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        )}
-        {children}
+      {/* Centering Wrapper for guaranteed vertical & horizontal centering without clipping */}
+      <div className="flex min-h-full items-center justify-center p-3 sm:p-4 md:p-6 text-center pointer-events-none">
+        {/* Modal Dialog Card */}
+        <div
+          role="dialog"
+          aria-modal="true"
+          className={cn(
+            'relative w-full max-w-lg rounded-2xl border border-border bg-card p-5 sm:p-6 md:p-7 shadow-2xl text-card-foreground text-left pointer-events-auto z-10',
+            'animate-fade-in focus:outline-none my-auto max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100vh-4rem)] overflow-y-auto overscroll-contain',
+            className,
+          )}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {showCloseButton && (
+            <button
+              type="button"
+              onClick={handleClose}
+              className="absolute right-3.5 top-3.5 sm:right-4 sm:top-4 rounded-lg p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20"
+              aria-label="Close"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+          {children}
+        </div>
       </div>
     </div>
   );
+
+  if (typeof document !== 'undefined' && document.body) {
+    return createPortal(content, document.body);
+  }
+  return content;
 }
 
 export const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (

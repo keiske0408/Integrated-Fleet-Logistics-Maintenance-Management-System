@@ -1146,20 +1146,45 @@ export function FormBuilderPage() {
         variant="destructive"
         icon={Trash2}
         title={`Delete Draft v${definition.version}?`}
+        badge={
+          <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-semibold text-red-700 dark:text-red-400 border border-red-500/20">
+            v{definition.version} Draft
+          </span>
+        }
         confirmText="Delete Draft"
         cancelText="Cancel"
         isLoading={isDeletingDraft}
+        className="max-w-md sm:max-w-lg"
       >
-        <div className="space-y-3">
+        <div className="space-y-3.5">
           <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-            Are you sure you want to delete this draft? Any changes in{' '}
-            <strong className="text-foreground">draft v{definition.version}</strong> will be
-            permanently removed.
+            Are you sure you want to delete this draft? Any unsaved edits or customizations in{' '}
+            <strong className="text-foreground font-semibold">draft v{definition.version}</strong>{' '}
+            will be permanently wiped.
           </p>
-          <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-xs text-destructive flex items-start gap-2">
-            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+
+          <div className="rounded-xl border border-border/80 bg-muted/40 p-3 sm:p-3.5 space-y-1.5 text-xs">
+            <div className="font-semibold text-foreground truncate">
+              {definition.title || 'Form Draft'}
+            </div>
+            <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-[11px]">
+              <span className="font-mono">v{definition.version} (draft)</span>
+              <span>·</span>
+              <span>
+                {definition.sections.length} section{definition.sections.length === 1 ? '' : 's'}
+              </span>
+              <span>·</span>
+              <span>
+                {fields.length} field{fields.length === 1 ? '' : 's'}
+              </span>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-red-500/20 bg-red-500/10 dark:bg-red-950/20 p-3 text-xs text-red-700 dark:text-red-300 flex items-start gap-2.5">
+            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-red-600 dark:text-red-400" />
             <span className="leading-relaxed">
-              Published and archived versions will not be affected. This action cannot be undone.
+              Published baseline and historical form submissions are unaffected. This draft cannot
+              be recovered once removed.
             </span>
           </div>
         </div>
