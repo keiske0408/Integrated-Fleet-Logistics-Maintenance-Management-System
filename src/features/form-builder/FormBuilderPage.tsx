@@ -192,6 +192,7 @@ export function FormBuilderPage() {
   }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { success: toastSuccess, error: toastError, warning: toastWarning } = useToast();
   const activeFormKey = routeFormKey ?? searchParams.get('form') ?? 'tsrf';
   const basePath =
     activeFormKey !== 'tsrf'
@@ -201,6 +202,14 @@ export function FormBuilderPage() {
   const [availableForms, setAvailableForms] = useState<FormDirectoryItem[]>([]);
   const [formsDirectoryOpen, setFormsDirectoryOpen] = useState(false);
   const [formsDirectorySearch, setFormsDirectorySearch] = useState('');
+  const [formsDirectoryFilter, setFormsDirectoryFilter] = useState<'all' | 'published' | 'draft'>(
+    'all',
+  );
+  const [formsDirectorySort, setFormsDirectorySort] = useState<
+    'name-asc' | 'name-desc' | 'versions'
+  >('name-asc');
+  const [formToDelete, setFormToDelete] = useState<FormDirectoryItem | null>(null);
+  const [isDeletingForm, setIsDeletingForm] = useState(false);
   const [newFormModalOpen, setNewFormModalOpen] = useState(false);
   const [newFormTitle, setNewFormTitle] = useState('');
   const [newFormKey, setNewFormKey] = useState('');
@@ -227,6 +236,40 @@ export function FormBuilderPage() {
     void loadAvailableForms();
   }, [loadAvailableForms]);
 
+  const deleteForm = async () => {
+    if (!formToDelete) return;
+    if (formToDelete.key === 'tsrf') {
+      toastWarning('The TSRF template is a core system form and cannot be deleted.');
+      setFormToDelete(null);
+      return;
+    }
+    setIsDeletingForm(true);
+    try {
+      const response = await apiFetch(
+        `/api/forms/${encodeURIComponent(formToDelete.id || formToDelete.key)}`,
+        {
+          method: 'DELETE',
+        },
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toastError(data.error || 'Failed to delete form template.');
+        return;
+      }
+      toastSuccess(`Form "${formToDelete.name}" deleted successfully.`);
+      const deletedKey = formToDelete.key;
+      setFormToDelete(null);
+      await loadAvailableForms();
+      if (deletedKey === activeFormKey) {
+        navigate('/form-builder');
+      }
+    } catch (error) {
+      toastError((error as Error).message || 'Failed to delete form template.');
+    } finally {
+      setIsDeletingForm(false);
+    }
+  };
+
   const allFormsList = React.useMemo(() => {
     const list = [...availableForms];
     if (!list.some((f) => f.key === 'tsrf')) {
@@ -241,26 +284,55 @@ export function FormBuilderPage() {
         latestVersion: 1,
       });
     }
-    return list.sort((a, b) => {
-      if (a.key === 'tsrf') return -1;
-      if (b.key === 'tsrf') return 1;
-      const isTestA = a.key.startsWith('test-form-') || a.key.startsWith('invalid-form-');
-      const isTestB = b.key.startsWith('test-form-') || b.key.startsWith('invalid-form-');
-      if (isTestA !== isTestB) return isTestA ? 1 : -1;
-      return a.name.localeCompare(b.name);
-    });
+    return list;
   }, [availableForms]);
 
+  const formsDirectoryCounts = React.useMemo(() => {
+    const total = allFormsList.length;
+    const published = allFormsList.filter((f) => Boolean(f.publishedVersion)).length;
+    const draft = allFormsList.filter((f) => !f.publishedVersion).length;
+    return { total, published, draft };
+  }, [allFormsList]);
+
   const filteredFormsDirectory = React.useMemo(() => {
-    if (!formsDirectorySearch.trim()) return allFormsList;
-    const q = formsDirectorySearch.toLowerCase();
-    return allFormsList.filter(
-      (f) =>
-        f.name.toLowerCase().includes(q) ||
-        f.key.toLowerCase().includes(q) ||
-        (f.publishedVersionName && f.publishedVersionName.toLowerCase().includes(q)),
-    );
-  }, [allFormsList, formsDirectorySearch]);
+    let list = [...allFormsList];
+
+    // Status filter
+    if (formsDirectoryFilter === 'published') {
+      list = list.filter((f) => Boolean(f.publishedVersion));
+    } else if (formsDirectoryFilter === 'draft') {
+      list = list.filter((f) => !f.publishedVersion);
+    }
+
+    // Text search filter
+    if (formsDirectorySearch.trim()) {
+      const q = formsDirectorySearch.toLowerCase();
+      list = list.filter(
+        (f) =>
+          f.name.toLowerCase().includes(q) ||
+          f.key.toLowerCase().includes(q) ||
+          (f.publishedVersionName && f.publishedVersionName.toLowerCase().includes(q)),
+      );
+    }
+
+    // Sorting
+    if (formsDirectorySort === 'name-desc') {
+      list.sort((a, b) => b.name.localeCompare(a.name));
+    } else if (formsDirectorySort === 'versions') {
+      list.sort((a, b) => b.versionCount - a.versionCount);
+    } else {
+      list.sort((a, b) => {
+        if (a.key === 'tsrf') return -1;
+        if (b.key === 'tsrf') return 1;
+        const isTestA = a.key.startsWith('test-form-') || a.key.startsWith('invalid-form-');
+        const isTestB = b.key.startsWith('test-form-') || b.key.startsWith('invalid-form-');
+        if (isTestA !== isTestB) return isTestA ? 1 : -1;
+        return a.name.localeCompare(b.name);
+      });
+    }
+
+    return list;
+  }, [allFormsList, formsDirectoryFilter, formsDirectorySearch, formsDirectorySort]);
 
   const switchForm = (targetKey: string) => {
     if (targetKey === activeFormKey) {
@@ -600,7 +672,6 @@ export function FormBuilderPage() {
     title: string;
     publishedFieldKeys: string[];
   } | null>(null);
-  const { success: toastSuccess, error: toastError, warning: toastWarning } = useToast();
   const propertiesPanelRef = useRef<HTMLDivElement>(null);
 
   const selectFieldAndScroll = (fieldId: string) => {
@@ -1502,7 +1573,7 @@ export function FormBuilderPage() {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-bold">{definition.name}</h1>
             <Button
               type="button"
@@ -1519,6 +1590,31 @@ export function FormBuilderPage() {
               <Edit3 className="mr-1.5 h-3.5 w-3.5 text-primary" />
               Edit Names
             </Button>
+            {definition.key !== 'tsrf' && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 px-2.5 text-xs text-red-600 border-red-500/30 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:border-red-500/30 dark:hover:bg-red-950/30"
+                onClick={() => {
+                  const target = availableForms.find((f) => f.key === definition.key) ?? {
+                    id: definition.id ?? definition.key,
+                    key: definition.key,
+                    name: definition.name,
+                    versionCount: availableVersions.length || 1,
+                    publishedVersion: publishedBaseline?.version ?? null,
+                    publishedVersionName: definition.versionName ?? null,
+                    hasDraft: Boolean(draftVersionId),
+                    latestVersion: definition.version ?? 1,
+                  };
+                  setFormToDelete(target);
+                }}
+                title="Delete Form Template"
+              >
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                Delete Form
+              </Button>
+            )}
           </div>
           <p className="text-sm text-muted-foreground">
             {definition.versionName ? (
@@ -1863,27 +1959,134 @@ export function FormBuilderPage() {
         </DialogHeader>
 
         <div className="space-y-3 pt-1">
-          {/* Search bar */}
-          <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
-            <Input
-              type="text"
-              placeholder="Filter forms by name, key, or release..."
-              value={formsDirectorySearch}
-              onChange={(e) => setFormsDirectorySearch(e.target.value)}
-              className="pl-9 h-9 text-xs bg-background"
-            />
+          {/* Search bar & Sort Controls */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input
+                type="text"
+                placeholder="Search forms by name, key, or release..."
+                value={formsDirectorySearch}
+                onChange={(e) => setFormsDirectorySearch(e.target.value)}
+                className="pl-9 pr-8 h-9 text-xs bg-background"
+              />
+              {formsDirectorySearch && (
+                <button
+                  type="button"
+                  onClick={() => setFormsDirectorySearch('')}
+                  className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground p-0.5 rounded"
+                  title="Clear search"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="text-xs text-muted-foreground hidden sm:inline">Sort:</span>
+              <Select
+                value={formsDirectorySort}
+                onChange={(e) =>
+                  setFormsDirectorySort(e.target.value as 'name-asc' | 'name-desc' | 'versions')
+                }
+                className="h-9 text-xs bg-background w-full sm:w-auto min-w-[130px]"
+              >
+                <option value="name-asc">Name (A-Z)</option>
+                <option value="name-desc">Name (Z-A)</option>
+                <option value="versions">Most Versions</option>
+              </Select>
+            </div>
+          </div>
+
+          {/* Filter Pills & Result Summary */}
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs pt-0.5">
+            <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg border border-border/60">
+              <button
+                type="button"
+                onClick={() => setFormsDirectoryFilter('all')}
+                className={cn(
+                  'px-2.5 py-1 rounded-md text-xs font-medium transition-all',
+                  formsDirectoryFilter === 'all'
+                    ? 'bg-background text-foreground shadow-xs font-semibold'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                All ({formsDirectoryCounts.total})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormsDirectoryFilter('published')}
+                className={cn(
+                  'px-2.5 py-1 rounded-md text-xs font-medium transition-all inline-flex items-center gap-1.5',
+                  formsDirectoryFilter === 'published'
+                    ? 'bg-background text-emerald-600 dark:text-emerald-400 shadow-xs font-semibold'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                Published ({formsDirectoryCounts.published})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormsDirectoryFilter('draft')}
+                className={cn(
+                  'px-2.5 py-1 rounded-md text-xs font-medium transition-all inline-flex items-center gap-1.5',
+                  formsDirectoryFilter === 'draft'
+                    ? 'bg-background text-amber-600 dark:text-amber-400 shadow-xs font-semibold'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                Draft Only ({formsDirectoryCounts.draft})
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 text-muted-foreground text-[11px]">
+              <span>
+                Showing {filteredFormsDirectory.length} of {allFormsList.length}
+              </span>
+              {(formsDirectorySearch || formsDirectoryFilter !== 'all') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormsDirectorySearch('');
+                    setFormsDirectoryFilter('all');
+                  }}
+                  className="text-primary hover:underline font-medium"
+                >
+                  Reset filters
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Forms List Grid */}
           <div className="max-h-[55vh] overflow-y-auto space-y-2 pr-1 overscroll-contain">
             {filteredFormsDirectory.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border p-8 text-center">
-                <FolderKanban className="mx-auto h-8 w-8 text-muted-foreground opacity-50 mb-2" />
-                <p className="text-sm font-semibold text-foreground">No forms match your search</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Try adjusting the filter keyword or create a new form template.
-                </p>
+              <div className="rounded-xl border border-dashed border-border p-8 text-center space-y-3">
+                <FolderKanban className="mx-auto h-8 w-8 text-muted-foreground opacity-50" />
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-foreground">
+                    No forms match your criteria
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Try adjusting the filter keyword or resetting active filters.
+                  </p>
+                </div>
+                {(formsDirectorySearch || formsDirectoryFilter !== 'all') && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setFormsDirectorySearch('');
+                      setFormsDirectoryFilter('all');
+                    }}
+                    className="h-8 text-xs"
+                  >
+                    Clear All Filters
+                  </Button>
+                )}
               </div>
             ) : (
               filteredFormsDirectory.map((form) => {
@@ -1944,6 +2147,29 @@ export function FormBuilderPage() {
                           Switch to Form
                         </Button>
                       )}
+
+                      {form.key !== 'tsrf' ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFormToDelete(form);
+                          }}
+                          className="h-8 w-8 p-0 text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                          title={`Delete form template "${form.name}"`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      ) : (
+                        <span
+                          className="text-[10px] font-semibold text-muted-foreground/50 uppercase px-1.5 py-0.5 rounded border border-border/40 select-none"
+                          title="Core system form cannot be deleted"
+                        >
+                          System
+                        </span>
+                      )}
                     </div>
                   </div>
                 );
@@ -1952,6 +2178,74 @@ export function FormBuilderPage() {
           </div>
         </div>
       </Dialog>
+
+      {/* Delete Form Confirmation Modal */}
+      {formToDelete && (
+        <ConfirmDialog
+          open={Boolean(formToDelete)}
+          onOpenChange={(open) => !open && setFormToDelete(null)}
+          onCancel={() => setFormToDelete(null)}
+          onConfirm={() => void deleteForm()}
+          variant="destructive"
+          icon={Trash2}
+          title={`Delete Form "${formToDelete.name}"?`}
+          badge={
+            <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-semibold text-red-700 dark:text-red-400 border border-red-500/20 font-mono">
+              {formToDelete.key}
+            </span>
+          }
+          confirmText="Delete Form"
+          cancelText="Cancel"
+          isLoading={isDeletingForm}
+          className="max-w-md sm:max-w-lg"
+        >
+          <div className="space-y-3.5">
+            <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+              Are you sure you want to delete{' '}
+              <strong className="text-foreground">{formToDelete.name}</strong>? This will
+              permanently remove the form template, all schema configurations, and its{' '}
+              <strong className="text-foreground">{formToDelete.versionCount} version(s)</strong>.
+            </p>
+
+            {formToDelete.key === activeFormKey && (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                <span>
+                  This form is currently open in the editor. Upon deletion, you will be redirected
+                  back to the default Transportation Service Request Form.
+                </span>
+              </div>
+            )}
+
+            <div className="rounded-xl border border-border/80 bg-muted/40 p-3 text-xs text-muted-foreground space-y-1">
+              <div className="flex justify-between">
+                <span>Form Key:</span>
+                <span className="font-mono font-semibold text-foreground">{formToDelete.key}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Total Versions:</span>
+                <span className="font-semibold text-foreground">{formToDelete.versionCount}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Status:</span>
+                <span className="font-semibold text-foreground">
+                  {formToDelete.publishedVersion
+                    ? `Published (v${formToDelete.publishedVersion})`
+                    : 'Draft only'}
+                </span>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-red-500/20 bg-red-500/10 dark:bg-red-950/20 p-3 text-xs text-red-700 dark:text-red-300 flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-red-600 dark:text-red-400" />
+              <span>
+                <strong>Audit Protection:</strong> If this form has existing workflow submissions,
+                deletion is blocked by policy to preserve enterprise audit records.
+              </span>
+            </div>
+          </div>
+        </ConfirmDialog>
+      )}
 
       {/* Create New Form Modal */}
       <Dialog
