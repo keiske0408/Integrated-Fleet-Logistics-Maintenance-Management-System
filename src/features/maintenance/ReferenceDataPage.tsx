@@ -39,7 +39,7 @@ import {
   PanelLeftClose,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
-import { Dialog } from '@/components/ui/dialog';
+import { Dialog, ConfirmDialog } from '@/components/ui/dialog';
 import { Pagination } from '@/components/ui/pagination';
 import { parseReferenceDataCsv, serializeReferenceDataCsv } from './referenceDataCsv';
 
@@ -1656,13 +1656,11 @@ export function ReferenceDataPage() {
             </Label>
           </label>
 
-          <div className="flex gap-3 pt-2">
-            <Button type="button" variant="outline" onClick={resetItemForm} className="flex-1">
+          <div className="flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3 pt-3 border-t border-border/50 [&>button]:w-full [&>button]:sm:w-auto [&>button]:flex-1">
+            <Button type="button" variant="outline" onClick={resetItemForm}>
               Cancel
             </Button>
-            <Button type="submit" className="flex-1">
-              {editingId ? 'Save Changes' : 'Add Entry'}
-            </Button>
+            <Button type="submit">{editingId ? 'Save Changes' : 'Add Entry'}</Button>
           </div>
         </form>
       </Dialog>
@@ -1727,18 +1725,11 @@ export function ReferenceDataPage() {
             />
             <span className="text-sm text-foreground">Supports hierarchy (parent/child items)</span>
           </label>
-          <div className="flex gap-3 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setModalMode(null)}
-              className="flex-1"
-            >
+          <div className="flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3 pt-3 border-t border-border/50 [&>button]:w-full [&>button]:sm:w-auto [&>button]:flex-1">
+            <Button type="button" variant="outline" onClick={() => setModalMode(null)}>
               Cancel
             </Button>
-            <Button type="submit" className="flex-1">
-              Create List
-            </Button>
+            <Button type="submit">Create List</Button>
           </div>
         </form>
       </Dialog>
@@ -1873,7 +1864,7 @@ export function ReferenceDataPage() {
               </label>
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3 pt-3 border-t border-border/50 [&>button]:w-full [&>button]:sm:w-auto [&>button]:flex-1">
               {editingAttrId && (
                 <Button
                   type="button"
@@ -1891,88 +1882,52 @@ export function ReferenceDataPage() {
                     });
                     setAttrOptionsText('');
                   }}
-                  className="flex-1"
                 >
                   Cancel Edit
                 </Button>
               )}
-              <Button type="submit" className="flex-1">
-                {editingAttrId ? 'Update Attribute' : 'Add Attribute'}
-              </Button>
+              <Button type="submit">{editingAttrId ? 'Update Attribute' : 'Add Attribute'}</Button>
             </div>
           </form>
         </div>
       </Dialog>
 
       {/* ── Delete Catalog Confirmation Modal ── */}
-      <Dialog
+      <ConfirmDialog
         open={Boolean(listToDelete)}
         onOpenChange={(isOpen) => !isOpen && !isDeletingList && setListToDelete(null)}
-        className="max-w-md"
-        showCloseButton={false}
+        onCancel={() => setListToDelete(null)}
+        onConfirm={handleDeleteListConfirm}
+        variant="destructive"
+        icon={Trash2}
+        title="Delete Reference Catalog"
+        confirmText={isDeletingList ? 'Deleting...' : 'Delete Catalog'}
+        cancelText="Cancel"
+        isLoading={isDeletingList}
       >
-        <div className="space-y-4">
-          <div className="flex items-center justify-between pb-2 border-b border-border/50">
-            <div className="flex items-center gap-2 text-destructive">
-              <Trash2 className="h-4 w-4" />
-              <h3 className="text-base font-bold text-foreground">Delete Reference Catalog</h3>
-            </div>
-            <button
-              type="button"
-              onClick={() => !isDeletingList && setListToDelete(null)}
-              className="text-muted-foreground hover:text-foreground p-1 rounded-lg hover:bg-muted transition-colors"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-xs text-foreground space-y-2">
-            <p className="font-semibold text-destructive">
-              Are you sure you want to delete this catalog?
-            </p>
-            <p className="text-muted-foreground leading-relaxed">
-              You are about to delete{' '}
-              <strong className="text-foreground">{listToDelete?.name}</strong> (
-              <span className="font-mono text-foreground font-semibold">{listToDelete?.code}</span>
-              ).
-            </p>
-            <p className="text-muted-foreground leading-relaxed">
-              This will permanently remove the catalog, along with its{' '}
-              <strong className="text-foreground">
-                {listToDelete ? getAttributes(listToDelete.code).length : 0} defined attributes
-              </strong>{' '}
-              and all{' '}
-              <strong className="text-foreground">
-                {listToDelete ? getItems(listToDelete.code).length : 0} items
-              </strong>
-              . This action cannot be undone.
-            </p>
-          </div>
-
-          <div className="flex justify-end gap-2 pt-1">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setListToDelete(null)}
-              disabled={isDeletingList}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              onClick={handleDeleteListConfirm}
-              disabled={isDeletingList}
-              className="gap-1.5"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              <span>{isDeletingList ? 'Deleting...' : 'Delete Catalog'}</span>
-            </Button>
-          </div>
+        <div className="p-3.5 rounded-xl bg-destructive/10 border border-destructive/20 text-xs text-foreground space-y-2">
+          <p className="font-semibold text-destructive">
+            Are you sure you want to delete this catalog?
+          </p>
+          <p className="text-muted-foreground leading-relaxed">
+            You are about to delete{' '}
+            <strong className="text-foreground">{listToDelete?.name}</strong> (
+            <span className="font-mono text-foreground font-semibold">{listToDelete?.code}</span>
+            ).
+          </p>
+          <p className="text-muted-foreground leading-relaxed">
+            This will permanently remove the catalog, along with its{' '}
+            <strong className="text-foreground">
+              {listToDelete ? getAttributes(listToDelete.code).length : 0} defined attributes
+            </strong>{' '}
+            and all{' '}
+            <strong className="text-foreground">
+              {listToDelete ? getItems(listToDelete.code).length : 0} items
+            </strong>
+            . This action cannot be undone.
+          </p>
         </div>
-      </Dialog>
+      </ConfirmDialog>
 
       {/* (toast rendered globally) */}
     </div>

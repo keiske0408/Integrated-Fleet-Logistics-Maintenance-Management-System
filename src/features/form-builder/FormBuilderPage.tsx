@@ -33,19 +33,20 @@ import {
   GitBranch,
   Lock,
   ArrowLeft,
-  Loader2,
+  AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { useToast } from '@/components/ui/toast';
+import { ConfirmDialog } from '@/components/ui/dialog';
 import { FormRenderer } from './FormRenderer';
 import { TSRF_V1, TSRF_WORKFLOW } from './seed';
 import { useLov } from '@/features/lov';
 import { useAuth } from '@/features/auth/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { validateFormDefinition, validateFormWorkflow } from './validation';
+import { validateFormDefinition, validateFormWorkflow, pruneWorkflowForFields } from './validation';
 import { projectFormForRoleStage } from './preview';
 import type {
   FieldType,
@@ -128,6 +129,26 @@ function collectFieldIds(fields: FormField[]): string[] {
   return fields.flatMap((field) => [field.id, ...collectFieldIds(field.rowFields ?? [])]);
 }
 
+function extractAllFieldKeys(def: FormDefinition | null | undefined): Set<string> {
+  if (!def || !Array.isArray(def.sections)) return new Set();
+  const keys = new Set<string>();
+  const collect = (fieldsList: FormField[], prefix = '') => {
+    fieldsList.forEach((f) => {
+      const fullKey = prefix ? `${prefix}.${f.key}` : f.key;
+      keys.add(fullKey);
+      if (Array.isArray(f.rowFields)) {
+        collect(f.rowFields, fullKey);
+      }
+    });
+  };
+  def.sections.forEach((sec) => {
+    if (Array.isArray(sec.fields)) {
+      collect(sec.fields);
+    }
+  });
+  return keys;
+}
+
 function cloneDefinition(): FormDefinition {
   return structuredClone(TSRF_V1);
 }
@@ -193,6 +214,17 @@ export function FormBuilderPage() {
   );
   const [isDeletingDraft, setIsDeletingDraft] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showRetireConfirmModal, setShowRetireConfirmModal] = useState(false);
+  const [retiredKeysToConfirm, setRetiredKeysToConfirm] = useState<string[]>([]);
+  const [fieldToDeletePrompt, setFieldToDeletePrompt] = useState<{
+    field: FormField;
+    sectionId: string;
+  } | null>(null);
+  const [sectionToDeletePrompt, setSectionToDeletePrompt] = useState<{
+    sectionId: string;
+    title: string;
+    publishedFieldKeys: string[];
+  } | null>(null);
   const { success: toastSuccess, error: toastError, warning: toastWarning } = useToast();
   const propertiesPanelRef = useRef<HTMLDivElement>(null);
 
@@ -209,6 +241,10 @@ export function FormBuilderPage() {
   const [draftVersionId, setDraftVersionId] = useState<string | null>(null);
   const [publishedFieldIds, setPublishedFieldIds] = useState<Set<string>>(() => new Set());
   const [publishedBaseline, setPublishedBaseline] = useState<FormDefinition | null>(null);
+  const publishedFieldKeys = React.useMemo(
+    () => extractAllFieldKeys(publishedBaseline),
+    [publishedBaseline],
+  );
   const [availableVersions, setAvailableVersions] = useState<
     Array<{ version: number; status: string }>
   >([]);
@@ -449,10 +485,32 @@ export function FormBuilderPage() {
     return () => window.clearTimeout(timer);
   }, [editRevision, isDefinitionLoaded, saving]);
 
-  const publish = async () => {
+  const removeFieldDirectly = (fieldId: string) => {
+    const updatedSections = definition.sections.map((s) => ({
+      ...s,
+      fields: s.fields.filter((f) => f.id !== fieldId),
+    }));
+    const updatedDefinition = { ...definition, sections: updatedSections };
+    const allRemainingFields = updatedSections.flatMap((s) => s.fields);
+    const pruned = pruneWorkflowForFields(workflow, allRemainingFields);
+    dispatchEditorHistory({
+      type: 'apply',
+      snapshot: { definition: updatedDefinition, workflow: pruned.workflow },
+    });
+    if (selectedId === fieldId) {
+      setSelectedId('');
+    }
+  };
+
+  const publish = async (bypassRetireCheck = false) => {
+    const pruned = pruneWorkflowForFields(workflow, fields);
+    const activeWorkflow = pruned.workflow;
+    if (pruned.modified) {
+      setWorkflow(activeWorkflow);
+    }
     const errors = [
       ...validateFormDefinition(definition, new Set(lists.map((list) => list.code))),
-      ...validateFormWorkflow(workflow, fields),
+      ...validateFormWorkflow(activeWorkflow, fields),
     ];
     if (errors.length) {
       toastWarning(errors.join(' '));
@@ -466,23 +524,54 @@ export function FormBuilderPage() {
       toastWarning('Wait for the current draft changes to save before publishing.');
       return;
     }
+
+    const currentPublishedKeys = extractAllFieldKeys(publishedBaseline);
+    const currentKeys = extractAllFieldKeys(definition);
+    const retiredKeys = [...currentPublishedKeys].filter((k) => !currentKeys.has(k));
+
+    if (!bypassRetireCheck && retiredKeys.length > 0) {
+      setRetiredKeysToConfirm(retiredKeys);
+      setShowRetireConfirmModal(true);
+      return;
+    }
+
     setSaving(true);
     try {
       const response = await apiFetch(
         `/api/forms/versions/${encodeURIComponent(draftVersionId)}/publish`,
-        { method: 'POST' },
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(
+            retiredKeys.length > 0
+              ? { confirmRetiredKeys: retiredKeys, acknowledgeFieldRetirement: true }
+              : {},
+          ),
+        },
       );
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? 'Unable to publish form.');
+      if (!response.ok) {
+        if (
+          result.canRetire &&
+          Array.isArray(result.removedKeys) &&
+          result.removedKeys.length > 0
+        ) {
+          setRetiredKeysToConfirm(result.removedKeys);
+          setShowRetireConfirmModal(true);
+          return;
+        }
+        throw new Error(result.error ?? 'Unable to publish form.');
+      }
       const published = { ...definition, version: result.version, status: 'published' as const };
       savedRevisionRef.current = editRevision;
       dispatchEditorHistory({
         type: 'reset',
-        snapshot: { definition: published, workflow },
+        snapshot: { definition: published, workflow: activeWorkflow },
       });
       setPublishedBaseline(published);
       setPublishedFieldIds(new Set(collectFieldIds(fields)));
       setDraftVersionId(null);
+      setShowRetireConfirmModal(false);
 
       setAvailableVersions((prev) =>
         prev
@@ -494,7 +583,11 @@ export function FormBuilderPage() {
           .sort((a, b) => b.version - a.version),
       );
 
-      toastSuccess(`Form v${result.version} published successfully!`);
+      const retiredNote =
+        result.retiredKeys && result.retiredKeys.length > 0
+          ? ` (Retired fields: ${result.retiredKeys.join(', ')})`
+          : '';
+      toastSuccess(`Form v${result.version} published successfully!${retiredNote}`);
     } catch (error) {
       toastError(error instanceof Error ? error.message : 'Unable to publish form.');
     } finally {
@@ -760,11 +853,30 @@ export function FormBuilderPage() {
     }));
   };
 
+  const performRemoveSection = (id: string) => {
+    const updatedSections = definition.sections.filter((section) => section.id !== id);
+    const updatedDefinition = { ...definition, sections: updatedSections };
+    const allRemainingFields = updatedSections.flatMap((s) => s.fields);
+    const pruned = pruneWorkflowForFields(workflow, allRemainingFields);
+    dispatchEditorHistory({
+      type: 'apply',
+      snapshot: { definition: updatedDefinition, workflow: pruned.workflow },
+    });
+  };
+
   const removeSection = (id: string) => {
-    setDefinition((current) => ({
-      ...current,
-      sections: current.sections.filter((section) => section.id !== id),
-    }));
+    const targetSection = definition.sections.find((s) => s.id === id);
+    const publishedFieldsInSection =
+      targetSection?.fields.filter((f) => publishedFieldKeys.has(f.key)) ?? [];
+    if (publishedFieldsInSection.length > 0) {
+      setSectionToDeletePrompt({
+        sectionId: id,
+        title: targetSection?.title || 'Untitled Section',
+        publishedFieldKeys: publishedFieldsInSection.map((f) => f.key),
+      });
+      return;
+    }
+    performRemoveSection(id);
   };
 
   const moveSectionByOffset = (sectionId: string, offset: -1 | 1) => {
@@ -1025,55 +1137,212 @@ export function FormBuilderPage() {
       </div>
 
       {/* Delete Draft Confirmation Modal */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
-          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-500/10 text-red-500">
-                <Trash2 className="h-5 w-5" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-base font-semibold text-foreground">
-                  Delete Draft v{definition.version}?
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  Are you sure you want to delete this draft? Any changes in draft v
-                  {definition.version} will be permanently removed. Published and archived versions
-                  will not be affected.
-                </p>
-              </div>
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        onCancel={() => setShowDeleteConfirm(false)}
+        onConfirm={() => void deleteDraft()}
+        variant="destructive"
+        icon={Trash2}
+        title={`Delete Draft v${definition.version}?`}
+        confirmText="Delete Draft"
+        cancelText="Cancel"
+        isLoading={isDeletingDraft}
+      >
+        <div className="space-y-3">
+          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+            Are you sure you want to delete this draft? Any changes in{' '}
+            <strong className="text-foreground">draft v{definition.version}</strong> will be
+            permanently removed.
+          </p>
+          <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-xs text-destructive flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+            <span className="leading-relaxed">
+              Published and archived versions will not be affected. This action cannot be undone.
+            </span>
+          </div>
+        </div>
+      </ConfirmDialog>
+
+      {/* Confirm Field Retirement Modal */}
+      <ConfirmDialog
+        open={showRetireConfirmModal}
+        onOpenChange={setShowRetireConfirmModal}
+        onCancel={() => setShowRetireConfirmModal(false)}
+        onConfirm={() => void publish(true)}
+        variant="warning"
+        icon={ShieldCheck}
+        title="Confirm Field Retirement"
+        badge={
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400 border border-amber-500/20">
+            v{definition.version} Release
+          </span>
+        }
+        description={
+          <>
+            Publishing v{definition.version} will decommission{' '}
+            <strong className="text-foreground font-semibold">
+              {retiredKeysToConfirm.length} published field
+              {retiredKeysToConfirm.length === 1 ? '' : 's'}
+            </strong>
+            .
+          </>
+        }
+        confirmText={`Acknowledge & Publish v${definition.version}`}
+        cancelText="Cancel"
+        isLoading={saving}
+        className="max-w-lg sm:max-w-xl"
+      >
+        <div className="space-y-3">
+          <div className="rounded-xl border border-border bg-muted/30 p-3 sm:p-3.5 space-y-2">
+            <p className="text-xs font-semibold text-foreground">
+              Fields being retired in this release:
+            </p>
+            <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto overscroll-contain pr-1">
+              {retiredKeysToConfirm.map((key) => (
+                <span
+                  key={key}
+                  className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-2 py-0.5 font-mono text-xs font-semibold text-amber-700 dark:text-amber-300 border border-amber-500/30"
+                >
+                  <Lock className="h-3 w-3 opacity-60" />
+                  {key}
+                </span>
+              ))}
             </div>
-            <div className="flex items-center justify-end gap-2.5 pt-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowDeleteConfirm(false)}
-                disabled={isDeletingDraft}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                className="bg-red-600 hover:bg-red-700 text-white"
-                onClick={() => void deleteDraft()}
-                disabled={isDeletingDraft}
-              >
-                {isDeletingDraft ? (
-                  <>
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                    Deleting...
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                    Delete Draft
-                  </>
-                )}
-              </Button>
+          </div>
+
+          <div className="space-y-2 text-xs text-muted-foreground bg-card border border-border/70 rounded-xl p-3">
+            <div className="flex items-start gap-2">
+              <span className="font-bold text-emerald-600 dark:text-emerald-400 shrink-0">✓</span>
+              <span>
+                <strong className="text-foreground">Historical Data Preserved:</strong> All previous
+                submissions retain their data for these fields for audit and compliance.
+              </span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="font-bold text-emerald-600 dark:text-emerald-400 shrink-0">✓</span>
+              <span>
+                <strong className="text-foreground">Clean Future Submissions:</strong> New
+                submissions under version {definition.version} will no longer show or require these
+                fields.
+              </span>
             </div>
           </div>
         </div>
+      </ConfirmDialog>
+
+      {/* Field Deletion / Retirement Prompt Modal */}
+      {fieldToDeletePrompt && (
+        <ConfirmDialog
+          open={Boolean(fieldToDeletePrompt)}
+          onOpenChange={(open) => !open && setFieldToDeletePrompt(null)}
+          onCancel={() => setFieldToDeletePrompt(null)}
+          onConfirm={() => {
+            removeFieldDirectly(fieldToDeletePrompt.field.id);
+            setFieldToDeletePrompt(null);
+          }}
+          variant="warning"
+          icon={Lock}
+          title="Remove Published Field?"
+          badge={
+            publishedBaseline?.version ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400 border border-amber-500/20">
+                <Lock className="h-2.5 w-2.5" /> v{publishedBaseline.version} Published
+              </span>
+            ) : undefined
+          }
+          confirmText="Remove from Draft"
+          cancelText="Cancel"
+        >
+          <div className="space-y-3">
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 dark:bg-amber-950/20 p-3.5 space-y-2">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
+                <span className="text-sm font-semibold text-foreground break-words">
+                  "{fieldToDeletePrompt.field.label}"
+                </span>
+                <code className="text-xs font-mono px-2 py-0.5 rounded bg-background border border-border text-foreground shrink-0 w-fit">
+                  {fieldToDeletePrompt.field.key}
+                </code>
+              </div>
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                This field is part of published baseline{' '}
+                <strong>v{publishedBaseline?.version}</strong>.
+              </p>
+            </div>
+
+            <div className="space-y-2 text-xs text-muted-foreground bg-muted/40 rounded-xl p-3 border border-border/60">
+              <div className="flex items-start gap-2">
+                <span className="text-amber-600 dark:text-amber-400 font-bold shrink-0">⚠️</span>
+                <p className="leading-relaxed">
+                  Removing it from this draft will{' '}
+                  <strong className="text-foreground">schedule it for retirement</strong> when you
+                  publish this release.
+                </p>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold shrink-0">✓</span>
+                <p className="leading-relaxed">
+                  <strong className="text-foreground">Historical data preserved:</strong> Existing
+                  submissions will retain all past values for audit and compliance.
+                </p>
+              </div>
+            </div>
+          </div>
+        </ConfirmDialog>
+      )}
+
+      {/* Section Deletion with Published Fields Confirmation Modal */}
+      {sectionToDeletePrompt && (
+        <ConfirmDialog
+          open={Boolean(sectionToDeletePrompt)}
+          onOpenChange={(open) => !open && setSectionToDeletePrompt(null)}
+          onCancel={() => setSectionToDeletePrompt(null)}
+          onConfirm={() => {
+            performRemoveSection(sectionToDeletePrompt.sectionId);
+            setSectionToDeletePrompt(null);
+          }}
+          variant="warning"
+          icon={Lock}
+          title={`Remove Section "${sectionToDeletePrompt.title}"?`}
+          confirmText="Remove Section & Retire Fields"
+          cancelText="Cancel"
+        >
+          <div className="space-y-3">
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 dark:bg-amber-950/20 p-3.5 space-y-2">
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                This section contains {sectionToDeletePrompt.publishedFieldKeys.length} published
+                field
+                {sectionToDeletePrompt.publishedFieldKeys.length === 1 ? '' : 's'}:
+              </p>
+              <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
+                {sectionToDeletePrompt.publishedFieldKeys.map((key) => (
+                  <span
+                    key={key}
+                    className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-2 py-0.5 font-mono text-xs font-semibold text-amber-700 dark:text-amber-300 border border-amber-500/30"
+                  >
+                    <Lock className="h-3 w-3 opacity-60" />
+                    {key}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2 text-xs text-muted-foreground bg-muted/40 rounded-xl p-3 border border-border/60">
+              <div className="flex items-start gap-2">
+                <span className="text-amber-600 dark:text-amber-400 font-bold shrink-0">⚠️</span>
+                <p className="leading-relaxed">
+                  Removing this section will schedule these published fields for retirement upon
+                  publishing.
+                </p>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold shrink-0">✓</span>
+                <p className="leading-relaxed">
+                  Existing submissions will retain all past values for audit and compliance.
+                </p>
+              </div>
+            </div>
+          </div>
+        </ConfirmDialog>
       )}
 
       {definition.status === 'draft' && publishedBaseline && (
@@ -1505,6 +1774,14 @@ export function FormBuilderPage() {
                               <span className="font-mono text-[11px] bg-muted/50 px-1 rounded">
                                 {field.key}
                               </span>
+                              {publishedFieldKeys.has(field.key) && (
+                                <span
+                                  className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400 border border-amber-500/20"
+                                  title="Published field. Removing this will schedule it for retirement upon publishing."
+                                >
+                                  <Lock className="h-2.5 w-2.5" /> Published
+                                </span>
+                              )}
                               <span>·</span>
                               <span className="capitalize">{field.type.replaceAll('_', ' ')}</span>
                               <span>·</span>
@@ -1558,16 +1835,18 @@ export function FormBuilderPage() {
                               variant="ghost"
                               size="icon"
                               className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                              title="Remove field"
+                              title={
+                                publishedFieldKeys.has(field.key)
+                                  ? 'Retire published field'
+                                  : 'Remove field'
+                              }
                               onClick={(event) => {
                                 event.stopPropagation();
-                                setDefinition((current) => ({
-                                  ...current,
-                                  sections: current.sections.map((s) => ({
-                                    ...s,
-                                    fields: s.fields.filter((f) => f.id !== field.id),
-                                  })),
-                                }));
+                                if (publishedFieldKeys.has(field.key)) {
+                                  setFieldToDeletePrompt({ field, sectionId: section.id });
+                                } else {
+                                  removeFieldDirectly(field.id);
+                                }
                               }}
                             >
                               <Trash2 className="h-3.5 w-3.5" />
@@ -1660,15 +1939,20 @@ export function FormBuilderPage() {
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        title="Delete field"
+                        title={
+                          publishedFieldKeys.has(selectedField.key)
+                            ? 'Retire published field'
+                            : 'Delete field'
+                        }
                         onClick={() => {
-                          setDefinition((current) => ({
-                            ...current,
-                            sections: current.sections.map((section) => ({
-                              ...section,
-                              fields: section.fields.filter((field) => field.id !== selectedId),
-                            })),
-                          }));
+                          if (publishedFieldKeys.has(selectedField.key)) {
+                            setFieldToDeletePrompt({
+                              field: selectedField,
+                              sectionId: selectedField.section,
+                            });
+                          } else {
+                            removeFieldDirectly(selectedField.id);
+                          }
                         }}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -1742,20 +2026,27 @@ export function FormBuilderPage() {
                         <div>
                           <div className="flex items-center justify-between mb-1">
                             <label className="block text-xs font-semibold">Field Key</label>
-                            {publishedFieldIds.has(selectedField.id) && (
+                            {(publishedFieldKeys.has(selectedField.key) ||
+                              publishedFieldIds.has(selectedField.id)) && (
                               <span className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-0.5">
-                                <Lock className="h-3 w-3" /> Published
+                                <Lock className="h-3 w-3" /> Published (Locked)
                               </span>
                             )}
                           </div>
                           <Input
                             value={selectedField.key}
-                            disabled={publishedFieldIds.has(selectedField.id)}
+                            disabled={
+                              publishedFieldKeys.has(selectedField.key) ||
+                              publishedFieldIds.has(selectedField.id)
+                            }
                             onChange={(event) => updateField({ key: event.target.value })}
                             className="font-mono text-xs"
                           />
                           <p className="text-[10px] text-muted-foreground mt-1">
-                            Unique key used in submissions and reporting.
+                            {publishedFieldKeys.has(selectedField.key) ||
+                            publishedFieldIds.has(selectedField.id)
+                              ? 'Immutable to preserve historical submissions and schema integrity.'
+                              : 'Unique key used in submissions and reporting.'}
                           </p>
                         </div>
                         <div>

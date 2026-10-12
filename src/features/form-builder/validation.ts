@@ -228,3 +228,51 @@ export function validateFormValues(definition: FormDefinition, values: FormValue
   definition.sections.forEach((section) => validateFields(section.fields, values));
   return errors;
 }
+
+export function pruneWorkflowForFields(
+  workflow: FormWorkflow,
+  fields: FormField[],
+): { workflow: FormWorkflow; modified: boolean } {
+  const fieldKeys = new Set<string>();
+  const collectKeys = (nestedFields: FormField[], prefix = '') =>
+    nestedFields.forEach((field) => {
+      const key = prefix ? `${prefix}.${field.key}` : field.key;
+      fieldKeys.add(key);
+      if (field.rowFields) collectKeys(field.rowFields, key);
+    });
+  collectKeys(fields);
+
+  let modified = false;
+  const stages = workflow.stages.map((stage) => {
+    if (!stage.fieldPermissions) return stage;
+    const cleanedPerms: Record<string, Record<string, 'edit' | 'read' | 'hidden'>> = {};
+    let stageModified = false;
+    for (const [key, perms] of Object.entries(stage.fieldPermissions)) {
+      if (fieldKeys.has(key)) {
+        cleanedPerms[key] = perms;
+      } else {
+        stageModified = true;
+      }
+    }
+    if (stageModified) {
+      modified = true;
+      return { ...stage, fieldPermissions: cleanedPerms };
+    }
+    return stage;
+  });
+
+  const transitions = workflow.transitions.map((transition) => {
+    if (!transition.requiredFields) return transition;
+    const validRequired = transition.requiredFields.filter((key) => fieldKeys.has(key));
+    if (validRequired.length !== transition.requiredFields.length) {
+      modified = true;
+      return { ...transition, requiredFields: validRequired };
+    }
+    return transition;
+  });
+
+  return {
+    workflow: modified ? { ...workflow, stages, transitions } : workflow,
+    modified,
+  };
+}

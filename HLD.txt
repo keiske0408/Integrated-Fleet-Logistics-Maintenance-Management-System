@@ -126,25 +126,27 @@ By consolidating dispatch requests, mileage tracking, maintenance validation, an
 
 ## 7. Strategic Implementation Roadmap
 
-This roadmap replaces the week-based proposal below as the active plan for the dynamic TSRF form and LOV work. Status was checked against the repository on 2026-10-06. Existing capabilities are identified so implementation extends them rather than rebuilding them. Complete one phase at a time, verify it, and stop for review before beginning the next phase.
+This roadmap replaces the week-based proposal below as the active plan for the dynamic TSRF form, LOV, authentication, and rollout work. Documentation status was reconciled against the repository notes on 2026-10-12; this is not a fresh test run or production verification. Existing capabilities are identified so implementation extends them rather than rebuilding them. Complete one phase at a time and verify its exit criteria before beginning the next phase.
 
 ### Verified Baseline
 
 - **Implemented:** Generic LOV lists, attributes, items, API routes, frontend integration, and the four system lists. Legacy reference-data tables/routes remain in place.
 - **Implemented:** Versioned form definitions, draft/publish flow, schema-driven TSRF renderer, field registry, declarative rules, server-side submission validation, workflow transitions/events, configurable 4:00 PM Asia/Manila cutoff, vehicle lookup, report projection with PII exclusion, and print view. The TSRF UI is list-first, offers an explicit New Request guide, returns to and selects successful submissions, shows event history and the linked approver or current role queue, and prints historical requests from their pinned schema with status metadata.
-- **Partial or missing:** Ongoing parity between legacy and generic LOV write paths; dynamic role-policy enforcement (intentionally frozen while fixed CASL policies remain authoritative); full field-access projection across all read surfaces; returned-request edit/resubmit; normalized driver lookup; complete paper-form fields and print parity; dynamic submission odometer integration; and end-to-end Activity History linkage for builder/workflow changes.
+- **Implemented since the earlier status snapshot:** Returned-request edit/resubmit with owner and field-level checks; sanitized active-driver lookup; ending odometer integration on completion; builder/workflow Activity History; Entra and Fleet-local authentication, signup approval, password reset, and secure first-admin bootstrap.
+- **Still open:** Validate printed TSRFs against the approved entity-specific paper samples; decide and implement dynamic server-backed role policies if administrators need to change permissions without a deployment; verify real Entra and SMTP integrations and production deployment controls. Fixed CASL policies remain authoritative until dynamic policy enforcement is implemented and tested.
 - **LOV slices complete:** Legacy reference rows are copied after legacy seed inserts during startup; a fresh-database smoke check confirmed all four defaults (8 departments, 8 vehicle types, 7 maintenance categories, 3 vendors). LOV item writes validate declared attribute keys/types/required/select options, hierarchy parent/list/cycle rules, and effective-date ordering. Active lookups and both dynamic/legacy TSRF submission validation enforce effective windows using server time.
 - **Implemented security baseline:** Role catalog GET routes remain available; writes are admin-gated and return 409 until dynamic policies are wired, and the Roles UI is read-only. Non-reviewer access to reports, details, events, and data edits is scoped to the creator; detail responses omit explicitly hidden fields and raw JSON storage columns. Published field keys cannot be renamed or removed on later versions, while labels remain editable. Legacy reference-data writes require the admin LOV permission. Production API writes fail closed when Arcjet is missing or errors; test mode bypasses external Arcjet and auth keeps its in-process limiter. Backend regression tests cover these boundaries.
 - **Implemented API contracts:** Existing LOV, form, and role-read routes are registered in `src/api/openapi.ts`; `openapi.json` and `src/api/generated-types.ts` were regenerated from that source.
 
 ### Delivery Phases
 
-1. **Phase 1: Security and API Contract Foundations — In Progress**
+1. **Phase 1: Security and API Contract Foundations — Implemented; staging verification pending**
    - Keep fixed CASL policies as the authoritative server permission source. Dynamic role catalog writes and UI editing are disabled until the role catalog can safely drive backend policy evaluation.
    - Enforce owner-scoped submission reads, reports, events, and edits while preserving reviewer access. Filter detail data and label snapshots according to the pinned version's current-stage field visibility.
    - Published field-key immutability is implemented in the publish API and builder UI. LOV, form lifecycle, and role-read paths are registered in the generated API contract.
    - Apply the global API write limit plus stricter form/TSRF/procurement policies. Production fails closed with 503 when required Arcjet protection is unavailable or errors; development/test behavior is documented.
-   - **Exit checks:** backend tests/build pass; non-admin role mutations are denied and admin catalog writes remain explicitly disabled; cross-owner submission access is denied; hidden fields are absent from details; published keys cannot change; generated paths/types are current; production Arcjet is configured and verified in staging.
+   - **Implementation checks:** backend tests/build pass; non-admin role mutations are denied and admin catalog writes remain explicitly disabled; cross-owner submission access is denied; hidden fields are absent from details; published keys cannot change; generated paths/types are current.
+   - **Release gate:** production Arcjet is configured and protected writes are verified in staging.
 
 2. **Phase 2: LOV Completion and Backward-Compatible Migration — Complete (2026-10-07)**
    - Generic LOV items are canonical for Departments, Vehicle Types, Maintenance Categories, and Vendors. Startup backfill runs after legacy seeds, copies active/inactive state, is idempotent, and preserves existing LOV edits when legacy rows are stale.
@@ -168,11 +170,32 @@ This roadmap replaces the week-based proposal below as the active plan for the d
    - Enforce field edit/read/hidden permissions on both UI and API. Add approval stamps and focused transition/denial tests.
    - **Exit checks:** tampered payloads and unauthorized transitions are rejected server-side; workflow edits require no code deployment.
 
-5. **Phase 5: Fleet Integrations, Repeaters, Reporting, and Print — In Progress (2026-10-07)**
+5. **Phase 5: Fleet Integrations, Repeaters, Reporting, and Print — Implemented; paper-form acceptance pending**
    - Conditional Fleet Asset/3rd Party Trucking fields, normalized driver lookup, route/passenger/material repeaters, reportable-field exposure, print approval stamps/signature lines, and an ENTITIES LOV-driven GVE/HULMA letterhead are present. Dynamic TSRF completion now records ending odometer readings to the assigned vehicle using the existing monotonic/PMS rules; requestors cannot inject the ending reading at intake.
    - Builder changes have scoped Activity History records; successful LOV/workflow mutations are audit-logged with actor/path metadata only. Workflow audit labels distinguish returned, rejected, cancelled, completed, resubmitted, and approved transitions without storing request bodies or comments.
-   - Remaining work: verify entity-specific paper-form parity/signatures against the approved sample. Keep passenger names, mobile numbers, and signatures classified as PII and out of unauthorized exports/logs.
-   - **Exit checks:** representative TSRF requests pass end-to-end API/UI tests; reports exclude PII; print output matches the approved paper form; vehicle mileage updates follow existing validation rules.
+   - Remaining work: compare the generated print view to the approved GVE and HULMA paper samples, including field order, conditional fields, approval stamps, signatures, and page breaks. Keep passenger names, mobile numbers, and signatures classified as PII and out of unauthorized exports/logs.
+   - **Implementation checks:** representative TSRF requests pass end-to-end API/UI tests; reports exclude PII; vehicle mileage updates follow existing validation rules.
+   - **Acceptance gate:** fleet/business owners approve print parity for both entities.
+
+6. **Phase 6: Production Readiness and Controlled Rollout — Not verified**
+   - Configure the production database, HTTPS origins/CORS, session secret, Entra app registrations and role map, SMTP delivery, and Arcjet. Keep development identity headers and demo accounts disabled.
+   - Run the secure one-time first-admin bootstrap; verify admin sign-in and account recovery without exposing bootstrap credentials or reset tokens.
+   - Exercise signup/approval, local and Entra login, logout/CSRF, password reset, role denial, owner scoping, audit logging, and protected write limits in staging. Verify database migration, backup/restore, and operational alert/retention procedures before live use.
+   - **Exit checks:** staging smoke/UAT results are recorded; production secrets and identity settings are validated; backup restore and rollback are rehearsed; no development-only authentication path is enabled.
+
+7. **Phase 7: Dynamic Server-Backed Role Policies — Deferred; decision required**
+   - Confirm whether role and permission changes must be configurable by administrators at runtime. Until approved, retain fixed CASL authorization and the read-only role catalog; catalog edits must not imply access grants.
+   - If approved, define the supported permission vocabulary and role-to-policy mapping, migrate/seed mappings, make policy evaluation server-authoritative, and add deny-by-default tests for every protected API family before enabling role writes in the UI.
+   - **Exit checks:** API authorization uses persisted policy mappings; unsupported permissions and privilege escalation are rejected; policy changes are audited; tests prove both grants and denials; generated OpenAPI/types are current.
+
+### Recommended Next Steps
+
+1. **Close paper-form parity first.** Obtain the approved GVE and HULMA samples, create a field-by-field/signature checklist, adjust the versioned definition and print layout, then get fleet/business sign-off. This is the remaining user-facing acceptance item in the current TSRF delivery.
+2. **Run production-readiness work in parallel with that review.** Provision staging integrations and secrets, bootstrap the first administrator securely, and verify Entra, SMTP, Arcjet, CSRF, backups, and audit operations. Do not enable live use until Phase 6 exit checks pass.
+3. **Make the RBAC decision before building it.** If runtime permission administration is not a business requirement, keep fixed CASL and close the phase as intentionally deferred. If it is required, implement Phase 7 as a server-side authorization change; do not treat the UI role matrix or catalog as enforcement.
+4. **Complete end-to-end UAT and controlled rollout.** Test requestor, department approver, finance, fleet, procurement, and administrator paths using representative trip/maintenance scenarios; record defects and acceptance, then roll out with monitoring and a rollback plan.
+
+**Immediate implementation order:** paper sample/parity review → staging integration and security verification → role-policy decision → UAT and controlled rollout. Production configuration and security verification are release blockers, even if they proceed alongside print work.
 
 ### Approved Decisions
 
@@ -185,7 +208,7 @@ This roadmap replaces the week-based proposal below as the active plan for the d
 
 ### Historical Proposal
 
-The following week-based sequence is retained only as historical planning context; it does not represent current implementation status:
+The following week-based sequence is retained only as historical planning context; it does not represent current implementation status or supersede the recommended next steps above:
 
 - Foundation/data ingestion (Weeks 1–2): fleet schema and initial vehicle/KM data.
 - TSRF/approvals (Weeks 3–4): intake cutoff and multi-role approvals.

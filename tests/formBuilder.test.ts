@@ -11,6 +11,7 @@ import {
   validateFormDefinition,
   validateFormValues,
   validateFormWorkflow,
+  pruneWorkflowForFields,
 } from '@/features/form-builder';
 import {
   choosePublishedDefinition,
@@ -545,5 +546,36 @@ describe('TSRF form definition', () => {
     ]);
     expect(selected.version).toBe(2);
     expect(selected.status).toBe('published');
+  });
+
+  it('prunes workflow stage permissions and transition required fields when fields are retired', () => {
+    const workflow = {
+      ...TSRF_WORKFLOW,
+      stages: [
+        {
+          ...TSRF_WORKFLOW.stages[0],
+          fieldPermissions: {
+            department: { department_requester: 'edit' as const },
+            retired_field_x: { department_requester: 'hidden' as const },
+          },
+        },
+      ],
+      transitions: [
+        {
+          ...TSRF_WORKFLOW.transitions[0],
+          requiredFields: ['department', 'retired_field_x'],
+        },
+      ],
+    };
+
+    const remainingFields = TSRF_V1.sections
+      .flatMap((s) => s.fields)
+      .filter((f) => f.key !== 'retired_field_x');
+
+    const result = pruneWorkflowForFields(workflow, remainingFields);
+    expect(result.modified).toBe(true);
+    expect(result.workflow.stages[0].fieldPermissions?.retired_field_x).toBeUndefined();
+    expect(result.workflow.stages[0].fieldPermissions?.department).toBeDefined();
+    expect(result.workflow.transitions[0].requiredFields).toEqual(['department']);
   });
 });

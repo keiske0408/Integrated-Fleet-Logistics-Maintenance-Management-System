@@ -568,18 +568,11 @@ export function UserManagementPage() {
             <Label htmlFor="user-active">Account is active</Label>
           </div>
 
-          <div className="flex gap-3 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowForm(false)}
-              className="flex-1"
-            >
+          <div className="flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3 pt-4 border-t border-border/50 [&>button]:w-full [&>button]:sm:w-auto [&>button]:flex-1">
+            <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
               Cancel
             </Button>
-            <Button type="submit" className="flex-1">
-              {editingId ? 'Save Changes' : 'Create User'}
-            </Button>
+            <Button type="submit">{editingId ? 'Save Changes' : 'Create User'}</Button>
           </div>
         </form>
       </Dialog>

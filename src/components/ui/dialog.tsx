@@ -60,12 +60,12 @@ export function Dialog({
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-y-auto"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto"
       role="presentation"
     >
       {/* Standardized Dark Tint Backdrop with Blur Effect */}
       <div
-        className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity animate-fade-in"
+        className="fixed inset-0 bg-slate-900/60 dark:bg-black/75 backdrop-blur-sm transition-opacity animate-fade-in"
         onClick={closeOnBackdropClick ? handleClose : undefined}
         aria-hidden="true"
       />
@@ -75,8 +75,8 @@ export function Dialog({
         role="dialog"
         aria-modal="true"
         className={cn(
-          'relative w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-2xl text-card-foreground',
-          'animate-fade-in focus:outline-none my-8 max-h-[calc(100vh-4rem)] overflow-y-auto',
+          'relative w-full max-w-lg rounded-2xl border border-border bg-card p-5 sm:p-6 md:p-7 shadow-2xl text-card-foreground',
+          'animate-fade-in focus:outline-none my-auto sm:my-8 max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100vh-4rem)] overflow-y-auto overscroll-contain',
           className,
         )}
         onClick={(e) => e.stopPropagation()}
@@ -85,7 +85,7 @@ export function Dialog({
           <button
             type="button"
             onClick={handleClose}
-            className="absolute right-4 top-4 rounded-lg p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20"
+            className="absolute right-3.5 top-3.5 sm:right-4 sm:top-4 rounded-lg p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20"
             aria-label="Close"
           >
             <X className="h-4 w-4" />
@@ -99,7 +99,7 @@ export function Dialog({
 
 export const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={cn('flex flex-col space-y-1.5 text-center sm:text-left mb-4', className)}
+    className={cn('flex flex-col space-y-1.5 text-left mb-4 sm:mb-5 pr-6 sm:pr-8', className)}
     {...props}
   />
 );
@@ -111,7 +111,10 @@ export const DialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <h2
     ref={ref}
-    className={cn('text-lg font-semibold leading-none tracking-tight text-foreground', className)}
+    className={cn(
+      'text-lg sm:text-xl font-bold leading-snug tracking-tight text-foreground break-words',
+      className,
+    )}
     {...props}
   />
 ));
@@ -121,13 +124,20 @@ export const DialogDescription = React.forwardRef<
   HTMLParagraphElement,
   React.HTMLAttributes<HTMLParagraphElement>
 >(({ className, ...props }, ref) => (
-  <p ref={ref} className={cn('text-sm text-muted-foreground', className)} {...props} />
+  <p
+    ref={ref}
+    className={cn('text-xs sm:text-sm text-muted-foreground leading-relaxed', className)}
+    {...props}
+  />
 ));
 DialogDescription.displayName = 'DialogDescription';
 
 export const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={cn('flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 pt-4', className)}
+    className={cn(
+      'flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5 sm:gap-3 pt-4 sm:pt-5 border-t border-border/50 mt-4 [&>button]:w-full [&>button]:sm:w-auto',
+      className,
+    )}
     {...props}
   />
 );
@@ -142,3 +152,5 @@ export {
   DialogFooter as ModalFooter,
 };
 export type ModalProps = DialogProps;
+
+export * from './confirm-dialog';
