@@ -57,6 +57,7 @@ import { TSRF_V1, TSRF_WORKFLOW } from './seed';
 import { useLov } from '@/features/lov';
 import { useAuth } from '@/features/auth/AuthContext';
 import { apiFetch } from '@/lib/api';
+import { cn } from '@/lib/utils';
 import { validateFormDefinition, validateFormWorkflow, pruneWorkflowForFields } from './validation';
 import { projectFormForRoleStage } from './preview';
 import type {

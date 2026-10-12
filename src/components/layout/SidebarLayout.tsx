@@ -5,6 +5,7 @@ import { useRoles } from '@/features/roles/RolesContext';
 import { useTheme } from '@/features/theme/ThemeContext';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
 import {
   Truck,
   LayoutDashboard,
@@ -365,7 +366,12 @@ export function SidebarLayout({ notifications = 0 }: SidebarLayoutProps) {
 
         {/* Page Content — rendered by React Router's <Outlet> */}
         <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-background">
-          <Outlet />
+          <ErrorBoundary
+            key={location.pathname}
+            fallbackTitle="This page encountered an unexpected error"
+          >
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
     </div>
