@@ -25,10 +25,28 @@ import { projectFormForRoleStage } from '@/features/form-builder/preview';
 import { parseFormDefinitionImport } from '@/features/form-builder/importSchema';
 import { diffFormDefinitions, diffFormWorkflows } from '@/features/form-builder/versionDiff';
 import { resolveDraftSaveRequest } from '@/features/form-builder/draftPersistence';
+import { describeIntakeRevision } from '@/features/form-builder/PublishedTsrfForm';
 import { createEditorHistory, editorHistoryReducer } from '@/features/form-builder/editorHistory';
 import { formatFieldOptions, parseFieldOptions } from '@/features/form-builder/fieldConfiguration';
 
 describe('TSRF form definition', () => {
+  it('identifies retired and newly required fields before intake resubmission', () => {
+    const next = structuredClone(TSRF_V1);
+    next.sections[1].fields = next.sections[1].fields.filter(
+      (field) => field.key !== 'projectName',
+    );
+    next.sections[1].fields.push({
+      id: 'new-required',
+      key: 'justification',
+      label: 'Justification',
+      section: next.sections[1].id,
+      type: 'text',
+      required: true,
+    });
+    expect(describeIntakeRevision(TSRF_V1, next)).toEqual(
+      expect.arrayContaining(['projectName: removed', 'justification: added']),
+    );
+  });
   it('updates the saved draft instead of creating new forms or versions on every save', () => {
     const state = {
       loaded: true,

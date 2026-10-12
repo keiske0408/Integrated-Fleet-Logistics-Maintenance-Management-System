@@ -36,6 +36,8 @@
 
 ## 6. Current Product Phase: Submission And Audit Reporting
 
+- **Version-safe request visibility:** form/version-scoped operational registers show pinned metadata with server pagination. Historical stage-based requester read corrections are append-only, admin-only, revision-checked and atomically audited, separate from immutable published schemas/workflows and edit/approval rights. Dynamic intake detects publication changes and retains values for explicit reload/review instead of silently falling back to legacy forms.
+
 - **Admin account/navigation follow-up (2026-10-12):** administrator-only editing of existing Fleet-local passwords, session/reset-link invalidation and actor/target audit are implemented. Role landing pages persist server-side and are configurable in Roles Management independently of disabled permission-policy edits. Local/Entra sign-in resolve the effective permitted path; external/unauthorized destinations are rejected. Auditor role mapping is preserved in admin user edits. See `docs/HYBRID_AUTH.md` for configuration and defaults.
 
 - **Status:** The owner-scoped returned-TSRF inbox, edit/resubmit flow, nested field-level edit enforcement, owner response masking, finance/approval print stamps, semantic Form Builder Activity History, and active-driver entity lookup are implemented. Audit metadata identifies the form and version but excludes schema/workflow payloads. Driver choices use active driver-role users and do not require a new table. Entra and Fleet-local auth paths are also implemented; production readiness remains pending deployment configuration, a secure first-admin bootstrap, and real Entra/SMTP verification.

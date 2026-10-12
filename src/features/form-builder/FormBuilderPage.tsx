@@ -74,6 +74,7 @@ import { moveFieldWithinSections } from './reorder';
 import { parseFormDefinitionImport } from './importSchema';
 import { diffFormDefinitions, diffFormWorkflows } from './versionDiff';
 import { resolveDraftSaveRequest } from './draftPersistence';
+import { VersionReadAccess } from './VersionReadAccess';
 import { createEditorHistory, editorHistoryReducer } from './editorHistory';
 import { formatFieldOptions, parseFieldOptions } from './fieldConfiguration';
 
@@ -664,6 +665,8 @@ export function FormBuilderPage() {
   const [isDeletingDraft, setIsDeletingDraft] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showRetireConfirmModal, setShowRetireConfirmModal] = useState(false);
+  const [restrictedStagesToConfirm, setRestrictedStagesToConfirm] = useState<string[]>([]);
+  const [showRestrictedConfirm, setShowRestrictedConfirm] = useState(false);
   const [retiredKeysToConfirm, setRetiredKeysToConfirm] = useState<string[]>([]);
   const [fieldToDeletePrompt, setFieldToDeletePrompt] = useState<{
     field: FormField;
@@ -1001,7 +1004,7 @@ export function FormBuilderPage() {
     }
   };
 
-  const publish = async (bypassRetireCheck = false) => {
+  const publish = async (bypassRetireCheck = false, acknowledgeRestrictedStages: string[] = []) => {
     const pruned = pruneWorkflowForFields(workflow, fields);
     const activeWorkflow = pruned.workflow;
     if (pruned.modified) {
@@ -1041,15 +1044,21 @@ export function FormBuilderPage() {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(
-            retiredKeys.length > 0
+          body: JSON.stringify({
+            acknowledgeRestrictedStages,
+            ...(retiredKeys.length > 0
               ? { confirmRetiredKeys: retiredKeys, acknowledgeFieldRetirement: true }
-              : {},
-          ),
+              : {}),
+          }),
         },
       );
       const result = await response.json();
       if (!response.ok) {
+        if (result.code === 'RESTRICTED_STAGE_ACCESS' && Array.isArray(result.restrictedStages)) {
+          setRestrictedStagesToConfirm(result.restrictedStages);
+          setShowRestrictedConfirm(true);
+          return;
+        }
         if (
           result.canRetire &&
           Array.isArray(result.removedKeys) &&
@@ -1077,6 +1086,7 @@ export function FormBuilderPage() {
       setPublishedFieldIds(new Set(collectFieldIds(fields)));
       setDraftVersionId(null);
       setShowRetireConfirmModal(false);
+      setShowRestrictedConfirm(false);
 
       setAvailableVersions((prev) =>
         prev
@@ -1892,6 +1902,25 @@ export function FormBuilderPage() {
       </div>
 
       {/* Delete Draft Confirmation Modal */}
+      <ConfirmDialog
+        open={showRestrictedConfirm}
+        onOpenChange={setShowRestrictedConfirm}
+        onCancel={() => setShowRestrictedConfirm(false)}
+        onConfirm={() => void publish(true, restrictedStagesToConfirm)}
+        variant="warning"
+        icon={ShieldCheck}
+        title="Confirm Restricted Requestor Access"
+        confirmText="Publish with Restricted Access"
+        cancelText="Review Permissions"
+        isLoading={saving}
+      >
+        <p className="text-sm">Missing permissions will hide request fields in these stages:</p>
+        <ul className="list-disc pl-5 text-sm">
+          {restrictedStagesToConfirm.map((stage) => (
+            <li key={stage}>{stage}</li>
+          ))}
+        </ul>
+      </ConfirmDialog>
       <ConfirmDialog
         open={showDeleteConfirm}
         onOpenChange={setShowDeleteConfirm}
@@ -4418,142 +4447,154 @@ export function FormBuilderPage() {
 
       {/* Stage Field Access Tab */}
       {activeTab === 'permissions' && (
-        <Card className="animate-fade-in">
-          <CardHeader className="pb-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <CardTitle className="text-base">Stage Field Access Control</CardTitle>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Configure field-level visibility and editability per workflow stage and role
-                </p>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="text-xs h-8"
-                  onClick={() => setAllFieldPermissions('edit')}
-                >
-                  All Editable
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="text-xs h-8"
-                  onClick={() => setAllFieldPermissions('read')}
-                >
-                  All Read-Only
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="text-xs h-8"
-                  onClick={() => setAllFieldPermissions('')}
-                >
-                  Reset Overrides
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border p-3.5 bg-muted/20">
-              <div className="min-w-56">
-                <label htmlFor="permission-stage" className="mb-1 block text-xs font-semibold">
-                  Workflow Stage
-                </label>
-                <Select
-                  id="permission-stage"
-                  value={selectedPermissionStage?.id ?? ''}
-                  onChange={(event) => setPermissionStageId(event.target.value)}
-                >
-                  {workflow.stages.map((stage) => (
-                    <option key={stage.id} value={stage.id}>
-                      {stage.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="min-w-56">
-                <label htmlFor="permission-role" className="mb-1 block text-xs font-semibold">
-                  Actor Role
-                </label>
-                <Select
-                  id="permission-role"
-                  value={permissionRole}
-                  onChange={(event) => setPermissionRole(event.target.value)}
-                >
-                  {WORKFLOW_ROLES.map((role) => (
-                    <option key={role} value={role}>
-                      {role.replaceAll('_', ' ')}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="flex-1 min-w-48">
-                <label
-                  htmlFor="permission-field-search"
-                  className="mb-1 block text-xs font-semibold"
-                >
-                  Filter Fields
-                </label>
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                  <Input
-                    id="permission-field-search"
-                    value={permissionFieldSearch}
-                    onChange={(e) => setPermissionFieldSearch(e.target.value)}
-                    placeholder="Search by field name or key..."
-                    className="h-9 pl-8 text-xs bg-background"
-                  />
+        <div className="space-y-4">
+          {definition.status !== 'draft' &&
+            selectedVersionId &&
+            currentUser?.role === 'system_admin' && (
+              <VersionReadAccess
+                versionId={selectedVersionId}
+                definition={definition}
+                workflow={workflow}
+              />
+            )}
+          <Card className="animate-fade-in">
+            <CardHeader className="pb-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="text-base">Stage Field Access Control</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Configure field-level visibility and editability per workflow stage and role
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="text-xs h-8"
+                    onClick={() => setAllFieldPermissions('edit')}
+                  >
+                    All Editable
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="text-xs h-8"
+                    onClick={() => setAllFieldPermissions('read')}
+                  >
+                    All Read-Only
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="text-xs h-8"
+                    onClick={() => setAllFieldPermissions('')}
+                  >
+                    Reset Overrides
+                  </Button>
                 </div>
               </div>
-            </div>
-
-            <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
-              {permissionFields
-                .filter(
-                  (field) =>
-                    field.label.toLowerCase().includes(permissionFieldSearch.toLowerCase()) ||
-                    field.key.toLowerCase().includes(permissionFieldSearch.toLowerCase()),
-                )
-                .map((field) => (
-                  <div
-                    key={field.key}
-                    className="flex items-center justify-between gap-3 border-b border-border/60 py-2.5"
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border p-3.5 bg-muted/20">
+                <div className="min-w-56">
+                  <label htmlFor="permission-stage" className="mb-1 block text-xs font-semibold">
+                    Workflow Stage
+                  </label>
+                  <Select
+                    id="permission-stage"
+                    value={selectedPermissionStage?.id ?? ''}
+                    onChange={(event) => setPermissionStageId(event.target.value)}
                   >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{field.label}</p>
-                      <p className="truncate text-xs font-mono text-muted-foreground">
-                        {field.key}
-                      </p>
-                    </div>
-                    <Select
-                      aria-label={`${field.label} access for ${permissionRole}`}
-                      className="w-36 h-8 text-xs shrink-0"
-                      value={
-                        selectedPermissionStage?.fieldPermissions?.[field.key]?.[permissionRole] ??
-                        ''
-                      }
-                      onChange={(event) =>
-                        updateFieldPermission(
-                          field.key,
-                          event.target.value as '' | 'edit' | 'read' | 'hidden',
-                        )
-                      }
-                    >
-                      <option value="">Default (Inherited)</option>
-                      <option value="edit">Editable</option>
-                      <option value="read">Read Only</option>
-                      <option value="hidden">Hidden</option>
-                    </Select>
+                    {workflow.stages.map((stage) => (
+                      <option key={stage.id} value={stage.id}>
+                        {stage.label}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <div className="min-w-56">
+                  <label htmlFor="permission-role" className="mb-1 block text-xs font-semibold">
+                    Actor Role
+                  </label>
+                  <Select
+                    id="permission-role"
+                    value={permissionRole}
+                    onChange={(event) => setPermissionRole(event.target.value)}
+                  >
+                    {WORKFLOW_ROLES.map((role) => (
+                      <option key={role} value={role}>
+                        {role.replaceAll('_', ' ')}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <div className="flex-1 min-w-48">
+                  <label
+                    htmlFor="permission-field-search"
+                    className="mb-1 block text-xs font-semibold"
+                  >
+                    Filter Fields
+                  </label>
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input
+                      id="permission-field-search"
+                      value={permissionFieldSearch}
+                      onChange={(e) => setPermissionFieldSearch(e.target.value)}
+                      placeholder="Search by field name or key..."
+                      className="h-9 pl-8 text-xs bg-background"
+                    />
                   </div>
-                ))}
-            </div>
-          </CardContent>
-        </Card>
+                </div>
+              </div>
+
+              <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+                {permissionFields
+                  .filter(
+                    (field) =>
+                      field.label.toLowerCase().includes(permissionFieldSearch.toLowerCase()) ||
+                      field.key.toLowerCase().includes(permissionFieldSearch.toLowerCase()),
+                  )
+                  .map((field) => (
+                    <div
+                      key={field.key}
+                      className="flex items-center justify-between gap-3 border-b border-border/60 py-2.5"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{field.label}</p>
+                        <p className="truncate text-xs font-mono text-muted-foreground">
+                          {field.key}
+                        </p>
+                      </div>
+                      <Select
+                        aria-label={`${field.label} access for ${permissionRole}`}
+                        className="w-36 h-8 text-xs shrink-0"
+                        value={
+                          selectedPermissionStage?.fieldPermissions?.[field.key]?.[
+                            permissionRole
+                          ] ?? ''
+                        }
+                        onChange={(event) =>
+                          updateFieldPermission(
+                            field.key,
+                            event.target.value as '' | 'edit' | 'read' | 'hidden',
+                          )
+                        }
+                      >
+                        <option value="">Default (Inherited)</option>
+                        <option value="edit">Editable</option>
+                        <option value="read">Read Only</option>
+                        <option value="hidden">Hidden</option>
+                      </Select>
+                    </div>
+                  ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );

@@ -51,6 +51,11 @@ const FormBuilderPage = React.lazy(() =>
     default: m.FormBuilderPage || m.default,
   })),
 );
+const FormSubmissionPage = React.lazy(() =>
+  import('@/features/form-builder/FormSubmissionPage').then((module) => ({
+    default: module.FormSubmissionPage,
+  })),
+);
 const PublishedTsrfForm = React.lazy(() =>
   import('@/features/form-builder/PublishedTsrfForm').then((m) => ({
     default: m.PublishedTsrfForm || m.default,
@@ -659,6 +664,22 @@ function InnerApp() {
           />
 
           {/* TSRF */}
+          <Route
+            path="/forms/:formKey/submissions"
+            element={
+              <ProtectedRoute permission="view:tsrf">
+                <FormSubmissionPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/forms/:formKey/submissions/:id"
+            element={
+              <ProtectedRoute permission="view:tsrf">
+                <FormSubmissionPage />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path={PAGE_ROUTES.tsrf}
             element={

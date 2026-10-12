@@ -1,12 +1,53 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { WorkflowActions } from '../src/features/form-builder/TSRFDetailView';
 import { evaluateTsrfSubmissionTime, DEFAULT_TSRF_CUTOFF } from '../src/domain/tsrf';
-import { collectEditableFormChanges } from '../src/features/form-builder/FormRenderer';
+import {
+  collectEditableFormChanges,
+  FormRenderer,
+} from '../src/features/form-builder/FormRenderer';
+vi.mock('@/features/lov', () => ({ useLov: () => ({ getActiveItems: () => [] }) }));
+vi.mock('@/features/auth/AuthContext', () => ({
+  useAuth: () => ({ currentUser: { id: 'owner', role: 'department_requester' } }),
+}));
+vi.mock('@/components/ui/toast', () => ({
+  useToast: () => ({ error: vi.fn(), warning: vi.fn() }),
+}));
 import type { FormField, FormValues } from '../src/features/form-builder/types';
 
 describe('Domain Rule 5: TSRF Cutoff Time Flagging', () => {
+  it('renders new intake without an undefined validation state', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(FormRenderer, {
+        definition: {
+          key: 'test',
+          name: 'Test',
+          version: 1,
+          status: 'published',
+          sections: [
+            {
+              id: 'main',
+              title: 'Request',
+              fields: [
+                {
+                  id: 'project',
+                  key: 'project',
+                  type: 'text',
+                  label: 'Project',
+                  section: 'main',
+                  required: true,
+                },
+              ],
+            },
+          ],
+        },
+        onSubmit: vi.fn(),
+      }),
+    );
+    expect(html).toContain('Project');
+    expect(html).toContain('Submit Request');
+  });
   it('renders only server-authorized workflow actions', () => {
     const onTransition = async () => {};
     expect(

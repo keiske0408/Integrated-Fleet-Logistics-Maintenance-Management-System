@@ -6,6 +6,7 @@ import {
 import { z } from 'zod';
 import { createRoleRedirectSchemas } from '../../../fleet-backend/src/domain/role-navigation';
 import { createAdminPasswordSchema } from '../../../fleet-backend/src/domain/admin-account';
+import { createSubmissionAccessSchemas } from '../../../fleet-backend/src/domain/submission-access';
 import {
   createReportFilterSchema,
   createReportSchemas,
@@ -25,6 +26,7 @@ import {
 
 extendZodWithOpenApi(z);
 const roleRedirectSchemas = createRoleRedirectSchemas(z);
+const submissionAccessSchemas = createSubmissionAccessSchemas(z);
 const {
   reportMetaSchema,
   submissionReportSchema,
@@ -94,7 +96,10 @@ const formVersionInputSchema = z.object({
   schema: jsonObjectSchema,
   workflow: jsonObjectSchema.optional(),
 });
-const formSubmissionInputSchema = z.object({ data: jsonObjectSchema });
+const formSubmissionInputSchema = z.object({
+  data: jsonObjectSchema,
+  expectedFormVersionId: z.string().uuid().optional(),
+});
 const formTransitionInputSchema = z.object({
   toStage: z.string(),
   comment: z.string().optional(),
@@ -194,6 +199,7 @@ for (const kind of ['submissions', 'activity']) {
 
 type ApiMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
 interface JsonEndpoint {
+  errors?: Record<number, z.ZodTypeAny>;
   method: ApiMethod;
   path: string;
   summary: string;
@@ -223,6 +229,12 @@ function registerJsonEndpoint(endpoint: JsonEndpoint) {
     summary: endpoint.summary,
     ...(Object.keys(request).length ? { request } : {}),
     responses: {
+      ...Object.fromEntries(
+        Object.entries(endpoint.errors ?? {}).map(([status, schema]) => [
+          status,
+          { description: 'Request rejected', content: { 'application/json': { schema } } },
+        ]),
+      ),
       [endpoint.status ?? 200]: {
         description: `${endpoint.summary} response`,
         content: { 'application/json': { schema: endpoint.response } },
@@ -440,6 +452,42 @@ registerJsonEndpoint({
   body: formSubmissionInputSchema,
   response: jsonResponseSchema,
   status: 201,
+  errors: { 409: submissionAccessSchemas.versionConflict },
+});
+registerJsonEndpoint({
+  method: 'get',
+  path: '/api/forms/{key}/submissions',
+  summary: 'Owner-scoped operational register with form/version filtering and complete counts',
+  params: keyParamsSchema,
+  query: submissionAccessSchemas.registerQuery,
+  response: submissionAccessSchemas.registerResponse,
+});
+registerJsonEndpoint({
+  method: 'get',
+  path: '/api/forms/versions/{id}/read-access',
+  summary: 'Administrator view of historical read policy and impact count',
+  params: idParamsSchema,
+  response: submissionAccessSchemas.policyResponse,
+});
+registerJsonEndpoint({
+  method: 'get',
+  path: '/api/forms/versions/{id}/read-access/history',
+  summary: 'Administrator-only read-policy revision history',
+  params: idParamsSchema,
+  response: submissionAccessSchemas.historyResponse,
+});
+registerJsonEndpoint({
+  method: 'put',
+  path: '/api/forms/versions/{id}/read-access',
+  summary: 'Append an audited read-only correction without changing the pinned workflow',
+  params: idParamsSchema,
+  body: submissionAccessSchemas.correction,
+  response: z.object({
+    status: z.literal(200),
+    revision: z.number().int(),
+    readGrants: submissionAccessSchemas.readGrants,
+  }),
+  errors: { 409: z.object({ error: z.string() }) },
 });
 registerJsonEndpoint({
   method: 'post',
@@ -462,7 +510,8 @@ registerJsonEndpoint({
   path: '/api/forms/submissions/{id}',
   summary: 'Get a role- and stage-projected form submission',
   params: idParamsSchema,
-  response: jsonResponseSchema,
+  query: z.object({ formKey: z.string().optional() }),
+  response: submissionAccessSchemas.detailResponse,
 });
 registerJsonEndpoint({
   method: 'get',
@@ -501,6 +550,11 @@ registerJsonEndpoint({
   path: '/api/forms/versions/{id}/publish',
   summary: 'Publish a validated form version',
   params: idParamsSchema,
+  body: z.object({
+    acknowledgeRestrictedStages: z.array(z.string()).optional(),
+    confirmRetiredKeys: z.array(z.string()).optional(),
+    acknowledgeFieldRetirement: z.boolean().optional(),
+  }),
   response: jsonResponseSchema,
 });
 

@@ -409,12 +409,18 @@ async function apiErrorMessage(response: Response, fallback: string): Promise<st
 }
 
 export function TSRFDetailView({ id: propId }: { id?: string }) {
-  const params = useParams<{ id: string }>();
+  const params = useParams<{ id: string; formKey?: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { currentUser } = useAuth();
   const submissionId = propId || params.id;
   const requestedEdit = searchParams.get('edit') === 'true';
+  const formKey = params.formKey ?? 'tsrf';
+  const registerPath =
+    formKey === 'tsrf' ? '/tsrf' : `/forms/${encodeURIComponent(formKey)}/submissions`;
+  const backParams = new URLSearchParams(searchParams);
+  backParams.delete('edit');
+  const backUrl = `${registerPath}?${backParams}`;
 
   const [detail, setDetail] = useState<SubmissionDetail | null>(null);
   const [events, setEvents] = useState<SubmissionEvent[]>([]);
@@ -428,7 +434,9 @@ export function TSRFDetailView({ id: propId }: { id?: string }) {
     setError(null);
     try {
       const [detailRes, eventsRes] = await Promise.all([
-        apiFetch(`/api/forms/submissions/${encodeURIComponent(submissionId)}`),
+        apiFetch(
+          `/api/forms/submissions/${encodeURIComponent(submissionId)}?formKey=${encodeURIComponent(formKey)}`,
+        ),
         apiFetch(`/api/forms/submissions/${encodeURIComponent(submissionId)}/events`),
       ]);
 
@@ -447,7 +455,7 @@ export function TSRFDetailView({ id: propId }: { id?: string }) {
 
   useEffect(() => {
     void loadData();
-  }, [submissionId]);
+  }, [submissionId, formKey, currentUser?.id]);
 
   const canEditReturned = Boolean(
     detail &&
@@ -489,7 +497,7 @@ export function TSRFDetailView({ id: propId }: { id?: string }) {
     }
 
     setEditing(false);
-    navigate(`/tsrf/${detail.id}`, { replace: true });
+    navigate(`${registerPath}/${detail.id}?${backParams}`, { replace: true });
     await loadData();
   };
 
@@ -538,7 +546,7 @@ export function TSRFDetailView({ id: propId }: { id?: string }) {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate('/tsrf')}
+            onClick={() => navigate(backUrl)}
             className="gap-2 text-xs font-medium"
           >
             <ArrowLeft className="h-4 w-4" /> Back to Requests
@@ -564,7 +572,7 @@ export function TSRFDetailView({ id: propId }: { id?: string }) {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate('/tsrf')}
+            onClick={() => navigate(backUrl)}
             className="gap-2 text-xs font-medium"
           >
             <ArrowLeft className="h-4 w-4" /> Back to Requests
@@ -605,7 +613,7 @@ export function TSRFDetailView({ id: propId }: { id?: string }) {
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => navigate('/tsrf')}
+              onClick={() => navigate(backUrl)}
               className="gap-1.5 text-xs font-medium shadow-xs shrink-0"
             >
               <ArrowLeft className="h-4 w-4" />
@@ -615,6 +623,10 @@ export function TSRFDetailView({ id: propId }: { id?: string }) {
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span className="text-muted-foreground/80">TSRF Logistics</span>
+                <span>
+                  {detail.formName} · v{detail.version} {detail.versionName ?? ''} (
+                  {detail.versionStatus})
+                </span>
                 <span className="text-muted-foreground/50">/</span>
                 <span className="font-mono font-medium text-foreground">
                   {detail.submissionNumber}
@@ -729,7 +741,7 @@ export function TSRFDetailView({ id: propId }: { id?: string }) {
                 className="gap-1.5 text-xs"
                 onClick={() => {
                   setEditing(false);
-                  navigate(`/tsrf/${detail.id}`, { replace: true });
+                  navigate(`${registerPath}/${detail.id}?${backParams}`, { replace: true });
                 }}
               >
                 <X className="h-3.5 w-3.5" /> Cancel
@@ -748,14 +760,17 @@ export function TSRFDetailView({ id: propId }: { id?: string }) {
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
             {/* Left Column: Meaningful Form Data (8 cols) */}
             <div className="space-y-6 lg:col-span-8">
+              {detail.visibility === 'partially_restricted' && (
+                <p className="text-sm text-muted-foreground">
+                  Some request fields are restricted at this stage.
+                </p>
+              )}
               {filteredSections.length === 0 ? (
                 <Card className="p-6 text-center border-border/70">
                   <p className="text-xs text-muted-foreground">
-                    {detail.formSchema.sections.some((section) =>
-                      section.fields.some((field) => field.type !== 'notice'),
-                    )
-                      ? 'No specific fields submitted for this request.'
-                      : 'Request details are not visible to your role at this stage.'}
+                    {detail.visibility === 'restricted'
+                      ? 'Request details are restricted at this stage.'
+                      : 'No request data has been recorded.'}
                   </p>
                 </Card>
               ) : (

@@ -11,6 +11,23 @@ import { projectFormValuesToDefinition, serializeTsrfValues, TSRF_V1 } from './s
 import type { FormDefinition, FormValues } from './types';
 import type { TSRFFormData } from '@/features/logistics/TSRFForm';
 import { apiFetch } from '@/lib/api';
+import { diffFormDefinitions } from './versionDiff';
+
+export function describeIntakeRevision(before: FormDefinition, after: FormDefinition): string[] {
+  return diffFormDefinitions(before, after)
+    .filter(
+      (change) =>
+        change.kind === 'field' &&
+        (change.action !== 'changed' ||
+          change.details?.some((property) =>
+            ['required', 'type', 'dataSource'].includes(property),
+          )),
+    )
+    .map(
+      (change) =>
+        `${change.path}: ${change.action}${change.details?.length ? ` (${change.details.join(', ')})` : ''}`,
+    );
+}
 
 interface PublishedTsrfFormProps {
   onSubmit: (data: TSRFFormData) => void;
@@ -41,41 +58,76 @@ export function PublishedTsrfForm({ onSubmit }: PublishedTsrfFormProps) {
 
   const [definition, setDefinition] = useState<FormDefinition>(TSRF_V1);
   const [hasPublishedDefinition, setHasPublishedDefinition] = useState(false);
+  const [versionId, setVersionId] = useState<string | null>(null);
+  const [loadingDefinition, setLoadingDefinition] = useState(true);
+  const [definitionError, setDefinitionError] = useState<string | null>(null);
+  const [staleVersion, setStaleVersion] = useState(false);
+  const [intakeValues, setIntakeValues] = useState<FormValues>({});
+  const [reloadDefinition, setReloadDefinition] = useState(0);
+  const [reviewChanges, setReviewChanges] = useState<string[]>([]);
   const [submissionRefreshToken, setSubmissionRefreshToken] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setLoadingDefinition(true);
+    setDefinitionError(null);
     apiFetch('/api/forms/published/tsrf')
-      .then(async (response) => (response.ok ? response.json() : null))
-      .then((saved) => {
-        if (cancelled || !saved || !Array.isArray(saved.versions)) return;
-        const published = saved.versions.some(
-          (version: SavedVersion) => version.status === 'published' && version.schema,
-        );
-        setHasPublishedDefinition(published);
-        setDefinition(choosePublishedDefinition(saved.versions));
+      .then(async (response) => {
+        if (!response.ok) throw new Error('The published request form is unavailable.');
+        return response.json();
       })
-      .catch(() => undefined);
+      .then((saved) => {
+        if (cancelled) return;
+        const published = [...(saved.versions ?? [])]
+          .filter((version: SavedVersion) => version.status === 'published' && version.schema)
+          .sort(
+            (before: SavedVersion, after: SavedVersion) => after.version - before.version,
+          )[0] as SavedVersion | undefined;
+        if (!published) throw new Error('No published request form is available.');
+        const nextDefinition = choosePublishedDefinition([published]);
+        if (versionId) setReviewChanges(describeIntakeRevision(definition, nextDefinition));
+        setHasPublishedDefinition(true);
+        setVersionId(published.id);
+        setIntakeValues((previous) => projectFormValuesToDefinition(nextDefinition, previous));
+        setDefinition(nextDefinition);
+        setStaleVersion(false);
+      })
+      .catch((cause) => {
+        if (!cancelled)
+          setDefinitionError(
+            cause instanceof Error ? cause.message : 'Unable to load the request form.',
+          );
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingDefinition(false);
+      });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadDefinition]);
 
   const submit = async (values: FormValues) => {
+    if (
+      !hasPublishedDefinition ||
+      !versionId ||
+      loadingDefinition ||
+      definitionError ||
+      staleVersion
+    )
+      throw new Error('Reload the published form before submitting.');
     const legacyData = serializeTsrfValues(values);
-    const submissionData = hasPublishedDefinition
-      ? projectFormValuesToDefinition(definition, values)
-      : legacyData;
-    const response = await apiFetch(
-      hasPublishedDefinition ? '/api/forms/tsrf/submissions' : '/api/tsrf',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(hasPublishedDefinition ? { data: submissionData } : submissionData),
-      },
-    );
+    const submissionData = projectFormValuesToDefinition(definition, values);
+    const response = await apiFetch('/api/forms/tsrf/submissions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: submissionData, expectedFormVersionId: versionId }),
+    });
     const result = await response.json();
     if (!response.ok) {
+      if (response.status === 409 && result.code === 'FORM_VERSION_CHANGED') {
+        setIntakeValues(values);
+        setStaleVersion(true);
+      }
       const detail = Array.isArray(result.details) ? result.details.join(' ') : result.error;
       throw new Error(detail ?? 'Unable to submit TSRF request.');
     }
@@ -180,7 +232,50 @@ export function PublishedTsrfForm({ onSubmit }: PublishedTsrfFormProps) {
         </Card>
 
         {/* Form Renderer */}
-        <FormRenderer definition={definition} onSubmit={submit} />
+        {loadingDefinition ? (
+          <p role="status" className="text-sm">
+            Loading published request form...
+          </p>
+        ) : definitionError ? (
+          <div role="alert" className="space-y-3 text-sm text-destructive">
+            <p>{definitionError}</p>
+            <Button variant="outline" onClick={() => setReloadDefinition((value) => value + 1)}>
+              Retry Loading
+            </Button>
+          </div>
+        ) : (
+          <>
+            {staleVersion && (
+              <div role="alert" className="space-y-3 border border-border rounded-lg p-4">
+                <p className="text-sm">
+                  The form changed. Your entries are retained until you reload and review the
+                  updated form.
+                </p>
+                <Button onClick={() => setReloadDefinition((value) => value + 1)}>
+                  Reload &amp; Review
+                </Button>
+              </div>
+            )}
+            {reviewChanges.length > 0 && (
+              <section className="space-y-2 border border-border rounded-lg p-4">
+                <h2 className="text-sm font-semibold">Updated Request Fields</h2>
+                <ul className="text-sm list-disc pl-5 break-words">
+                  {reviewChanges.map((change) => (
+                    <li key={change}>{change}</li>
+                  ))}
+                </ul>
+              </section>
+            )}
+            <FormRenderer
+              key={versionId}
+              definition={definition}
+              initialValues={intakeValues}
+              onValuesChange={setIntakeValues}
+              submitDisabled={staleVersion}
+              onSubmit={submit}
+            />
+          </>
+        )}
       </div>
     );
   }

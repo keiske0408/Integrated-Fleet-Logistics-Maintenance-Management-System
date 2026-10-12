@@ -723,6 +723,10 @@
             "additionalProperties": {
               "nullable": true
             }
+          },
+          "expectedFormVersionId": {
+            "type": "string",
+            "format": "uuid"
           }
         },
         "required": ["data"]
@@ -3671,6 +3675,10 @@
                     "additionalProperties": {
                       "nullable": true
                     }
+                  },
+                  "expectedFormVersionId": {
+                    "type": "string",
+                    "format": "uuid"
                   }
                 },
                 "required": ["data"]
@@ -3687,6 +3695,560 @@
                   "type": "object",
                   "additionalProperties": {
                     "nullable": true
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": ["FORM_VERSION_CHANGED"]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["code", "error"]
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Owner-scoped operational register with form/version filtering and complete counts",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "key",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "formVersionId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10
+            },
+            "required": false,
+            "name": "pageSize",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": ["all", "pending", "returned", "approved", "dispatched", "late"],
+              "default": "all"
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": ["all", "on_time", "late"],
+              "default": "all"
+            },
+            "required": false,
+            "name": "sla",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "default": ""
+            },
+            "required": false,
+            "name": "search",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owner-scoped operational register with form/version filtering and complete counts response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "formDefinitionId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "formKey": {
+                            "type": "string"
+                          },
+                          "formName": {
+                            "type": "string"
+                          },
+                          "formVersionId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "version": {
+                            "type": "integer"
+                          },
+                          "versionName": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "versionStatus": {
+                            "type": "string",
+                            "enum": ["draft", "published", "archived"]
+                          },
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "submissionNumber": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "stage": {
+                            "type": "string"
+                          },
+                          "isLate": {
+                            "type": "boolean"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "visibility": {
+                            "type": "string",
+                            "enum": ["visible", "partially_restricted", "restricted", "empty"]
+                          },
+                          "readPolicyRevision": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "data": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          },
+                          "labelSnapshots": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          },
+                          "currentAssignee": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "role": {
+                                "type": "string"
+                              }
+                            },
+                            "required": ["name", "role"]
+                          },
+                          "currentResponsibleRoles": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "formDefinitionId",
+                          "formKey",
+                          "formName",
+                          "formVersionId",
+                          "version",
+                          "versionName",
+                          "versionStatus",
+                          "id",
+                          "submissionNumber",
+                          "status",
+                          "stage",
+                          "isLate",
+                          "createdAt",
+                          "visibility",
+                          "readPolicyRevision",
+                          "data",
+                          "labelSnapshots",
+                          "currentAssignee",
+                          "currentResponsibleRoles"
+                        ]
+                      }
+                    },
+                    "versions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "version": {
+                            "type": "integer"
+                          },
+                          "versionName": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": ["draft", "published", "archived"]
+                          }
+                        },
+                        "required": ["id", "version", "versionName", "status"]
+                      }
+                    },
+                    "summary": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "integer"
+                        },
+                        "pending": {
+                          "type": "integer"
+                        },
+                        "returned": {
+                          "type": "integer"
+                        },
+                        "approved": {
+                          "type": "integer"
+                        },
+                        "dispatched": {
+                          "type": "integer"
+                        },
+                        "late": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": ["total", "pending", "returned", "approved", "dispatched", "late"]
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "integer"
+                        },
+                        "page": {
+                          "type": "integer"
+                        },
+                        "pageSize": {
+                          "type": "integer"
+                        },
+                        "formKey": {
+                          "type": "string"
+                        },
+                        "formName": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["total", "page", "pageSize", "formKey", "formName"]
+                    }
+                  },
+                  "required": ["rows", "versions", "summary", "meta"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forms/versions/{id}/read-access": {
+      "get": {
+        "summary": "Administrator view of historical read policy and impact count",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Administrator view of historical read policy and impact count response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "formVersionId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "version": {
+                      "type": "integer"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": ["draft", "published", "archived"]
+                    },
+                    "revision": {
+                      "type": "integer"
+                    },
+                    "readGrants": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "department_requester": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "maxItems": 1000
+                          }
+                        },
+                        "required": ["department_requester"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "affectedSubmissions": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "formVersionId",
+                    "version",
+                    "status",
+                    "revision",
+                    "readGrants",
+                    "affectedSubmissions"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Append an audited read-only correction without changing the pinned workflow",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "readGrants": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "object",
+                      "properties": {
+                        "department_requester": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "maxItems": 1000
+                        }
+                      },
+                      "required": ["department_requester"],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": ["expectedRevision", "reason", "readGrants"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Append an audited read-only correction without changing the pinned workflow response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "number",
+                      "enum": [200]
+                    },
+                    "revision": {
+                      "type": "integer"
+                    },
+                    "readGrants": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "department_requester": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "maxItems": 1000
+                          }
+                        },
+                        "required": ["department_requester"],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["status", "revision", "readGrants"]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forms/versions/{id}/read-access/history": {
+      "get": {
+        "summary": "Administrator-only read-policy revision history",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Administrator-only read-policy revision history response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "formVersionId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "revision": {
+                        "type": "integer"
+                      },
+                      "readGrants": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "object",
+                          "properties": {
+                            "department_requester": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "maxItems": 1000
+                            }
+                          },
+                          "required": ["department_requester"],
+                          "additionalProperties": false
+                        }
+                      },
+                      "actorId": {
+                        "type": "string"
+                      },
+                      "reason": {
+                        "type": "string"
+                      },
+                      "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "formVersionId",
+                      "revision",
+                      "readGrants",
+                      "actorId",
+                      "reason",
+                      "createdAt"
+                    ]
                   }
                 }
               }
@@ -3805,6 +4367,14 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "formKey",
+            "in": "query"
           }
         ],
         "responses": {
@@ -3814,9 +4384,159 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": {
-                    "nullable": true
-                  }
+                  "properties": {
+                    "formDefinitionId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "formKey": {
+                      "type": "string"
+                    },
+                    "formName": {
+                      "type": "string"
+                    },
+                    "formVersionId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "version": {
+                      "type": "integer"
+                    },
+                    "versionName": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "versionStatus": {
+                      "type": "string",
+                      "enum": ["draft", "published", "archived"]
+                    },
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "submissionNumber": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "stage": {
+                      "type": "string"
+                    },
+                    "isLate": {
+                      "type": "boolean"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "visibility": {
+                      "type": "string",
+                      "enum": ["visible", "partially_restricted", "restricted", "empty"]
+                    },
+                    "readPolicyRevision": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "labelSnapshots": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "currentAssignee": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "role": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["name", "role"]
+                    },
+                    "currentResponsibleRoles": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "createdById": {
+                      "type": "string"
+                    },
+                    "formSchema": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "fieldAccess": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string",
+                        "enum": ["read", "edit"]
+                      }
+                    },
+                    "resubmitStage": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "availableTransitions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "toStage": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "statusCategory": {
+                            "type": "string"
+                          },
+                          "reasonRequired": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": ["toStage", "label", "statusCategory", "reasonRequired"]
+                      }
+                    }
+                  },
+                  "required": [
+                    "formDefinitionId",
+                    "formKey",
+                    "formName",
+                    "formVersionId",
+                    "version",
+                    "versionName",
+                    "versionStatus",
+                    "id",
+                    "submissionNumber",
+                    "status",
+                    "stage",
+                    "isLate",
+                    "createdAt",
+                    "visibility",
+                    "readPolicyRevision",
+                    "data",
+                    "labelSnapshots",
+                    "currentAssignee",
+                    "currentResponsibleRoles",
+                    "createdById",
+                    "formSchema",
+                    "fieldAccess",
+                    "resubmitStage",
+                    "availableTransitions"
+                  ]
                 }
               }
             }
@@ -4032,6 +4752,32 @@
             "in": "path"
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "acknowledgeRestrictedStages": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "confirmRetiredKeys": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "acknowledgeFieldRetirement": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Publish a validated form version response",

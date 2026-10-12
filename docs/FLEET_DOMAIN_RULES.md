@@ -28,3 +28,12 @@
 
 - **Rule**: TSRF requests submitted after the department's cutoff time must be flagged, not silently accepted (confirm exact cutoff rule with the fleet team before hardcoding a value).
 - **Behavior**: Submissions timestamped after the scheduled daily cutoff (default standard: **16:00 / 4:00 PM**) are persisted with `is_flagged_after_cutoff = true` and require supervisory exception review before dispatch scheduling.
+
+## 6. Versioned Requests And Read Access
+
+- A submission is pinned to one form version. Archived version status does not archive or cancel its requests. Historical schemas, workflows, values, and lookup snapshots are never replaced with the newest form.
+- Requestors may read only their own requests and only fields allowed at the current stage. Missing grants remain restrictive; metadata distinguishes restricted data from absent data.
+- Administrators can append version-specific, stage-specific requester read grants with a mandatory reason and expected revision. Policy history and the activity audit are saved atomically. Removing supplementary grants creates a new revision; it does not delete history.
+- Read corrections never grant editing or approval. Edits, assignments, and transitions still use the original pinned workflow. Internal and nested fields stay protected unless explicitly selected by an administrator.
+- The operational register is scoped by form and optional version, uses server pagination and complete authorized counts, and searches references rather than hidden payload values. Reports retain reportability and PII restrictions in addition to effective read access.
+- Publication requires explicit acknowledgement of stages with incomplete requester grants. Dynamic intake submits its loaded version ID; publication and intake share a form lock. A stale version returns `409 FORM_VERSION_CHANGED` without inserting a request or event. The client retains values in memory for explicit reload/review and never silently switches to legacy intake.

@@ -104,7 +104,13 @@ if (-not ($vehicleTypes | Where-Object { $_.code -eq 'VAN' })) {
 
 ## Walkthrough
 
-### Workflow Actions And Field Visibility
+### Historical Read Corrections And Version Registers
+
+As administrator, select the published or archived version in Form Builder, open Stage Field Access, and use Historical Read Access. Select a stage and explicitly select requester read fields, including required repeater parents/children. The impact count identifies how many requests use that version. Enter a reason and Apply Read Correction. This does not save a draft, change submitted data, or grant editing/approval. Revision History records each correction. To revoke supplementary access, clear its checkboxes and save a new revision with a reason. A concurrent change returns a conflict requiring Reload Policy.
+
+Request registers default to all versions of one form. The Version selector filters by pinned version; each row and detail shows the historical version/release. Restricted fields are labelled rather than reported as unsubmitted. Existing `/tsrf` routes remain available; other form registers use `/forms/:formKey/submissions`. Search is by reference, not hidden payload fields.
+
+New intake waits for the published form. Loading failure has a retry state, not a legacy-form fallback. If a release changes while intake is open, the API rejects submission without committing it. Reload & Review retains compatible entries in memory and requires a new validated submission. Publishing a draft with missing stage read grants requires an explicit restricted-access confirmation recorded in the publication audit.
 
 Save and autosave update the selected draft in place. Saving without changes does not create a form or version. The first edit to a published version creates a new draft under the same form; subsequent edits update that draft. Publishing makes that version available to new submissions, while previous submissions remain pinned to their original version. The draft comparison includes workflow stages, field permissions, transitions, and cutoff changes as well as schema changes.
 

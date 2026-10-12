@@ -1613,7 +1613,94 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    get?: never;
+    /** Owner-scoped operational register with form/version filtering and complete counts */
+    get: {
+      parameters: {
+        query?: {
+          formVersionId?: string;
+          page?: number;
+          pageSize?: number;
+          status?: 'all' | 'pending' | 'returned' | 'approved' | 'dispatched' | 'late';
+          sla?: 'all' | 'on_time' | 'late';
+          search?: string;
+        };
+        header?: never;
+        path: {
+          key: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Owner-scoped operational register with form/version filtering and complete counts response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              rows: {
+                /** Format: uuid */
+                formDefinitionId: string;
+                formKey: string;
+                formName: string;
+                /** Format: uuid */
+                formVersionId: string;
+                version: number;
+                versionName: string | null;
+                /** @enum {string} */
+                versionStatus: 'draft' | 'published' | 'archived';
+                /** Format: uuid */
+                id: string;
+                submissionNumber: string;
+                status: string;
+                stage: string;
+                isLate: boolean;
+                /** Format: date-time */
+                createdAt: string;
+                /** @enum {string} */
+                visibility: 'visible' | 'partially_restricted' | 'restricted' | 'empty';
+                readPolicyRevision: number;
+                data: {
+                  [key: string]: unknown;
+                };
+                labelSnapshots: {
+                  [key: string]: unknown;
+                };
+                currentAssignee: {
+                  name: string;
+                  role: string;
+                } | null;
+                currentResponsibleRoles: string[];
+              }[];
+              versions: {
+                /** Format: uuid */
+                id: string;
+                version: number;
+                versionName: string | null;
+                /** @enum {string} */
+                status: 'draft' | 'published' | 'archived';
+              }[];
+              summary: {
+                total: number;
+                pending: number;
+                returned: number;
+                approved: number;
+                dispatched: number;
+                late: number;
+              };
+              meta: {
+                total: number;
+                page: number;
+                pageSize: number;
+                formKey: string;
+                formName: string;
+              };
+            };
+          };
+        };
+      };
+    };
     put?: never;
     /** Create a form submission */
     post: {
@@ -1631,6 +1718,8 @@ export interface paths {
             data: {
               [key: string]: unknown;
             };
+            /** Format: uuid */
+            expectedFormVersionId?: string;
           };
         };
       };
@@ -1646,8 +1735,179 @@ export interface paths {
             };
           };
         };
+        /** @description Request rejected */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              /** @enum {string} */
+              code: 'FORM_VERSION_CHANGED';
+              error: string;
+            };
+          };
+        };
       };
     };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/forms/versions/{id}/read-access': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Administrator view of historical read policy and impact count */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Administrator view of historical read policy and impact count response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              /** Format: uuid */
+              formVersionId: string;
+              version: number;
+              /** @enum {string} */
+              status: 'draft' | 'published' | 'archived';
+              revision: number;
+              readGrants: {
+                [key: string]: {
+                  department_requester: string[];
+                };
+              };
+              affectedSubmissions: number;
+            };
+          };
+        };
+      };
+    };
+    /** Append an audited read-only correction without changing the pinned workflow */
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': {
+            expectedRevision: number;
+            reason: string;
+            readGrants: {
+              [key: string]: {
+                department_requester: string[];
+              };
+            };
+          };
+        };
+      };
+      responses: {
+        /** @description Append an audited read-only correction without changing the pinned workflow response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              /** @enum {number} */
+              status: 200;
+              revision: number;
+              readGrants: {
+                [key: string]: {
+                  department_requester: string[];
+                };
+              };
+            };
+          };
+        };
+        /** @description Request rejected */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              error: string;
+            };
+          };
+        };
+      };
+    };
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/forms/versions/{id}/read-access/history': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Administrator-only read-policy revision history */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Administrator-only read-policy revision history response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            'application/json': {
+              /** Format: uuid */
+              id: string;
+              /** Format: uuid */
+              formVersionId: string;
+              revision: number;
+              readGrants: {
+                [key: string]: {
+                  department_requester: string[];
+                };
+              };
+              actorId: string;
+              reason: string;
+              /** Format: date-time */
+              createdAt: string;
+            }[];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -1759,7 +2019,9 @@ export interface paths {
     /** Get a role- and stage-projected form submission */
     get: {
       parameters: {
-        query?: never;
+        query?: {
+          formKey?: string;
+        };
         header?: never;
         path: {
           id: string;
@@ -1775,7 +2037,52 @@ export interface paths {
           };
           content: {
             'application/json': {
-              [key: string]: unknown;
+              /** Format: uuid */
+              formDefinitionId: string;
+              formKey: string;
+              formName: string;
+              /** Format: uuid */
+              formVersionId: string;
+              version: number;
+              versionName: string | null;
+              /** @enum {string} */
+              versionStatus: 'draft' | 'published' | 'archived';
+              /** Format: uuid */
+              id: string;
+              submissionNumber: string;
+              status: string;
+              stage: string;
+              isLate: boolean;
+              /** Format: date-time */
+              createdAt: string;
+              /** @enum {string} */
+              visibility: 'visible' | 'partially_restricted' | 'restricted' | 'empty';
+              readPolicyRevision: number;
+              data: {
+                [key: string]: unknown;
+              };
+              labelSnapshots: {
+                [key: string]: unknown;
+              };
+              currentAssignee: {
+                name: string;
+                role: string;
+              } | null;
+              currentResponsibleRoles: string[];
+              createdById: string;
+              formSchema: {
+                [key: string]: unknown;
+              };
+              fieldAccess: {
+                [key: string]: 'read' | 'edit';
+              };
+              resubmitStage: string | null;
+              availableTransitions: {
+                toStage: string;
+                label: string;
+                statusCategory: string;
+                reasonRequired: boolean;
+              }[];
             };
           };
         };
@@ -2001,7 +2308,15 @@ export interface paths {
         };
         cookie?: never;
       };
-      requestBody?: never;
+      requestBody?: {
+        content: {
+          'application/json': {
+            acknowledgeRestrictedStages?: string[];
+            confirmRetiredKeys?: string[];
+            acknowledgeFieldRetirement?: boolean;
+          };
+        };
+      };
       responses: {
         /** @description Publish a validated form version response */
         200: {
@@ -2478,6 +2793,8 @@ export interface components {
       data: {
         [key: string]: unknown;
       };
+      /** Format: uuid */
+      expectedFormVersionId?: string;
     };
     FormTransitionInput: {
       toStage: string;

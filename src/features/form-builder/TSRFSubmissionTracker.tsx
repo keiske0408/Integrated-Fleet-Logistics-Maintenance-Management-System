@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Plus,
   RefreshCw,
@@ -30,6 +30,15 @@ import { useAuth } from '@/features/auth/AuthContext';
 import type { FormDefinition, FormValues } from './types';
 
 export interface SubmissionRow {
+  formKey?: string;
+  formName?: string;
+  formVersionId?: string;
+  version?: number;
+  versionName?: string | null;
+  versionStatus?: string;
+  visibility?: 'visible' | 'partially_restricted' | 'restricted' | 'empty';
+  readPolicyRevision?: number;
+  labelSnapshots?: Record<string, { code: string; label: string }>;
   id: string;
   submissionNumber: string;
   status: string;
@@ -84,7 +93,8 @@ export interface SubmissionPrintRequest {
 
 interface TSRFSubmissionTrackerProps {
   refreshToken: number;
-  onNewRequest: () => void;
+  onNewRequest?: () => void;
+  formKey?: string;
 }
 
 function displayStatus(value: string): string {
@@ -125,8 +135,13 @@ function displayResponsibility(submission: SubmissionRow): string {
   return 'Unassigned';
 }
 
-export function TSRFSubmissionTracker({ refreshToken, onNewRequest }: TSRFSubmissionTrackerProps) {
+export function TSRFSubmissionTracker({
+  refreshToken,
+  onNewRequest,
+  formKey = 'tsrf',
+}: TSRFSubmissionTrackerProps) {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { currentUser } = useAuth();
 
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([]);
@@ -134,34 +149,88 @@ export function TSRFSubmissionTracker({ refreshToken, onNewRequest }: TSRFSubmis
   const [error, setError] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
 
-  // Search & Filter state
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<
-    'all' | 'pending' | 'returned' | 'approved' | 'dispatched' | 'late'
-  >('all');
-  const [departmentFilter, setDepartmentFilter] = useState<string>('all');
-  const [slaFilter, setSlaFilter] = useState<'all' | 'on_time' | 'late'>('all');
-
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const searchQuery = searchParams.get('search') ?? '';
+  const statusFilter = searchParams.get('status') ?? 'all';
+  const slaFilter = searchParams.get('sla') ?? 'all';
+  const versionFilter = searchParams.get('formVersionId') ?? '';
+  const currentPage = Math.max(1, Number(searchParams.get('page')) || 1);
+  const pageSize = Math.min(100, Math.max(1, Number(searchParams.get('pageSize')) || 10));
+  const [versions, setVersions] = useState<
+    Array<{ id: string; version: number; versionName: string | null; status: string }>
+  >([]);
+  const [formName, setFormName] = useState(formKey);
+  const [summary, setSummary] = useState({
+    total: 0,
+    pending: 0,
+    returned: 0,
+    approved: 0,
+    dispatched: 0,
+    late: 0,
+  });
+  const stats = {
+    ...summary,
+    onTimePct: summary.total
+      ? Math.round(((summary.total - summary.late) / summary.total) * 100)
+      : 100,
+  };
+  const updateFilter = (key: string, value: string, resetPage = true) => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      if (value && value !== 'all') next.set(key, value);
+      else next.delete(key);
+      if (resetPage) next.delete('page');
+      return next;
+    });
+  };
+  const setSearchQuery = (value: string) => updateFilter('search', value);
+  const setStatusFilter = (value: string) => updateFilter('status', value);
+  const setSlaFilter = (value: string) => updateFilter('sla', value);
+  const setPageSize = (value: number) => updateFilter('pageSize', String(value));
+  const setCurrentPage = (value: number | ((page: number) => number)) =>
+    updateFilter('page', String(typeof value === 'function' ? value(currentPage) : value), false);
+  const query = new URLSearchParams({
+    search: searchQuery,
+    status: statusFilter,
+    sla: slaFilter,
+    page: String(currentPage),
+    pageSize: String(pageSize),
+  });
+  if (versionFilter) query.set('formVersionId', versionFilter);
+  const requestUrl = `/api/forms/${encodeURIComponent(formKey)}/submissions?${query}`;
+  const registerPath =
+    formKey === 'tsrf' ? '/tsrf' : `/forms/${encodeURIComponent(formKey)}/submissions`;
+  const detailUrl = (id: string) => `${registerPath}/${id}?${searchParams}`;
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    void apiFetch('/api/forms/tsrf/submissions/report?limit=100')
+    void apiFetch(requestUrl)
       .then(async (response) => {
         if (!response.ok) throw new Error('Unable to load TSRF requests.');
-        return (await response.json()) as SubmissionRow[];
+        return (await response.json()) as {
+          rows: SubmissionRow[];
+          versions: typeof versions;
+          summary: typeof summary;
+          meta: { formName: string };
+        };
       })
-      .then((rows) => {
+      .then((result) => {
         if (cancelled) return;
-        setSubmissions(rows);
+        setSubmissions(result.rows);
+        setVersions(result.versions);
+        setSummary(result.summary);
+        setFormName(result.meta.formName);
+        const lastPage = Math.max(1, Math.ceil(result.summary.total / pageSize));
+        if (currentPage > lastPage) setCurrentPage(lastPage);
       })
       .catch((cause: unknown) => {
-        if (!cancelled)
+        if (!cancelled) {
+          setSubmissions([]);
+          setVersions([]);
+          setSummary({ total: 0, pending: 0, returned: 0, approved: 0, dispatched: 0, late: 0 });
           setError(cause instanceof Error ? cause.message : 'Unable to load TSRF requests.');
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -169,144 +238,21 @@ export function TSRFSubmissionTracker({ refreshToken, onNewRequest }: TSRFSubmis
     return () => {
       cancelled = true;
     };
-  }, [refreshToken, reloadToken]);
-
-  // Reset pagination when search or filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, statusFilter, departmentFilter, slaFilter, pageSize]);
-
-  // Summary Metrics calculations
-  const stats = useMemo(() => {
-    const total = submissions.length;
-    let pending = 0;
-    let returned = 0;
-    let approved = 0;
-    let dispatched = 0;
-    let late = 0;
-
-    for (const sub of submissions) {
-      const s = (sub.status || '').toLowerCase();
-      if (s === 'returned') returned++;
-      if (
-        s.includes('pending') ||
-        s.includes('review') ||
-        s.includes('submitted') ||
-        s.includes('endorsement')
-      )
-        pending++;
-      if (s.includes('approved')) approved++;
-      if (s.includes('dispatched') || s.includes('completed')) dispatched++;
-      if (sub.isLate) late++;
-    }
-
-    const onTimePct = total > 0 ? Math.round(((total - late) / total) * 100) : 100;
-    return { total, pending, returned, approved, dispatched, late, onTimePct };
-  }, [submissions]);
-
-  // Unique departments for dropdown filter
-  const availableDepartments = useMemo(() => {
-    const depts = new Set<string>();
-    submissions.forEach((s) => {
-      const d = String(
-        s.data?.department ||
-          s.data?.requestingDepartment ||
-          s.data?.requesting_department ||
-          s.data?.dept ||
-          '',
-      ).trim();
-      if (d && d !== '—' && d !== 'undefined') depts.add(d);
-    });
-    return Array.from(depts).sort();
-  }, [submissions]);
-
-  // Filtered rows
-  const filteredSubmissions = useMemo(() => {
-    return submissions.filter((sub) => {
-      // 1. Status Filter Pills
-      if (statusFilter === 'pending') {
-        const s = (sub.status || '').toLowerCase();
-        if (
-          !s.includes('pending') &&
-          !s.includes('review') &&
-          !s.includes('submitted') &&
-          !s.includes('endorsement')
-        )
-          return false;
-      } else if (statusFilter === 'returned') {
-        if ((sub.status || '').toLowerCase() !== 'returned') return false;
-      } else if (statusFilter === 'approved') {
-        const s = (sub.status || '').toLowerCase();
-        if (!s.includes('approved')) return false;
-      } else if (statusFilter === 'dispatched') {
-        const s = (sub.status || '').toLowerCase();
-        if (!s.includes('dispatched') && !s.includes('completed')) return false;
-      } else if (statusFilter === 'late') {
-        if (!sub.isLate) return false;
-      }
-
-      // 2. Department Filter
-      const dept = String(
-        sub.data?.department ||
-          sub.data?.requestingDepartment ||
-          sub.data?.requesting_department ||
-          sub.data?.dept ||
-          '',
-      ).trim();
-      if (departmentFilter !== 'all') {
-        if (dept.toLowerCase() !== departmentFilter.toLowerCase()) return false;
-      }
-
-      // 3. SLA Filter
-      if (slaFilter === 'on_time' && sub.isLate) return false;
-      if (slaFilter === 'late' && !sub.isLate) return false;
-
-      // 4. Search query matching
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const num = (sub.submissionNumber || '').toLowerCase();
-        const stat = (sub.status || '').toLowerCase();
-        const assignee = (sub.currentAssignee?.name || '').toLowerCase();
-        const roles = (sub.currentResponsibleRoles || []).join(' ').toLowerCase();
-
-        // Check deep data fields
-        const proj = String(sub.data?.projectName || sub.data?.purpose || '').toLowerCase();
-        const vtype = String(sub.data?.vehicleType || '').toLowerCase();
-
-        return (
-          num.includes(q) ||
-          dept.toLowerCase().includes(q) ||
-          proj.includes(q) ||
-          stat.includes(q) ||
-          assignee.includes(q) ||
-          roles.includes(q) ||
-          vtype.includes(q)
-        );
-      }
-
-      return true;
-    });
-  }, [submissions, statusFilter, departmentFilter, slaFilter, searchQuery]);
+  }, [requestUrl, refreshToken, reloadToken, currentUser?.id]);
 
   // Pagination calculation
-  const totalItems = filteredSubmissions.length;
+  const totalItems = summary.total;
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const startIndex = (safeCurrentPage - 1) * pageSize;
   const endIndex = Math.min(startIndex + pageSize, totalItems);
-  const paginatedSubmissions = filteredSubmissions.slice(startIndex, endIndex);
+  const paginatedSubmissions = submissions;
 
   const isFiltered =
-    searchQuery !== '' ||
-    statusFilter !== 'all' ||
-    departmentFilter !== 'all' ||
-    slaFilter !== 'all';
+    searchQuery !== '' || statusFilter !== 'all' || versionFilter !== '' || slaFilter !== 'all';
 
   const resetFilters = () => {
-    setSearchQuery('');
-    setStatusFilter('all');
-    setDepartmentFilter('all');
-    setSlaFilter('all');
+    setSearchParams({});
   };
 
   return (
@@ -319,7 +265,7 @@ export function TSRFSubmissionTracker({ refreshToken, onNewRequest }: TSRFSubmis
               <Truck className="h-4 w-4" />
             </span>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">
-              TSRF Logistics Intake & Dispatch
+              {formKey === 'tsrf' ? 'TSRF Logistics Intake & Dispatch' : `${formName} Requests`}
             </h1>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -341,15 +287,17 @@ export function TSRFSubmissionTracker({ refreshToken, onNewRequest }: TSRFSubmis
             Refresh
           </Button>
 
-          <Button
-            type="button"
-            size="sm"
-            className="gap-2 shadow-sm font-medium text-xs"
-            onClick={onNewRequest}
-          >
-            <Plus className="h-4 w-4" />
-            Create Request
-          </Button>
+          {onNewRequest && (
+            <Button
+              type="button"
+              size="sm"
+              className="gap-2 shadow-sm font-medium text-xs"
+              onClick={onNewRequest}
+            >
+              <Plus className="h-4 w-4" />
+              Create Request
+            </Button>
+          )}
         </div>
       </div>
 
@@ -435,7 +383,7 @@ export function TSRFSubmissionTracker({ refreshToken, onNewRequest }: TSRFSubmis
               <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 type="text"
-                placeholder="Search by TSRF number, department, project, or assignee..."
+                placeholder="Search by request reference..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="h-9 pl-9 text-xs"
@@ -456,17 +404,19 @@ export function TSRFSubmissionTracker({ refreshToken, onNewRequest }: TSRFSubmis
               {/* Department Filter */}
               <div className="flex items-center gap-1.5">
                 <span className="text-[11px] text-muted-foreground font-medium whitespace-nowrap">
-                  Department:
+                  Version:
                 </span>
                 <select
-                  value={departmentFilter}
-                  onChange={(e) => setDepartmentFilter(e.target.value)}
+                  aria-label="Form version"
+                  value={versionFilter}
+                  onChange={(e) => updateFilter('formVersionId', e.target.value)}
                   className="h-9 rounded-md border border-border bg-background px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                 >
-                  <option value="all">All Departments</option>
-                  {availableDepartments.map((dept) => (
-                    <option key={dept} value={dept}>
-                      {dept}
+                  <option value="">All Versions</option>
+                  {versions.map((version) => (
+                    <option key={version.id} value={version.id}>
+                      v{version.version}
+                      {version.versionName ? ` - ${version.versionName}` : ''} ({version.status})
                     </option>
                   ))}
                 </select>
@@ -561,9 +511,11 @@ export function TSRFSubmissionTracker({ refreshToken, onNewRequest }: TSRFSubmis
           <table className="w-full min-w-[920px] text-left text-xs">
             <thead className="border-b border-border bg-muted/40 font-semibold uppercase tracking-wider text-muted-foreground">
               <tr>
-                <th className="px-4 py-3">TSRF Reference</th>
-                <th className="px-4 py-3">Department</th>
-                <th className="px-4 py-3">Project / Purpose</th>
+                <th className="px-4 py-3">Request Reference</th>
+                <th className="px-4 py-3">{formKey === 'tsrf' ? 'Department' : 'Form'}</th>
+                <th className="px-4 py-3">
+                  {formKey === 'tsrf' ? 'Project / Purpose' : 'Release'}
+                </th>
                 <th className="px-4 py-3">Submission Date</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Assignment</th>
@@ -625,33 +577,41 @@ export function TSRFSubmissionTracker({ refreshToken, onNewRequest }: TSRFSubmis
                         >
                           Clear All Filters
                         </Button>
-                      ) : (
+                      ) : onNewRequest ? (
                         <Button size="sm" className="mt-2 text-xs gap-1.5" onClick={onNewRequest}>
                           <Plus className="h-3.5 w-3.5" />
                           Submit First Request
                         </Button>
-                      )}
+                      ) : null}
                     </div>
                   </td>
                 </tr>
               ) : (
                 paginatedSubmissions.map((submission) => {
                   const dateObj = new Date(submission.createdAt);
-                  const dept = String(
-                    submission.data?.department ||
-                      submission.data?.requestingDepartment ||
-                      submission.data?.requesting_department ||
-                      submission.data?.dept ||
-                      '—',
-                  );
-                  const proj = String(
-                    submission.data?.projectName || submission.data?.purpose || '',
-                  );
+                  const restricted =
+                    submission.visibility === 'restricted' ||
+                    submission.visibility === 'partially_restricted';
+                  const dept =
+                    formKey === 'tsrf'
+                      ? String(
+                          submission.labelSnapshots?.department?.label ??
+                            submission.data.department ??
+                            (restricted ? 'Restricted at this stage' : '—'),
+                        )
+                      : (submission.formName ?? formName);
+                  const proj =
+                    formKey === 'tsrf'
+                      ? String(
+                          submission.data.projectName ??
+                            (restricted ? 'Restricted at this stage' : '—'),
+                        )
+                      : `v${submission.version} ${submission.versionName ?? ''}`;
 
                   return (
                     <tr
                       key={submission.id}
-                      onClick={() => navigate(`/tsrf/${submission.id}`)}
+                      onClick={() => navigate(detailUrl(submission.id))}
                       className="cursor-pointer transition-colors hover:bg-muted/40 group"
                     >
                       {/* TSRF Reference */}
@@ -659,6 +619,10 @@ export function TSRFSubmissionTracker({ refreshToken, onNewRequest }: TSRFSubmis
                         <span className="font-mono text-primary font-bold group-hover:underline">
                           {submission.submissionNumber}
                         </span>
+                        <div className="mt-1 text-[10px] text-muted-foreground font-normal">
+                          {formName} · v{submission.version} {submission.versionName ?? ''} (
+                          {submission.versionStatus})
+                        </div>
                       </td>
 
                       {/* Explicit Department Column */}
@@ -672,7 +636,11 @@ export function TSRFSubmissionTracker({ refreshToken, onNewRequest }: TSRFSubmis
                       {/* Project / Purpose */}
                       <td className="px-4 py-3.5 text-muted-foreground">
                         <span className="truncate max-w-[200px] block" title={proj}>
-                          {proj || '—'}
+                          {proj ||
+                            (submission.visibility === 'restricted' ||
+                            submission.visibility === 'partially_restricted'
+                              ? 'Restricted at this stage'
+                              : '—')}
                         </span>
                       </td>
 
@@ -743,8 +711,8 @@ export function TSRFSubmissionTracker({ refreshToken, onNewRequest }: TSRFSubmis
                             navigate(
                               currentUser?.role === 'department_requester' &&
                                 submission.status.toLowerCase() === 'returned'
-                                ? `/tsrf/${submission.id}?edit=true`
-                                : `/tsrf/${submission.id}`,
+                                ? `${detailUrl(submission.id)}&edit=true`
+                                : detailUrl(submission.id),
                             )
                           }
                         >

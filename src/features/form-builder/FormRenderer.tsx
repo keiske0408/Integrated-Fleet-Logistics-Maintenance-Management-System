@@ -33,6 +33,8 @@ const SECTION_ICONS: Record<string, React.ComponentType<{ className?: string }>>
 };
 
 interface FormRendererProps {
+  submitDisabled?: boolean;
+  onValuesChange?: (values: FormValues) => void;
   definition: FormDefinition;
   initialValues?: FormValues;
   onSubmit: (values: FormValues) => void | Promise<void>;
@@ -231,6 +233,8 @@ function Field({
 }
 
 export function FormRenderer({
+  submitDisabled = false,
+  onValuesChange,
   definition,
   initialValues = {},
   onSubmit,
@@ -245,8 +249,12 @@ export function FormRenderer({
   const [driverOptions, setDriverOptions] = useState<Array<{ value: string; label: string }>>([]);
   const [initialValuesSnapshot] = useState(() => getInitialValues(definition, initialValues));
   const [values, setValues] = useState<FormValues>(initialValuesSnapshot);
-  const [, setValidationErrors] = useState<string[]>([]);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    onValuesChange?.(values);
+  }, [values, onValuesChange]);
 
   useEffect(() => {
     const fields = flattenFields(definition.sections.flatMap((section) => section.fields));
@@ -341,6 +349,7 @@ export function FormRenderer({
   };
 
   const submitForm = async () => {
+    if (submitting || submitDisabled) return;
     const errors = validateFormValues(definition, values);
     setValidationErrors(errors);
     if (errors.length > 0) {
@@ -480,7 +489,7 @@ export function FormRenderer({
         </div>
         <Button
           type="submit"
-          disabled={submitting}
+          disabled={submitting || submitDisabled}
           className="w-full sm:w-auto h-11 px-7 font-bold text-xs sm:text-sm shadow-md hover:shadow-lg gap-2 rounded-xl transition-all active:scale-[0.98] shrink-0"
         >
           {submitting ? (
