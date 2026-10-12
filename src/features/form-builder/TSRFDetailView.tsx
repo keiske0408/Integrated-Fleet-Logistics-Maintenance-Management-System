@@ -11,16 +11,334 @@ import {
   AlertTriangle,
   Layers,
   X,
+  ArrowRight,
+  MessageSquare,
+  RotateCcw,
+  XCircle,
+  Truck,
+  Sparkles,
+  ShieldCheck,
+  Clock,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/features/auth/AuthContext';
 import { FormRenderer } from './FormRenderer';
 import { FormPrintView, formatPrintableFieldValue } from './FormPrintView';
 import type { FormField, FormValues } from './types';
-import type { SubmissionDetail, SubmissionEvent, SubmissionRow } from './TSRFSubmissionTracker';
+import type {
+  SubmissionDetail,
+  SubmissionEvent,
+  SubmissionRow,
+  SubmissionTransition,
+} from './TSRFSubmissionTracker';
+
+export function WorkflowActions({
+  transitions,
+  onTransition,
+}: {
+  transitions: SubmissionTransition[];
+  onTransition: (transition: SubmissionTransition, comment: string) => Promise<void>;
+}) {
+  const [selected, setSelected] = useState<SubmissionTransition | null>(null);
+  const [comment, setComment] = useState('');
+  const [pending, setPending] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  if (transitions.length === 0) return null;
+
+  const submitAction = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!selected || pending || (selected.reasonRequired && !comment.trim())) return;
+    setPending(true);
+    setActionError(null);
+    try {
+      await onTransition(selected, comment.trim());
+      setSelected(null);
+      setComment('');
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : 'Unable to update the request.');
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const getTransitionStyle = (cat: string) => {
+    const s = cat.toLowerCase();
+    if (s === 'approved' || s === 'completed') {
+      return {
+        variant: 'default' as const,
+        className:
+          'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs border-emerald-600 hover:border-emerald-700 font-semibold',
+        icon: CheckCircle2,
+        pillColor: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
+        modalIconBg: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+        confirmBtnClass: 'bg-emerald-600 hover:bg-emerald-700 text-white',
+        presets: [
+          'Approved as requested',
+          'Route, schedule, and passenger manifest verified',
+          'Fleet unit and driver allocation authorized',
+        ],
+      };
+    }
+    if (s === 'returned') {
+      return {
+        variant: 'outline' as const,
+        className:
+          'border-amber-500/40 text-amber-700 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 shadow-xs font-semibold',
+        icon: RotateCcw,
+        pillColor: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30',
+        modalIconBg: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+        confirmBtnClass: 'bg-amber-600 hover:bg-amber-700 text-white',
+        presets: [
+          'Please complete and clarify the passenger list',
+          'Please provide specific destination route and intermediate stops',
+          'Departure time conflict - please revise call time',
+        ],
+      };
+    }
+    if (s === 'rejected' || s === 'cancelled') {
+      return {
+        variant: 'outline' as const,
+        className:
+          'border-rose-500/40 text-rose-700 dark:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 shadow-xs font-semibold',
+        icon: XCircle,
+        pillColor: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30',
+        modalIconBg: 'bg-rose-500/15 text-rose-600 dark:text-rose-400',
+        confirmBtnClass: 'bg-rose-600 hover:bg-rose-700 text-white',
+        presets: [
+          'No available fleet vehicles for requested timeslot',
+          'Request falls outside standard operating logistics policy',
+          'Insufficient lead time for vehicle preparation',
+        ],
+      };
+    }
+    if (s === 'in_progress' || s === 'dispatched') {
+      return {
+        variant: 'default' as const,
+        className:
+          'bg-blue-600 hover:bg-blue-700 text-white shadow-xs border-blue-600 hover:border-blue-700 font-semibold',
+        icon: Truck,
+        pillColor: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30',
+        modalIconBg: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
+        confirmBtnClass: 'bg-blue-600 hover:bg-blue-700 text-white',
+        presets: [
+          'Vehicle dispatched and en route to pickup location',
+          'Trip initiated as scheduled',
+        ],
+      };
+    }
+    return {
+      variant: 'default' as const,
+      className: 'bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs font-semibold',
+      icon: ArrowRight,
+      pillColor: 'bg-primary/10 text-primary border-primary/20',
+      modalIconBg: 'bg-primary/10 text-primary',
+      confirmBtnClass: 'bg-primary hover:bg-primary/90 text-primary-foreground',
+      presets: ['Endorsed and moving to next stage', 'Requirements verified, forwarding request'],
+    };
+  };
+
+  const activeStyle = selected ? getTransitionStyle(selected.statusCategory) : null;
+  const ActiveIcon = activeStyle?.icon || ArrowRight;
+
+  return (
+    <section className="border-t border-border/50 pt-3.5 space-y-3" aria-label="Workflow actions">
+      <div className="flex items-center justify-between">
+        <h4 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
+          <Sparkles className="h-3.5 w-3.5 text-primary" />
+          Actions
+        </h4>
+        <span className="text-[10px] font-semibold text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full">
+          {transitions.length} Available
+        </span>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {transitions.map((transition) => {
+          const style = getTransitionStyle(transition.statusCategory);
+          const Icon = style.icon;
+          return (
+            <Button
+              key={transition.toStage}
+              type="button"
+              variant={style.variant}
+              size="sm"
+              disabled={pending}
+              className={`gap-1.5 text-xs whitespace-normal h-auto min-h-8 px-3 py-1.5 transition-all ${style.className}`}
+              onClick={() => {
+                setSelected(transition);
+                setComment('');
+                setActionError(null);
+              }}
+            >
+              <Icon className="h-3.5 w-3.5 shrink-0" />
+              {transition.reasonRequired && (
+                <span className="rounded bg-black/15 dark:bg-white/15 px-1 py-0.2 text-[9px] font-semibold uppercase tracking-wider">
+                  Req
+                </span>
+              )}
+              {transition.label}
+            </Button>
+          );
+        })}
+      </div>
+
+      {selected && (
+        <Dialog open={true} onOpenChange={(open) => !open && !pending && setSelected(null)}>
+          <form onSubmit={(event) => void submitAction(event)} className="space-y-4">
+            <DialogHeader>
+              <div className="flex items-center gap-2.5">
+                <div className={`p-2 rounded-xl shrink-0 ${activeStyle?.modalIconBg}`}>
+                  <ActiveIcon className="h-5 w-5" />
+                </div>
+                <div>
+                  <DialogTitle>Confirm: {selected.label}</DialogTitle>
+                  <DialogDescription>
+                    Execute workflow transition and update dispatch queue.
+                  </DialogDescription>
+                </div>
+              </div>
+            </DialogHeader>
+
+            <div className="rounded-xl border border-border/60 bg-muted/30 p-3 flex items-center justify-between gap-2 text-xs">
+              <span className="text-muted-foreground font-medium">Stage Progression</span>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-foreground">Active</span>
+                <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                <Badge
+                  variant="outline"
+                  className={`font-semibold capitalize ${activeStyle?.pillColor}`}
+                >
+                  {selected.label}
+                </Badge>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label
+                  htmlFor="workflow-decision-comment"
+                  className="text-xs font-semibold text-foreground flex items-center gap-1.5"
+                >
+                  <MessageSquare className="h-3.5 w-3.5 text-primary" />
+                  <span>
+                    {selected.reasonRequired
+                      ? 'Reason / Explanation (Required)'
+                      : 'Comments / Remarks (Optional)'}
+                  </span>
+                </label>
+                {selected.reasonRequired ? (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30"
+                  >
+                    Mandatory
+                  </Badge>
+                ) : (
+                  <span className="text-[11px] text-muted-foreground">Optional</span>
+                )}
+              </div>
+
+              {activeStyle?.presets && activeStyle.presets.length > 0 && (
+                <div className="space-y-1.5 pt-0.5">
+                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                    Quick Templates:
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {activeStyle.presets.map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => setComment(preset)}
+                        className="text-[11px] rounded-lg border border-border/70 bg-background/80 hover:bg-muted hover:border-primary/50 px-2.5 py-1 text-muted-foreground hover:text-foreground text-left transition-colors"
+                      >
+                        {preset}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <textarea
+                id="workflow-decision-comment"
+                value={comment}
+                onChange={(event) => setComment(event.target.value)}
+                required={selected.reasonRequired}
+                disabled={pending}
+                rows={3}
+                placeholder={
+                  selected.reasonRequired
+                    ? 'Provide specific justification for this action…'
+                    : 'Add optional notes for the audit trail…'
+                }
+                className="w-full rounded-xl border border-input bg-background px-3.5 py-2.5 text-xs sm:text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 transition-all resize-y min-h-[80px]"
+              />
+
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-0.5">
+                <span className="flex items-center gap-1 text-[11px]">
+                  <ShieldCheck className="h-3 w-3 text-primary" />
+                  Recorded in permanent audit log
+                </span>
+                <span>{comment.length} characters</span>
+              </div>
+            </div>
+
+            {actionError && (
+              <div
+                role="alert"
+                className="rounded-lg border border-destructive/30 bg-destructive/10 p-2.5 text-xs text-destructive flex items-center gap-2"
+              >
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <span>{actionError}</span>
+              </div>
+            )}
+
+            <DialogFooter className="pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={pending}
+                onClick={() => setSelected(null)}
+                className="gap-1.5 text-xs"
+              >
+                <X className="h-3.5 w-3.5" /> Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={pending || (selected.reasonRequired && !comment.trim())}
+                className={`gap-1.5 text-xs font-semibold shadow-xs ${activeStyle?.confirmBtnClass}`}
+              >
+                {pending ? (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    <span>Processing...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    <span>Confirm {selected.label}</span>
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Dialog>
+      )}
+    </section>
+  );
+}
 
 function displayStatus(value: string): string {
   if (!value) return '—';
@@ -172,6 +490,21 @@ export function TSRFDetailView({ id: propId }: { id?: string }) {
 
     setEditing(false);
     navigate(`/tsrf/${detail.id}`, { replace: true });
+    await loadData();
+  };
+
+  const transitionRequest = async (transition: SubmissionTransition, comment: string) => {
+    if (!detail) return;
+    const response = await apiFetch(
+      `/api/forms/submissions/${encodeURIComponent(detail.id)}/transition`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toStage: transition.toStage, comment }),
+      },
+    );
+    if (!response.ok)
+      throw new Error(await apiErrorMessage(response, 'Unable to update the request.'));
     await loadData();
   };
 
@@ -350,6 +683,35 @@ export function TSRFDetailView({ id: propId }: { id?: string }) {
           </div>
         </div>
 
+        {/* Returned Action Callout Banner */}
+        {canEditReturned && !editing && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 p-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-950 dark:text-amber-100 shadow-xs animate-fade-in">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5">
+                <RotateCcw className="h-4 w-4" />
+              </div>
+              <div className="space-y-0.5">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-200">
+                  Request Returned For Revision
+                </h3>
+                <p className="text-xs text-amber-800/90 dark:text-amber-300/90">
+                  Check the audit remarks from your reviewer, update editable fields, and resubmit
+                  for approval.
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              className="gap-2 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white shadow-xs shrink-0 self-start sm:self-auto"
+              onClick={() => setEditing(true)}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              <span>Edit &amp; Resubmit Now</span>
+            </Button>
+          </div>
+        )}
+
         {/* ─── Two-Column Executive Grid ─── */}
         {editing && canEditReturned ? (
           <div className="space-y-4">
@@ -389,7 +751,11 @@ export function TSRFDetailView({ id: propId }: { id?: string }) {
               {filteredSections.length === 0 ? (
                 <Card className="p-6 text-center border-border/70">
                   <p className="text-xs text-muted-foreground">
-                    No specific fields submitted for this request.
+                    {detail.formSchema.sections.some((section) =>
+                      section.fields.some((field) => field.type !== 'notice'),
+                    )
+                      ? 'No specific fields submitted for this request.'
+                      : 'Request details are not visible to your role at this stage.'}
                   </p>
                 </Card>
               ) : (
@@ -537,6 +903,13 @@ export function TSRFDetailView({ id: propId }: { id?: string }) {
                       <span>{createdDate.toLocaleString()}</span>
                     </div>
                   </div>
+                  <WorkflowActions
+                    transitions={(detail.availableTransitions ?? []).filter(
+                      (transition) =>
+                        !canEditReturned || transition.toStage !== detail.resubmitStage,
+                    )}
+                    onTransition={transitionRequest}
+                  />
                 </CardContent>
               </Card>
 
@@ -555,51 +928,118 @@ export function TSRFDetailView({ id: propId }: { id?: string }) {
                   ) : (
                     <div className="relative pl-5 before:absolute before:bottom-2 before:left-[9px] before:top-2 before:w-[2px] before:bg-border">
                       <div className="space-y-5">
-                        {events.map((event, idx) => (
-                          <div key={event.id || idx} className="relative group">
-                            {/* Node circle */}
-                            <div className="absolute -left-5 top-1 flex h-4 w-4 items-center justify-center rounded-full border border-background bg-primary text-primary-foreground shadow-xs">
-                              <CheckCircle2 className="h-2.5 w-2.5" />
-                            </div>
+                        {events.map((event, idx) => {
+                          const toStageLower = (event.toStage || '').toLowerCase();
+                          const actionLower = (event.action || '').toLowerCase();
+                          const isApproved =
+                            toStageLower.includes('approv') ||
+                            actionLower.includes('approv') ||
+                            toStageLower.includes('complet');
+                          const isReturned =
+                            toStageLower.includes('returned') || actionLower.includes('returned');
+                          const isRejected =
+                            toStageLower.includes('reject') ||
+                            toStageLower.includes('cancel') ||
+                            actionLower.includes('reject');
 
-                            {/* Event content */}
-                            <div className="space-y-1">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-xs font-semibold text-foreground">
-                                  {displayStatus(event.action)}
-                                </span>
-                                <time className="text-[10px] text-muted-foreground whitespace-nowrap">
-                                  {new Date(event.createdAt).toLocaleDateString([], {
-                                    month: 'short',
-                                    day: 'numeric',
-                                  })}
-                                </time>
+                          return (
+                            <div key={event.id || idx} className="relative group">
+                              {/* Node circle */}
+                              <div
+                                className={`absolute -left-5 top-1 flex h-4 w-4 items-center justify-center rounded-full border border-background shadow-xs text-white ${
+                                  isApproved
+                                    ? 'bg-emerald-600'
+                                    : isReturned
+                                      ? 'bg-amber-600'
+                                      : isRejected
+                                        ? 'bg-rose-600'
+                                        : 'bg-primary'
+                                }`}
+                              >
+                                {isApproved ? (
+                                  <CheckCircle2 className="h-2.5 w-2.5" />
+                                ) : isReturned ? (
+                                  <RotateCcw className="h-2.5 w-2.5" />
+                                ) : isRejected ? (
+                                  <XCircle className="h-2.5 w-2.5" />
+                                ) : (
+                                  <Clock className="h-2.5 w-2.5" />
+                                )}
                               </div>
 
-                              <p className="text-[11px] text-muted-foreground">
-                                <span className="font-medium text-foreground">
-                                  {event.actorName}
-                                </span>{' '}
-                                · <span>{displayStatus(event.actorRole)}</span>
-                              </p>
+                              {/* Event content */}
+                              <div className="space-y-1.5">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-xs font-semibold text-foreground">
+                                    {displayStatus(event.action)}
+                                  </span>
+                                  <time className="text-[10px] text-muted-foreground whitespace-nowrap font-mono">
+                                    {new Date(event.createdAt).toLocaleDateString([], {
+                                      month: 'short',
+                                      day: 'numeric',
+                                    })}{' '}
+                                    {new Date(event.createdAt).toLocaleTimeString([], {
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })}
+                                  </time>
+                                </div>
 
-                              {event.fromStage && (
-                                <p className="text-[10px] text-muted-foreground">
-                                  <span>{displayStatus(event.fromStage)}</span> →{' '}
-                                  <span className="font-semibold text-primary">
-                                    {displayStatus(event.toStage)}
+                                <p className="text-[11px] text-muted-foreground">
+                                  <span className="font-medium text-foreground">
+                                    {event.actorName}
+                                  </span>{' '}
+                                  ·{' '}
+                                  <span className="capitalize">
+                                    {displayStatus(event.actorRole)}
                                   </span>
                                 </p>
-                              )}
 
-                              {event.comment && (
-                                <p className="mt-1 rounded bg-muted/40 p-2 text-xs italic text-foreground border border-border/40">
-                                  &quot;{event.comment}&quot;
-                                </p>
-                              )}
+                                {event.fromStage && (
+                                  <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                                    <span className="rounded bg-muted px-1.5 py-0.5 font-medium">
+                                      {displayStatus(event.fromStage)}
+                                    </span>
+                                    <ArrowRight className="h-2.5 w-2.5 text-muted-foreground" />
+                                    <span className="rounded bg-primary/10 text-primary px-1.5 py-0.5 font-semibold">
+                                      {displayStatus(event.toStage)}
+                                    </span>
+                                  </div>
+                                )}
+
+                                {event.comment && (
+                                  <div
+                                    className={`mt-2 rounded-xl p-3 text-xs border ${
+                                      isReturned
+                                        ? 'bg-amber-500/10 border-amber-500/25 text-amber-950 dark:text-amber-100'
+                                        : isRejected
+                                          ? 'bg-rose-500/10 border-rose-500/25 text-rose-950 dark:text-rose-100'
+                                          : isApproved
+                                            ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-950 dark:text-emerald-100'
+                                            : 'bg-muted/40 border-border/60 text-foreground'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-1.5 mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                      <MessageSquare className="h-3 w-3 text-primary" />
+                                      <span>
+                                        {isReturned
+                                          ? 'Return Reason'
+                                          : isRejected
+                                            ? 'Rejection Note'
+                                            : isApproved
+                                              ? 'Approval Remarks'
+                                              : 'Decision Remarks'}
+                                      </span>
+                                    </div>
+                                    <p className="leading-relaxed whitespace-pre-wrap break-words italic">
+                                      &ldquo;{event.comment}&rdquo;
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}

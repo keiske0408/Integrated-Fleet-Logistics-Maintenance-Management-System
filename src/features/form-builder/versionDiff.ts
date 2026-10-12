@@ -1,7 +1,7 @@
-import type { FormDefinition, FormField, FormSection } from './types';
+import type { FormDefinition, FormField, FormSection, FormWorkflow } from './types';
 
 export interface FormVersionChange {
-  kind: 'section' | 'field';
+  kind: 'section' | 'field' | 'workflow';
   action: 'added' | 'removed' | 'changed';
   path: string;
   details?: string[];
@@ -22,6 +22,16 @@ const FIELD_PROPERTIES: Array<keyof FormField> = [
   'maxRows',
   'meta',
 ];
+
+export function diffFormWorkflows(
+  before: FormWorkflow | null,
+  after: FormWorkflow,
+): FormVersionChange[] {
+  if (!before) return [];
+  return (['initialStage', 'stages', 'transitions', 'cutoff'] as const)
+    .filter((property) => JSON.stringify(before[property]) !== JSON.stringify(after[property]))
+    .map((property) => ({ kind: 'workflow', action: 'changed', path: property }));
+}
 
 function fieldMap(sections: FormSection[]): Map<string, FormField> {
   const fields = new Map<string, FormField>();

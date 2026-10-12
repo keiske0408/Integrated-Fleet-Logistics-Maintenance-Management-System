@@ -23,11 +23,48 @@ import { getWorkflowApprovalStamps } from '@/features/form-builder';
 import { moveFieldWithinSections } from '@/features/form-builder/reorder';
 import { projectFormForRoleStage } from '@/features/form-builder/preview';
 import { parseFormDefinitionImport } from '@/features/form-builder/importSchema';
-import { diffFormDefinitions } from '@/features/form-builder/versionDiff';
+import { diffFormDefinitions, diffFormWorkflows } from '@/features/form-builder/versionDiff';
+import { resolveDraftSaveRequest } from '@/features/form-builder/draftPersistence';
 import { createEditorHistory, editorHistoryReducer } from '@/features/form-builder/editorHistory';
 import { formatFieldOptions, parseFieldOptions } from '@/features/form-builder/fieldConfiguration';
 
 describe('TSRF form definition', () => {
+  it('updates the saved draft instead of creating new forms or versions on every save', () => {
+    const state = {
+      loaded: true,
+      definitionId: 'definition-id',
+      draftVersionId: 'draft-id',
+      hasChanges: true,
+    };
+    expect(resolveDraftSaveRequest(state)).toEqual({
+      url: '/api/forms/versions/draft-id',
+      method: 'PUT',
+    });
+    expect(resolveDraftSaveRequest({ ...state, hasChanges: false })).toBeNull();
+    expect(
+      resolveDraftSaveRequest({ ...state, draftVersionId: null, hasChanges: false }),
+    ).toBeNull();
+    expect(resolveDraftSaveRequest({ ...state, loaded: false })).toBeNull();
+    expect(resolveDraftSaveRequest({ ...state, draftVersionId: null })).toEqual({
+      url: '/api/forms/definition-id/versions',
+      method: 'POST',
+    });
+    expect(resolveDraftSaveRequest({ ...state, definitionId: null, draftVersionId: null })).toEqual(
+      { url: '/api/forms', method: 'POST' },
+    );
+  });
+
+  it('includes stage field access and transition changes in the published comparison', () => {
+    const workflow = structuredClone(TSRF_WORKFLOW);
+    expect(diffFormWorkflows(TSRF_WORKFLOW, workflow)).toEqual([]);
+    workflow.stages[1].fieldPermissions = { projectName: { department_requester: 'read' } };
+    workflow.transitions[0].reasonRequired = true;
+    expect(diffFormWorkflows(TSRF_WORKFLOW, workflow)).toEqual([
+      { kind: 'workflow', action: 'changed', path: 'stages' },
+      { kind: 'workflow', action: 'changed', path: 'transitions' },
+    ]);
+  });
+
   it('reorders fields by keyboard action without moving them across sections', () => {
     const sections = structuredClone(TSRF_V1.sections);
     const section = sections[1];
@@ -289,6 +326,20 @@ describe('TSRF form definition', () => {
         action: 'resubmitted',
       }),
     );
+  });
+
+  it('keeps submitted request details readable to requestors throughout the default workflow', () => {
+    for (const stage of TSRF_WORKFLOW.stages) {
+      const projected = projectFormForRoleStage(TSRF_V1, stage, 'department_requester');
+      expect(projected.fieldAccess.projectName).toBe(stage.id === 'returned' ? 'edit' : 'read');
+      expect(projected.fieldAccess['passengers.name']).toBe(
+        stage.id === 'returned' ? 'edit' : 'read',
+      );
+      expect(projected.fieldAccess['cargo.description']).toBe(
+        stage.id === 'returned' ? 'edit' : 'read',
+      );
+      expect(projected.fieldAccess.endingKm).toBeUndefined();
+    }
   });
 
   it('allows owners to cancel submitted or returned TSRFs with a reason', () => {

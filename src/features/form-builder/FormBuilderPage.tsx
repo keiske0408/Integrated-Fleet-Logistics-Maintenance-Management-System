@@ -72,7 +72,8 @@ import type {
 import type { FieldRule, RuleOperator } from './rules';
 import { moveFieldWithinSections } from './reorder';
 import { parseFormDefinitionImport } from './importSchema';
-import { diffFormDefinitions } from './versionDiff';
+import { diffFormDefinitions, diffFormWorkflows } from './versionDiff';
+import { resolveDraftSaveRequest } from './draftPersistence';
 import { createEditorHistory, editorHistoryReducer } from './editorHistory';
 import { formatFieldOptions, parseFieldOptions } from './fieldConfiguration';
 
@@ -688,6 +689,9 @@ export function FormBuilderPage() {
   const [draftVersionId, setDraftVersionId] = useState<string | null>(null);
   const [publishedFieldIds, setPublishedFieldIds] = useState<Set<string>>(() => new Set());
   const [publishedBaseline, setPublishedBaseline] = useState<FormDefinition | null>(null);
+  const [publishedWorkflowBaseline, setPublishedWorkflowBaseline] = useState<FormWorkflow | null>(
+    null,
+  );
   const publishedFieldKeys = React.useMemo(
     () => extractAllFieldKeys(publishedBaseline),
     [publishedBaseline],
@@ -703,6 +707,7 @@ export function FormBuilderPage() {
   const [isUpdatingFormName, setIsUpdatingFormName] = useState(false);
   const [isUpdatingVersionName, setIsUpdatingVersionName] = useState(false);
   const [saving, setSaving] = useState(false);
+  const saveInFlightRef = useRef(false);
   const importInputRef = useRef<HTMLInputElement>(null);
   const [permissionRole, setPermissionRole] = useState('department_requester');
   const [permissionStageId, setPermissionStageId] = useState('dispatch_assignment');
@@ -718,7 +723,10 @@ export function FormBuilderPage() {
     : { definition, fieldAccess: {} };
   const versionChanges =
     definition.status === 'draft' && publishedBaseline
-      ? diffFormDefinitions(publishedBaseline, definition)
+      ? [
+          ...diffFormDefinitions(publishedBaseline, definition),
+          ...diffFormWorkflows(publishedWorkflowBaseline, workflow),
+        ]
       : [];
   const previewUrl = (role: string, stageId: string) =>
     `${basePath}/preview/${encodeURIComponent(role)}/${encodeURIComponent(stageId)}${routeVersion ? `/${encodeURIComponent(routeVersion)}` : ''}`;
@@ -784,6 +792,7 @@ export function FormBuilderPage() {
           })),
         );
         const published = versions.find((version) => version.status === 'published');
+        setPublishedWorkflowBaseline(published?.workflow ?? null);
         setPublishedBaseline(
           published?.schema
             ? {
@@ -858,46 +867,33 @@ export function FormBuilderPage() {
   }, [currentUser?.id, activeFormKey, routeVersion]);
 
   const saveDraft = async (automatic = false, revision = editRevision) => {
-    if (saving) return;
+    if (saving || saveInFlightRef.current) return;
+    const saveRequest = resolveDraftSaveRequest({
+      loaded: isDefinitionLoaded,
+      definitionId,
+      draftVersionId,
+      hasChanges: revision > savedRevisionRef.current,
+    });
+    if (!saveRequest) {
+      if (!automatic)
+        toastWarning(isDefinitionLoaded ? 'No unsaved changes.' : 'Wait for the form to load.');
+      return;
+    }
+    saveInFlightRef.current = true;
     setSaving(true);
     try {
       const draft = { ...definition, status: 'draft' as const };
-      let response: Response;
-      if (!definitionId) {
-        response = await apiFetch('/api/forms', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            key: draft.key,
-            name: draft.name,
-            versionName: draft.versionName,
-            schema: draft,
-            workflow,
-          }),
-        });
-      } else if (draftVersionId) {
-        response = await apiFetch(`/api/forms/versions/${encodeURIComponent(draftVersionId)}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: draft.name,
-            versionName: draft.versionName,
-            schema: draft,
-            workflow,
-          }),
-        });
-      } else {
-        response = await apiFetch(`/api/forms/${encodeURIComponent(definitionId)}/versions`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: draft.name,
-            versionName: draft.versionName,
-            schema: draft,
-            workflow,
-          }),
-        });
-      }
+      const response = await apiFetch(saveRequest.url, {
+        method: saveRequest.method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          key: draft.key,
+          name: draft.name,
+          versionName: draft.versionName,
+          schema: draft,
+          workflow,
+        }),
+      });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? 'Unable to save draft.');
 
@@ -918,7 +914,10 @@ export function FormBuilderPage() {
         (typeof result.version === 'object' ? result.id : definitionId);
 
       if (resolvedDefId) setDefinitionId(resolvedDefId);
-      if (savedVersionId) setDraftVersionId(savedVersionId);
+      if (savedVersionId) {
+        setDraftVersionId(savedVersionId);
+        setSelectedVersionId(savedVersionId);
+      }
 
       savedRevisionRef.current = Math.max(savedRevisionRef.current, revision);
       autosaveErrorRevisionRef.current = null;
@@ -936,12 +935,17 @@ export function FormBuilderPage() {
         if (exists) {
           return prev.map((v) =>
             v.version === versionNum
-              ? { ...v, status: 'draft', versionName: draft.versionName }
+              ? { ...v, id: savedVersionId, status: 'draft', versionName: draft.versionName }
               : v,
           );
         }
         return [
-          { version: versionNum, status: 'draft', versionName: draft.versionName },
+          {
+            id: savedVersionId,
+            version: versionNum,
+            status: 'draft',
+            versionName: draft.versionName,
+          },
           ...prev,
         ].sort((a, b) => b.version - a.version);
       });
@@ -958,6 +962,7 @@ export function FormBuilderPage() {
         toastError(detail);
       }
     } finally {
+      saveInFlightRef.current = false;
       setSaving(false);
     }
   };
@@ -1068,6 +1073,7 @@ export function FormBuilderPage() {
         snapshot: { definition: published, workflow: activeWorkflow },
       });
       setPublishedBaseline(published);
+      setPublishedWorkflowBaseline(activeWorkflow);
       setPublishedFieldIds(new Set(collectFieldIds(fields)));
       setDraftVersionId(null);
       setShowRetireConfirmModal(false);
@@ -1857,11 +1863,18 @@ export function FormBuilderPage() {
             </Button>
           )}
 
-          <Button onClick={() => void saveDraft()} disabled={saving}>
+          <Button
+            onClick={() => void saveDraft()}
+            disabled={
+              saving ||
+              !isDefinitionLoaded ||
+              (Boolean(definitionId) && editRevision <= savedRevisionRef.current)
+            }
+          >
             <Save className="mr-2 h-4 w-4" />
             {saving
               ? 'Saving...'
-              : editRevision > savedRevisionRef.current || !draftVersionId
+              : editRevision > savedRevisionRef.current || !definitionId
                 ? 'Save Draft'
                 : 'Saved'}
           </Button>

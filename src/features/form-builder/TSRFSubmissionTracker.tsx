@@ -59,6 +59,14 @@ export interface SubmissionDetail extends SubmissionRow {
   labelSnapshots: Record<string, { code: string; label: string }>;
   fieldAccess: Record<string, 'read' | 'edit'>;
   resubmitStage: string | null;
+  availableTransitions?: SubmissionTransition[];
+}
+
+export interface SubmissionTransition {
+  toStage: string;
+  label: string;
+  statusCategory: string;
+  reasonRequired: boolean;
 }
 
 export interface SubmissionPrintRequest {
@@ -718,9 +726,19 @@ export function TSRFSubmissionTracker({ refreshToken, onNewRequest }: TSRFSubmis
                       <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
                         <Button
                           type="button"
-                          variant="ghost"
+                          variant={
+                            currentUser?.role === 'department_requester' &&
+                            submission.status.toLowerCase() === 'returned'
+                              ? 'default'
+                              : 'outline'
+                          }
                           size="sm"
-                          className="h-8 gap-1 px-2.5 text-xs text-primary hover:bg-primary/10 font-medium"
+                          className={`h-8 gap-1.5 px-3 text-xs font-semibold shadow-2xs transition-all ${
+                            currentUser?.role === 'department_requester' &&
+                            submission.status.toLowerCase() === 'returned'
+                              ? 'bg-amber-600 hover:bg-amber-700 text-white border-amber-600'
+                              : 'border-border/70 text-foreground hover:bg-primary hover:text-primary-foreground hover:border-primary'
+                          }`}
                           onClick={() =>
                             navigate(
                               currentUser?.role === 'department_requester' &&
@@ -739,7 +757,7 @@ export function TSRFSubmissionTracker({ refreshToken, onNewRequest }: TSRFSubmis
                           ) : (
                             <>
                               <span>View Details</span>
-                              <ArrowRight className="h-3 w-3" />
+                              <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
                             </>
                           )}
                         </Button>

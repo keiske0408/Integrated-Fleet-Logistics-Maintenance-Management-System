@@ -16,6 +16,8 @@ import {
   Trash2,
   FileText,
   Info,
+  AlertCircle,
+  RefreshCw,
 } from 'lucide-react';
 import { fieldRegistry } from './registry';
 import { getFieldState } from './rules';
@@ -441,19 +443,49 @@ export function FormRenderer({
       })}
 
       {/* Action / Submit Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 sm:p-5 rounded-2xl border border-border/70 bg-card/80 backdrop-blur-xs shadow-xs">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Info className="h-4 w-4 text-primary shrink-0" />
-          <span>Verify schedule, stops, and passenger/cargo manifest before submitting.</span>
+      <div className="sticky bottom-4 z-20 flex flex-col sm:flex-row items-center justify-between gap-4 p-4 sm:p-5 rounded-2xl border border-border/80 bg-card/95 backdrop-blur-md shadow-lg transition-all">
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div
+            className={`p-2.5 rounded-xl shrink-0 ${
+              validationErrors.length > 0
+                ? 'bg-destructive/15 text-destructive'
+                : 'bg-primary/10 text-primary'
+            }`}
+          >
+            {validationErrors.length > 0 ? (
+              <AlertCircle className="h-5 w-5" />
+            ) : (
+              <Info className="h-5 w-5" />
+            )}
+          </div>
+          <div className="space-y-0.5 text-xs">
+            {validationErrors.length > 0 ? (
+              <>
+                <p className="font-semibold text-destructive">
+                  {validationErrors.length === 1
+                    ? '1 required field needs attention'
+                    : `${validationErrors.length} required fields need attention`}
+                </p>
+                <p className="text-muted-foreground">{validationErrors[0]}</p>
+              </>
+            ) : (
+              <>
+                <p className="font-semibold text-foreground">Ready for Dispatch Submission</p>
+                <p className="text-muted-foreground">
+                  Verify schedule, stops, and passenger/cargo manifest before submitting.
+                </p>
+              </>
+            )}
+          </div>
         </div>
         <Button
           type="submit"
           disabled={submitting}
-          className="w-full sm:w-auto h-10 px-6 font-semibold shadow-sm gap-2"
+          className="w-full sm:w-auto h-11 px-7 font-bold text-xs sm:text-sm shadow-md hover:shadow-lg gap-2 rounded-xl transition-all active:scale-[0.98] shrink-0"
         >
           {submitting ? (
             <>
-              <span className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
+              <RefreshCw className="h-4 w-4 animate-spin" />
               <span>Submitting Request...</span>
             </>
           ) : (

@@ -1,9 +1,47 @@
 import { describe, it, expect } from 'vitest';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { WorkflowActions } from '../src/features/form-builder/TSRFDetailView';
 import { evaluateTsrfSubmissionTime, DEFAULT_TSRF_CUTOFF } from '../src/domain/tsrf';
 import { collectEditableFormChanges } from '../src/features/form-builder/FormRenderer';
 import type { FormField, FormValues } from '../src/features/form-builder/types';
 
 describe('Domain Rule 5: TSRF Cutoff Time Flagging', () => {
+  it('renders only server-authorized workflow actions', () => {
+    const onTransition = async () => {};
+    expect(
+      renderToStaticMarkup(
+        React.createElement(WorkflowActions, {
+          transitions: [],
+          onTransition,
+        }),
+      ),
+    ).toBe('');
+    const html = renderToStaticMarkup(
+      React.createElement(WorkflowActions, {
+        transitions: [
+          {
+            toStage: 'endorsement',
+            label: 'Endorsement',
+            statusCategory: 'in_review',
+            reasonRequired: false,
+          },
+          {
+            toStage: 'returned',
+            label: 'Returned',
+            statusCategory: 'returned',
+            reasonRequired: true,
+          },
+        ],
+        onTransition,
+      }),
+    );
+    expect(html).toContain('Workflow actions');
+    expect(html).toContain('Endorsement</button>');
+    expect(html).toContain('Returned</button>');
+    expect(html).not.toContain('Rejected</button>');
+  });
+
   it('should not flag TSRF request submitted before 16:00 (4:00 PM) standard cutoff', () => {
     // 2:30 PM (14:30)
     const submissionTime = new Date('2026-09-23T14:30:00');

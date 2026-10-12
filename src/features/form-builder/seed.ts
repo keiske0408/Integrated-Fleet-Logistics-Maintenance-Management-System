@@ -41,6 +41,12 @@ function withEntityReadAccess(stages: FormWorkflow['stages']): FormWorkflow['sta
     return {
       ...stage,
       fieldPermissions: {
+        ...Object.fromEntries(
+          Object.keys(returnedRequestorFieldAccess).map((path) => [
+            path,
+            { department_requester: 'read' },
+          ]),
+        ),
         ...otherFieldPermissions,
         entity: { ...ENTITY_READ_ACCESS, ...entity },
         endingKm: {

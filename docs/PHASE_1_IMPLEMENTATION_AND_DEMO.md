@@ -104,6 +104,16 @@ if (-not ($vehicleTypes | Where-Object { $_.code -eq 'VAN' })) {
 
 ## Walkthrough
 
+### Workflow Actions And Field Visibility
+
+Save and autosave update the selected draft in place. Saving without changes does not create a form or version. The first edit to a published version creates a new draft under the same form; subsequent edits update that draft. Publishing makes that version available to new submissions, while previous submissions remain pinned to their original version. The draft comparison includes workflow stages, field permissions, transitions, and cutoff changes as well as schema changes.
+
+The request detail page shows authorized next-stage actions under Dispatch Status. An approver at Submitted must match the department head snapshotted when the request was submitted. Allowed transition roles alone do not assign that person. Returned, rejected, and cancelled transitions require a reason; the API also checks configured required fields before progressing.
+
+Requestors only receive fields explicitly marked Read or Edit for their role at the current stage. An empty detail view does not mean the stored request data is missing. The default TSRF template grants requestors Read access to request details at each stage and Edit access when returned; the ending odometer remains hidden.
+
+For an existing custom workflow, create a draft version in Form Builder, open Stage Field Access, select Submitted and department requester, and set the request fields (including repeater children) to Read. Repeat for later stages where requestors should see those fields, retaining intentional Hidden settings, then publish and submit a new request. Existing submissions keep their pinned version and access rules; publishing does not retroactively change them.
+
 1. Sign in as `admin@hulma.com` and open Form Builder.
 2. Save the seeded TSRF definition as a draft and publish it. The dynamic intake uses the newest published version; drafts are not exposed to requestors.
 3. Sign out, then sign in as `ana.santos@hulma.com` with `request123`. TSRF opens on the request register.
