@@ -729,6 +729,30 @@ function InnerApp() {
             }
           />
           <Route
+            path={`${PAGE_ROUTES.form_builder}/forms/:formKey`}
+            element={
+              <ProtectedRoute permission="manage:reference_data">
+                <FormBuilderPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={`${PAGE_ROUTES.form_builder}/forms/:formKey/versions/:version`}
+            element={
+              <ProtectedRoute permission="manage:reference_data">
+                <FormBuilderPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={`${PAGE_ROUTES.form_builder}/forms/:formKey/preview/:role/:stage/:version?`}
+            element={
+              <ProtectedRoute permission="manage:reference_data">
+                <FormBuilderPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path={`${PAGE_ROUTES.form_builder}/versions/:version`}
             element={
               <ProtectedRoute permission="manage:reference_data">

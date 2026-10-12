@@ -1,5 +1,5 @@
-import React, { useEffect, useReducer, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Copy,
   Download,
@@ -35,13 +35,22 @@ import {
   ArrowLeft,
   AlertTriangle,
   Edit3,
+  FolderKanban,
+  Check,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { useToast } from '@/components/ui/toast';
-import { ConfirmDialog } from '@/components/ui/dialog';
+import {
+  ConfirmDialog,
+  Dialog,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { FormRenderer } from './FormRenderer';
 import { WorkflowDiagramPreview } from './WorkflowDiagramPreview';
 import { TSRF_V1, TSRF_WORKFLOW } from './seed';
@@ -151,21 +160,384 @@ function extractAllFieldKeys(def: FormDefinition | null | undefined): Set<string
   return keys;
 }
 
+export interface FormDirectoryItem {
+  id: string;
+  key: string;
+  name: string;
+  createdAt?: string;
+  updatedAt?: string;
+  versionCount: number;
+  publishedVersion: number | null;
+  publishedVersionName: string | null;
+  hasDraft: boolean;
+  latestVersion: number;
+}
+
 function cloneDefinition(): FormDefinition {
   return structuredClone(TSRF_V1);
 }
 
 export function FormBuilderPage() {
   const {
+    formKey: routeFormKey,
     version: routeVersion,
     role: routeRole,
     stage: routeStage,
   } = useParams<{
+    formKey?: string;
     version?: string;
     role?: string;
     stage?: string;
   }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const activeFormKey = routeFormKey ?? searchParams.get('form') ?? 'tsrf';
+  const basePath =
+    activeFormKey !== 'tsrf'
+      ? `/form-builder/forms/${encodeURIComponent(activeFormKey)}`
+      : '/form-builder';
+
+  const [availableForms, setAvailableForms] = useState<FormDirectoryItem[]>([]);
+  const [formsDirectoryOpen, setFormsDirectoryOpen] = useState(false);
+  const [formsDirectorySearch, setFormsDirectorySearch] = useState('');
+  const [newFormModalOpen, setNewFormModalOpen] = useState(false);
+  const [newFormTitle, setNewFormTitle] = useState('');
+  const [newFormKey, setNewFormKey] = useState('');
+  const [newFormVersionName, setNewFormVersionName] = useState('');
+  const [newFormTemplate, setNewFormTemplate] = useState<'blank' | 'inspection' | 'tsrf'>('blank');
+  const [isCreatingForm, setIsCreatingForm] = useState(false);
+  const [isKeyManuallyEdited, setIsKeyManuallyEdited] = useState(false);
+
+  const loadAvailableForms = useCallback(async () => {
+    try {
+      const response = await apiFetch('/api/forms');
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data)) {
+          setAvailableForms(data);
+        }
+      }
+    } catch {
+      // silently ignore fallback
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadAvailableForms();
+  }, [loadAvailableForms]);
+
+  const allFormsList = React.useMemo(() => {
+    const list = [...availableForms];
+    if (!list.some((f) => f.key === 'tsrf')) {
+      list.unshift({
+        id: 'tsrf-def',
+        key: 'tsrf',
+        name: 'Transportation Service Request Form',
+        versionCount: 1,
+        publishedVersion: 1,
+        publishedVersionName: 'Standard',
+        hasDraft: false,
+        latestVersion: 1,
+      });
+    }
+    return list.sort((a, b) => {
+      if (a.key === 'tsrf') return -1;
+      if (b.key === 'tsrf') return 1;
+      const isTestA = a.key.startsWith('test-form-') || a.key.startsWith('invalid-form-');
+      const isTestB = b.key.startsWith('test-form-') || b.key.startsWith('invalid-form-');
+      if (isTestA !== isTestB) return isTestA ? 1 : -1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [availableForms]);
+
+  const filteredFormsDirectory = React.useMemo(() => {
+    if (!formsDirectorySearch.trim()) return allFormsList;
+    const q = formsDirectorySearch.toLowerCase();
+    return allFormsList.filter(
+      (f) =>
+        f.name.toLowerCase().includes(q) ||
+        f.key.toLowerCase().includes(q) ||
+        (f.publishedVersionName && f.publishedVersionName.toLowerCase().includes(q)),
+    );
+  }, [allFormsList, formsDirectorySearch]);
+
+  const switchForm = (targetKey: string) => {
+    if (targetKey === activeFormKey) {
+      setFormsDirectoryOpen(false);
+      return;
+    }
+    if (saving || editRevision > savedRevisionRef.current) {
+      toastWarning('Save current changes before switching forms.');
+      return;
+    }
+    setFormsDirectoryOpen(false);
+    const targetPath =
+      targetKey === 'tsrf'
+        ? '/form-builder'
+        : `/form-builder/forms/${encodeURIComponent(targetKey)}`;
+    navigate(targetPath);
+  };
+
+  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setNewFormTitle(val);
+    if (!isKeyManuallyEdited) {
+      const slug = val
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+      setNewFormKey(slug);
+    }
+  };
+
+  const handleCreateNewForm = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const title = newFormTitle.trim();
+    const key = newFormKey
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, '_');
+    if (!title) {
+      toastWarning('Please enter a form name.');
+      return;
+    }
+    if (!key) {
+      toastWarning('Please enter a valid form key (identifier).');
+      return;
+    }
+
+    setIsCreatingForm(true);
+    try {
+      let initialSchema: FormDefinition;
+      let initialWorkflow: FormWorkflow;
+
+      if (newFormTemplate === 'tsrf') {
+        initialSchema = {
+          ...structuredClone(TSRF_V1),
+          key,
+          name: title,
+          version: 1,
+          versionName: newFormVersionName.trim() || 'v1 Initial Release',
+          status: 'draft',
+        };
+        initialWorkflow = structuredClone(TSRF_WORKFLOW);
+      } else if (newFormTemplate === 'inspection') {
+        initialSchema = {
+          key,
+          name: title,
+          version: 1,
+          versionName: newFormVersionName.trim() || 'v1 Initial Release',
+          status: 'draft',
+          sections: [
+            {
+              id: 'sec-vehicle',
+              title: 'Vehicle & Inspection Information',
+              description: 'Select the fleet vehicle and record the initial reading.',
+              fields: [
+                {
+                  id: `field-${Date.now()}-1`,
+                  key: 'assignedVehicleId',
+                  type: 'entity_lookup',
+                  label: 'Vehicle Plate Number',
+                  section: 'sec-vehicle',
+                  required: true,
+                  dataSource: {
+                    kind: 'entity',
+                    entity: 'vehicles',
+                    valueField: 'id',
+                    labelField: 'plateNumber',
+                  },
+                  width: 'half',
+                },
+                {
+                  id: `field-${Date.now()}-2`,
+                  key: 'odometerReading',
+                  type: 'number',
+                  label: 'Current Odometer (KM)',
+                  section: 'sec-vehicle',
+                  required: true,
+                  placeholder: 'e.g. 52000',
+                  width: 'half',
+                },
+              ],
+            },
+            {
+              id: 'sec-checklist',
+              title: 'Roadworthiness Checklist',
+              description: 'Confirm physical checks before vehicle departure.',
+              fields: [
+                {
+                  id: `field-${Date.now()}-3`,
+                  key: 'brakesCheck',
+                  type: 'checkbox',
+                  label: 'Brakes & parking brake working properly',
+                  section: 'sec-checklist',
+                  required: true,
+                  width: 'half',
+                },
+                {
+                  id: `field-${Date.now()}-4`,
+                  key: 'tiresCheck',
+                  type: 'checkbox',
+                  label: 'Tires pressure and condition inspected',
+                  section: 'sec-checklist',
+                  required: true,
+                  width: 'half',
+                },
+                {
+                  id: `field-${Date.now()}-5`,
+                  key: 'lightsCheck',
+                  type: 'checkbox',
+                  label: 'All headlights, signals and hazards working',
+                  section: 'sec-checklist',
+                  required: true,
+                  width: 'half',
+                },
+                {
+                  id: `field-${Date.now()}-6`,
+                  key: 'fluidsCheck',
+                  type: 'checkbox',
+                  label: 'Engine oil, coolant, and brake fluid checked',
+                  section: 'sec-checklist',
+                  required: true,
+                  width: 'half',
+                },
+                {
+                  id: `field-${Date.now()}-7`,
+                  key: 'remarks',
+                  type: 'textarea',
+                  label: 'Inspector Remarks / Notes',
+                  section: 'sec-checklist',
+                  placeholder: 'Optional notes on vehicle condition or remarks...',
+                  width: 'full',
+                },
+              ],
+            },
+          ],
+        };
+        initialWorkflow = {
+          initialStage: 'submitted',
+          stages: [
+            { id: 'draft', label: 'Draft', statusCategory: 'draft' },
+            { id: 'submitted', label: 'Submitted', statusCategory: 'in_review' },
+            { id: 'approved', label: 'Approved', statusCategory: 'approved' },
+            { id: 'completed', label: 'Completed', statusCategory: 'completed' },
+          ],
+          transitions: [
+            {
+              from: 'draft',
+              to: 'submitted',
+              roles: ['driver', 'department_requester', 'superadmin'],
+              action: 'Submit',
+            },
+            {
+              from: 'submitted',
+              to: 'approved',
+              roles: ['fleet_manager', 'superadmin'],
+              action: 'Approve',
+            },
+            {
+              from: 'approved',
+              to: 'completed',
+              roles: ['logistics_officer', 'fleet_manager', 'superadmin'],
+              action: 'Complete',
+            },
+          ],
+        };
+      } else {
+        // Blank starter
+        initialSchema = {
+          key,
+          name: title,
+          version: 1,
+          versionName: newFormVersionName.trim() || 'v1 Initial Release',
+          status: 'draft',
+          sections: [
+            {
+              id: 'sec-general',
+              title: 'General Information',
+              description: 'Initial intake fields for this form.',
+              fields: [
+                {
+                  id: `field-${Date.now()}-1`,
+                  key: 'title',
+                  type: 'text',
+                  label: 'Form Title / Subject',
+                  section: 'sec-general',
+                  required: true,
+                  placeholder: 'Enter subject or title...',
+                  width: 'full',
+                },
+              ],
+            },
+          ],
+        };
+        initialWorkflow = {
+          initialStage: 'submitted',
+          stages: [
+            { id: 'draft', label: 'Draft', statusCategory: 'draft' },
+            { id: 'submitted', label: 'Submitted', statusCategory: 'in_review' },
+            { id: 'approved', label: 'Approved', statusCategory: 'approved' },
+            { id: 'completed', label: 'Completed', statusCategory: 'completed' },
+          ],
+          transitions: [
+            {
+              from: 'draft',
+              to: 'submitted',
+              roles: ['department_requester', 'superadmin'],
+              action: 'Submit',
+            },
+            {
+              from: 'submitted',
+              to: 'approved',
+              roles: ['approver', 'department_head', 'superadmin'],
+              action: 'Approve',
+            },
+            {
+              from: 'approved',
+              to: 'completed',
+              roles: ['logistics_officer', 'superadmin'],
+              action: 'Complete',
+            },
+          ],
+        };
+      }
+
+      const response = await apiFetch('/api/forms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          key,
+          name: title,
+          versionName: initialSchema.versionName,
+          schema: initialSchema,
+          workflow: initialWorkflow,
+        }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error ?? 'Failed to create new form.');
+      }
+
+      toastSuccess(`Form "${title}" created successfully!`);
+      setNewFormModalOpen(false);
+      setFormsDirectoryOpen(false);
+      setNewFormTitle('');
+      setNewFormKey('');
+      setNewFormVersionName('');
+      setIsKeyManuallyEdited(false);
+
+      await loadAvailableForms();
+      navigate(`/form-builder/forms/${encodeURIComponent(key)}`);
+    } catch (error) {
+      toastError(error instanceof Error ? error.message : 'Unable to create form.');
+    } finally {
+      setIsCreatingForm(false);
+    }
+  };
+
   const [editorHistory, dispatchEditorHistory] = useReducer(
     editorHistoryReducer,
     {
@@ -272,21 +644,21 @@ export function FormBuilderPage() {
       ? diffFormDefinitions(publishedBaseline, definition)
       : [];
   const previewUrl = (role: string, stageId: string) =>
-    `/form-builder/preview/${encodeURIComponent(role)}/${encodeURIComponent(stageId)}${routeVersion ? `/${encodeURIComponent(routeVersion)}` : ''}`;
+    `${basePath}/preview/${encodeURIComponent(role)}/${encodeURIComponent(stageId)}${routeVersion ? `/${encodeURIComponent(routeVersion)}` : ''}`;
   const openPreview = () => {
     const stageId = selectedPermissionStage?.id ?? workflow.initialStage;
     navigate(previewUrl(permissionRole, stageId));
   };
   const leavePreview = () => {
     setPreview(false);
-    navigate(routeVersion ? `/form-builder/versions/${routeVersion}` : '/form-builder');
+    navigate(routeVersion ? `${basePath}/versions/${routeVersion}` : basePath);
   };
   const selectVersion = (version: string) => {
     if (saving || editRevision > savedRevisionRef.current) {
       toastWarning('Save the current changes before switching versions.');
       return;
     }
-    navigate(version === 'working' ? '/form-builder' : `/form-builder/versions/${version}`);
+    navigate(version === 'working' ? basePath : `${basePath}/versions/${version}`);
   };
 
   useEffect(() => {
@@ -301,18 +673,18 @@ export function FormBuilderPage() {
       !WORKFLOW_ROLES.includes(routeRole) ||
       !workflow.stages.some((stage) => stage.id === routeStage)
     ) {
-      navigate('/form-builder', { replace: true });
+      navigate(basePath, { replace: true });
       return;
     }
     setPermissionRole(routeRole);
     setPermissionStageId(routeStage);
     setPreview(true);
-  }, [isDefinitionLoaded, navigate, routeRole, routeStage, workflow.stages]);
+  }, [basePath, isDefinitionLoaded, navigate, routeRole, routeStage, workflow.stages]);
 
   useEffect(() => {
     let cancelled = false;
     setIsDefinitionLoaded(false);
-    apiFetch(`/api/forms/${encodeURIComponent(definition.key)}`)
+    apiFetch(`/api/forms/${encodeURIComponent(activeFormKey)}`)
       .then(async (response) => {
         if (response.status === 404) return null;
         if (!response.ok) throw new Error('Unable to load saved form versions.');
@@ -387,7 +759,11 @@ export function FormBuilderPage() {
             },
           });
           setDraftVersionId(selected.status === 'draft' ? selected.id : null);
-          setSelectedId(selected.schema.sections[1]?.fields[0]?.id ?? '');
+          setSelectedId(
+            selected.schema.sections[1]?.fields[0]?.id ??
+              selected.schema.sections[0]?.fields[0]?.id ??
+              '',
+          );
         }
         setIsDefinitionLoaded(true);
       })
@@ -400,7 +776,7 @@ export function FormBuilderPage() {
     return () => {
       cancelled = true;
     };
-  }, [currentUser?.id, definition.key, routeVersion]);
+  }, [currentUser?.id, activeFormKey, routeVersion]);
 
   const saveDraft = async (automatic = false, revision = editRevision) => {
     if (saving) return;
@@ -666,9 +1042,9 @@ export function FormBuilderPage() {
       const latestDraft = remainingVersions.find((v) => v.status === 'draft');
       const nextTarget = latestPublished ?? latestDraft;
       if (nextTarget) {
-        navigate(`/form-builder/versions/${nextTarget.version}`);
+        navigate(`${basePath}/versions/${nextTarget.version}`);
       } else {
-        navigate('/form-builder');
+        navigate(basePath);
       }
     } catch (error) {
       toastError(error instanceof Error ? error.message : 'Unable to delete draft.');
@@ -1076,6 +1452,53 @@ export function FormBuilderPage() {
 
   return (
     <div className="space-y-4 animate-fade-in">
+      {/* Forms Directory & Switcher Navigation Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-border/60">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setFormsDirectoryOpen(true)}
+            className="h-8 gap-2 px-3 text-xs font-semibold border-border/80 bg-background hover:bg-muted/60 shadow-sm"
+            title="Browse all forms in directory"
+          >
+            <FolderKanban className="h-3.5 w-3.5 text-primary" />
+            <span>All Forms</span>
+            <span className="inline-flex items-center justify-center rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary border border-primary/20">
+              {allFormsList.length}
+            </span>
+          </Button>
+
+          <span className="text-muted-foreground/40 font-light">/</span>
+
+          <div className="inline-flex items-center gap-2 rounded-lg border border-border/80 bg-muted/40 px-3 py-1 text-xs">
+            <span className="font-semibold text-foreground max-w-[200px] sm:max-w-xs truncate">
+              {definition.name}
+            </span>
+            <span className="font-mono text-[10px] text-muted-foreground bg-background px-1.5 py-0.5 rounded border border-border/50">
+              {definition.key}
+            </span>
+          </div>
+        </div>
+
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => {
+            setNewFormTitle('');
+            setNewFormKey('');
+            setNewFormVersionName('');
+            setIsKeyManuallyEdited(false);
+            setNewFormModalOpen(true);
+          }}
+          className="h-8 gap-1.5 px-3 text-xs font-semibold shadow-sm bg-primary text-primary-foreground hover:bg-primary/90"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          New Form
+        </Button>
+      </div>
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
@@ -1399,6 +1822,289 @@ export function FormBuilderPage() {
           </div>
         </div>
       </ConfirmDialog>
+
+      {/* Forms Directory Modal */}
+      <Dialog
+        open={formsDirectoryOpen}
+        onOpenChange={setFormsDirectoryOpen}
+        className="max-w-2xl sm:max-w-3xl"
+      >
+        <DialogHeader className="mb-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 pr-6">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20">
+                <FolderKanban className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg sm:text-xl font-bold">Forms Directory</DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                  Browse, search, and switch between form definitions across the system.
+                </DialogDescription>
+              </div>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                setFormsDirectoryOpen(false);
+                setNewFormTitle('');
+                setNewFormKey('');
+                setNewFormVersionName('');
+                setIsKeyManuallyEdited(false);
+                setNewFormModalOpen(true);
+              }}
+              className="h-8 gap-1.5 text-xs font-semibold"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New Form
+            </Button>
+          </div>
+        </DialogHeader>
+
+        <div className="space-y-3 pt-1">
+          {/* Search bar */}
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              type="text"
+              placeholder="Filter forms by name, key, or release..."
+              value={formsDirectorySearch}
+              onChange={(e) => setFormsDirectorySearch(e.target.value)}
+              className="pl-9 h-9 text-xs bg-background"
+            />
+          </div>
+
+          {/* Forms List Grid */}
+          <div className="max-h-[55vh] overflow-y-auto space-y-2 pr-1 overscroll-contain">
+            {filteredFormsDirectory.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border p-8 text-center">
+                <FolderKanban className="mx-auto h-8 w-8 text-muted-foreground opacity-50 mb-2" />
+                <p className="text-sm font-semibold text-foreground">No forms match your search</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Try adjusting the filter keyword or create a new form template.
+                </p>
+              </div>
+            ) : (
+              filteredFormsDirectory.map((form) => {
+                const isCurrent = form.key === definition.key;
+                return (
+                  <div
+                    key={form.key}
+                    className={cn(
+                      'flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border p-3 sm:p-3.5 transition-all text-left',
+                      isCurrent
+                        ? 'border-primary/50 bg-primary/5 ring-1 ring-primary/20'
+                        : 'border-border bg-card hover:border-border/80 hover:bg-muted/30',
+                    )}
+                  >
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm text-foreground truncate">
+                          {form.name}
+                        </span>
+                        <span className="font-mono text-[10px] bg-muted px-1.5 py-0.5 rounded border border-border text-muted-foreground">
+                          {form.key}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        {form.publishedVersion ? (
+                          <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />v
+                            {form.publishedVersion} Published
+                            {form.publishedVersionName ? ` (${form.publishedVersionName})` : ''}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium">
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                            Draft only (v{form.latestVersion})
+                          </span>
+                        )}
+                        <span>·</span>
+                        <span>
+                          {form.versionCount} version{form.versionCount === 1 ? '' : 's'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="shrink-0 flex items-center gap-2">
+                      {isCurrent ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary border border-primary/20">
+                          <Check className="h-3 w-3" />
+                          Currently Editing
+                        </span>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => switchForm(form.key)}
+                          className="h-8 text-xs font-medium"
+                        >
+                          Switch to Form
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </Dialog>
+
+      {/* Create New Form Modal */}
+      <Dialog
+        open={newFormModalOpen}
+        onOpenChange={setNewFormModalOpen}
+        className="max-w-lg sm:max-w-xl"
+      >
+        <DialogHeader className="mb-2">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20">
+              <Plus className="h-5 w-5" />
+            </div>
+            <div>
+              <DialogTitle className="text-lg font-bold">Create New Form</DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                Set up a new form definition with its key, release name, and starting template.
+              </DialogDescription>
+            </div>
+          </div>
+        </DialogHeader>
+
+        <form onSubmit={handleCreateNewForm} className="space-y-4 pt-1">
+          <div className="space-y-1.5">
+            <label htmlFor="new-form-name" className="text-xs font-semibold text-foreground">
+              Form Name *
+            </label>
+            <Input
+              id="new-form-name"
+              value={newFormTitle}
+              onChange={handleTitleChange}
+              placeholder="e.g. Vehicle Pre-Trip Inspection"
+              required
+              className="h-9 text-sm"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="new-form-key" className="text-xs font-semibold text-foreground">
+              Form Identifier (Slug / Key) *
+            </label>
+            <Input
+              id="new-form-key"
+              value={newFormKey}
+              onChange={(e) => {
+                setIsKeyManuallyEdited(true);
+                setNewFormKey(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '_'));
+              }}
+              placeholder="e.g. vehicle_pre_trip_inspection"
+              required
+              className="h-9 text-xs font-mono"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Unique slug used for URL routes, submissions, and API endpoints. Letters, numbers, and
+              underscores only.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <label
+              htmlFor="new-form-version-name"
+              className="text-xs font-semibold text-foreground"
+            >
+              Initial Release Name
+            </label>
+            <Input
+              id="new-form-version-name"
+              value={newFormVersionName}
+              onChange={(e) => setNewFormVersionName(e.target.value)}
+              placeholder="e.g. Initial v1, 2026 Q4 Launch"
+              className="h-9 text-sm"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-foreground block">Starting Template</label>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div
+                onClick={() => setNewFormTemplate('blank')}
+                className={cn(
+                  'cursor-pointer rounded-xl border p-3 text-left transition-all',
+                  newFormTemplate === 'blank'
+                    ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                    : 'border-border hover:bg-muted/30',
+                )}
+              >
+                <div className="font-semibold text-xs text-foreground flex items-center justify-between">
+                  <span>Blank Form</span>
+                  {newFormTemplate === 'blank' && <Check className="h-3.5 w-3.5 text-primary" />}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-1 leading-snug">
+                  Clean canvas with 1 initial section.
+                </p>
+              </div>
+
+              <div
+                onClick={() => setNewFormTemplate('inspection')}
+                className={cn(
+                  'cursor-pointer rounded-xl border p-3 text-left transition-all',
+                  newFormTemplate === 'inspection'
+                    ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                    : 'border-border hover:bg-muted/30',
+                )}
+              >
+                <div className="font-semibold text-xs text-foreground flex items-center justify-between">
+                  <span>Inspection</span>
+                  {newFormTemplate === 'inspection' && (
+                    <Check className="h-3.5 w-3.5 text-primary" />
+                  )}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-1 leading-snug">
+                  Vehicle lookup, odometer & checklist.
+                </p>
+              </div>
+
+              <div
+                onClick={() => setNewFormTemplate('tsrf')}
+                className={cn(
+                  'cursor-pointer rounded-xl border p-3 text-left transition-all',
+                  newFormTemplate === 'tsrf'
+                    ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                    : 'border-border hover:bg-muted/30',
+                )}
+              >
+                <div className="font-semibold text-xs text-foreground flex items-center justify-between">
+                  <span>TSRF Clone</span>
+                  {newFormTemplate === 'tsrf' && <Check className="h-3.5 w-3.5 text-primary" />}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-1 leading-snug">
+                  Full multi-stop fleet request workflow.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="pt-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setNewFormModalOpen(false)}
+              disabled={isCreatingForm}
+              className="h-9 text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={isCreatingForm || !newFormTitle.trim() || !newFormKey.trim()}
+              className="h-9 text-xs font-semibold"
+            >
+              {isCreatingForm ? 'Creating...' : 'Create Form'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </Dialog>
 
       {/* Field Deletion / Retirement Prompt Modal */}
       {fieldToDeletePrompt && (
