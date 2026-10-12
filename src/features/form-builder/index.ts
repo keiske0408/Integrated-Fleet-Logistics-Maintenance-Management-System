@@ -7,3 +7,4 @@ export * from './rules';
 export * from './validation';
 export * from './PublishedTsrfForm';
 export * from './FormPrintView';
+export * from './WorkflowDiagramPreview';
