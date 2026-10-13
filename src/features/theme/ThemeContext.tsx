@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { safeStorage } from '@/lib/storage';
 
 export type Theme = 'light' | 'dark';
 
@@ -45,19 +46,23 @@ function applySavedThemeVariables() {
       }
     };
 
-    const savedDark = localStorage.getItem('fleet_theme_vars_dark');
+    const savedDark = safeStorage.getItem('fleet_theme_vars_dark');
     if (savedDark) apply(JSON.parse(savedDark), 'dark');
-    const savedLight = localStorage.getItem('fleet_theme_vars_light');
+    const savedLight = safeStorage.getItem('fleet_theme_vars_light');
     if (savedLight) apply(JSON.parse(savedLight), 'light');
-  } catch {}
+  } catch {
+    // Fallback silently if storage read or parse fails
+  }
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
     try {
-      const saved = localStorage.getItem('fleet_theme') as Theme | null;
+      const saved = safeStorage.getItem('fleet_theme') as Theme | null;
       if (saved === 'light' || saved === 'dark') return saved;
-    } catch {}
+    } catch {
+      // Fallback silently to dark theme
+    }
     return 'dark';
   });
 
@@ -74,7 +79,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       root.classList.remove('dark');
       root.classList.add('light');
     }
-    localStorage.setItem('fleet_theme', theme);
+    safeStorage.setItem('fleet_theme', theme);
   }, [theme]);
 
   const setTheme = (t: Theme) => setThemeState(t);

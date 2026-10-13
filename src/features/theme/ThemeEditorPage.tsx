@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from './ThemeContext';
+import { safeStorage } from '@/lib/storage';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 import {
@@ -336,8 +337,8 @@ export function ThemeEditorPage() {
   // It is updated exclusively when the user clicks "Apply Theme".
   const [savedThemeState, setSavedThemeState] = useState<AppThemeState>(() => {
     try {
-      const savedDark = localStorage.getItem('fleet_theme_vars_dark');
-      const savedLight = localStorage.getItem('fleet_theme_vars_light');
+      const savedDark = safeStorage.getItem('fleet_theme_vars_dark');
+      const savedLight = safeStorage.getItem('fleet_theme_vars_light');
       return {
         dark: savedDark ? { ...DEFAULT_DARK, ...JSON.parse(savedDark) } : { ...DEFAULT_DARK },
         light: savedLight ? { ...DEFAULT_LIGHT, ...JSON.parse(savedLight) } : { ...DEFAULT_LIGHT },
@@ -357,7 +358,7 @@ export function ThemeEditorPage() {
   // Derive the initially-selected preset from what is actually saved
   const [appliedPreset, setAppliedPreset] = useState<string | null>(() => {
     try {
-      const savedDark = localStorage.getItem('fleet_theme_vars_dark');
+      const savedDark = safeStorage.getItem('fleet_theme_vars_dark');
       if (!savedDark) return 'Ocean Blue (Default)';
       const parsed = JSON.parse(savedDark) as Partial<ThemeVars>;
       // Match by primary hue — a good enough fingerprint for the built-in presets
@@ -434,8 +435,8 @@ export function ThemeEditorPage() {
   const handleSave = () => {
     // Commit the preview state → saved state, update DOM, and persist
     setSavedThemeState({ dark: { ...themeState.dark }, light: { ...themeState.light } });
-    localStorage.setItem('fleet_theme_vars_dark', JSON.stringify(themeState.dark));
-    localStorage.setItem('fleet_theme_vars_light', JSON.stringify(themeState.light));
+    safeStorage.setItem('fleet_theme_vars_dark', JSON.stringify(themeState.dark));
+    safeStorage.setItem('fleet_theme_vars_light', JSON.stringify(themeState.light));
     toastSuccess('Theme applied and saved!');
   };
 
