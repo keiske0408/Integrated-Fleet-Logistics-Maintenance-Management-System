@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from './ThemeContext';
+import { useAuth } from '@/features/auth/AuthContext';
+import { apiFetch } from '@/lib/api';
 import { safeStorage } from '@/lib/storage';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
@@ -9,11 +11,14 @@ import {
   Moon,
   Download,
   Upload,
-  Check,
   Palette,
   Type,
   Layers,
   Sliders,
+  Globe,
+  Database,
+  Loader2,
+  Info,
 } from 'lucide-react';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -330,12 +335,30 @@ function HSLControl({
 type Section = 'presets' | 'colors' | 'typography' | 'layout';
 
 export function ThemeEditorPage() {
-  const { theme: currentThemeMode, setTheme } = useTheme();
+  const { theme: currentThemeMode, setTheme, systemTheme, refreshTheme } = useTheme();
+  const { currentUser } = useAuth();
+  const isAdmin = currentUser?.role === 'system_admin' || currentUser?.role === 'admin';
+  const { success: toastSuccess, error: toastError } = useToast();
+
+  const [isSaving, setIsSaving] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [lastPublishedInfo, setLastPublishedInfo] = useState<{
+    updatedBy?: string | null;
+    updatedAt?: string | null;
+  } | null>(() => {
+    if (systemTheme) {
+      return { updatedBy: systemTheme.updatedBy, updatedAt: systemTheme.updatedAt };
+    }
+    return null;
+  });
 
   // ─── Saved (committed) theme state ────────────────────────────────────────
   // This is the ONLY state that writes to the real DOM / CSS variables.
-  // It is updated exclusively when the user clicks "Apply Theme".
+  // It is updated exclusively when the user clicks "Apply Theme" or when loaded from DB.
   const [savedThemeState, setSavedThemeState] = useState<AppThemeState>(() => {
+    if (systemTheme?.dark && systemTheme?.light) {
+      return { dark: { ...systemTheme.dark }, light: { ...systemTheme.light } };
+    }
     try {
       const savedDark = safeStorage.getItem('fleet_theme_vars_dark');
       const savedLight = safeStorage.getItem('fleet_theme_vars_light');
@@ -354,6 +377,21 @@ export function ThemeEditorPage() {
     dark: { ...savedThemeState.dark },
     light: { ...savedThemeState.light },
   }));
+
+  // Synchronize with database systemTheme when loaded
+  useEffect(() => {
+    if (systemTheme?.dark && systemTheme?.light) {
+      setSavedThemeState({ dark: { ...systemTheme.dark }, light: { ...systemTheme.light } });
+      setThemeState({ dark: { ...systemTheme.dark }, light: { ...systemTheme.light } });
+      setLastPublishedInfo({
+        updatedBy: systemTheme.updatedBy,
+        updatedAt: systemTheme.updatedAt,
+      });
+      if (systemTheme.presetName) {
+        setAppliedPreset(systemTheme.presetName);
+      }
+    }
+  }, [systemTheme]);
 
   // Derive the initially-selected preset from what is actually saved
   const [appliedPreset, setAppliedPreset] = useState<string | null>(() => {
@@ -375,7 +413,6 @@ export function ThemeEditorPage() {
 
   const [editMode, setEditMode] = useState<'dark' | 'light'>(currentThemeMode);
   const [section, setSection] = useState<Section>('presets');
-  const { success: toastSuccess } = useToast();
 
   // Synchronize editMode when theme changes from sidebar or elsewhere
   useEffect(() => {
@@ -426,18 +463,89 @@ export function ThemeEditorPage() {
     setAppliedPreset(preset.name);
   };
 
-  const resetToDefault = () => {
-    // Reset preview back to saved state (discard unsaved edits)
-    setThemeState({ dark: { ...savedThemeState.dark }, light: { ...savedThemeState.light } });
-    setAppliedPreset('Ocean Blue (Default)');
+  const resetToDefault = async () => {
+    if (!isAdmin) {
+      // Discard unsaved preview edits back to saved database state
+      setThemeState({ dark: { ...savedThemeState.dark }, light: { ...savedThemeState.light } });
+      setAppliedPreset('Ocean Blue (Default)');
+      toastSuccess('Reset preview back to current organization theme.');
+      return;
+    }
+
+    setIsResetting(true);
+    try {
+      const res = await apiFetch('/api/theme/reset', { method: 'POST' });
+      if (res.ok) {
+        const resetData = (await res.json()) as {
+          dark: ThemeVars;
+          light: ThemeVars;
+          presetName?: string;
+          updatedBy?: string;
+          updatedAt?: string;
+        };
+        setThemeState({ dark: { ...resetData.dark }, light: { ...resetData.light } });
+        setSavedThemeState({ dark: { ...resetData.dark }, light: { ...resetData.light } });
+        setAppliedPreset('Ocean Blue (Default)');
+        setLastPublishedInfo({
+          updatedBy: resetData.updatedBy,
+          updatedAt: resetData.updatedAt,
+        });
+        await refreshTheme();
+        toastSuccess('Organization theme reset to default in database!');
+      } else {
+        throw new Error('Failed to reset theme in database');
+      }
+    } catch {
+      setThemeState({ dark: { ...DEFAULT_DARK }, light: { ...DEFAULT_LIGHT } });
+      setSavedThemeState({ dark: { ...DEFAULT_DARK }, light: { ...DEFAULT_LIGHT } });
+      setAppliedPreset('Ocean Blue (Default)');
+      toastSuccess('Reset preview back to default.');
+    } finally {
+      setIsResetting(false);
+    }
   };
 
-  const handleSave = () => {
-    // Commit the preview state → saved state, update DOM, and persist
-    setSavedThemeState({ dark: { ...themeState.dark }, light: { ...themeState.light } });
-    safeStorage.setItem('fleet_theme_vars_dark', JSON.stringify(themeState.dark));
-    safeStorage.setItem('fleet_theme_vars_light', JSON.stringify(themeState.light));
-    toastSuccess('Theme applied and saved!');
+  const handleSave = async () => {
+    if (!isAdmin) {
+      toastError(
+        'Permission denied: Only administrators can publish organization themes to the database.',
+      );
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const res = await apiFetch('/api/theme', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          presetName: appliedPreset,
+          dark: themeState.dark,
+          light: themeState.light,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = (await res.json().catch(() => ({}))) as { message?: string };
+        throw new Error(errorData.message || 'Failed to save theme to database');
+      }
+
+      const saved = (await res.json()) as {
+        updatedBy?: string | null;
+        updatedAt?: string | null;
+      };
+      setSavedThemeState({ dark: { ...themeState.dark }, light: { ...themeState.light } });
+      safeStorage.setItem('fleet_theme_vars_dark', JSON.stringify(themeState.dark));
+      safeStorage.setItem('fleet_theme_vars_light', JSON.stringify(themeState.light));
+      setLastPublishedInfo({ updatedBy: saved.updatedBy, updatedAt: saved.updatedAt });
+      await refreshTheme();
+      toastSuccess('Organization theme published! Saved to database and applied to all users.');
+    } catch (err: unknown) {
+      const error = err as Error;
+      toastError(error.message || 'Error saving theme');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const exportTheme = () => {
@@ -497,12 +605,24 @@ export function ThemeEditorPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Theme Editor</h1>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-2xl font-bold text-foreground">Theme Editor</h1>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20">
+              <Database className="h-3 w-3" /> Database Backed
+            </span>
+            {lastPublishedInfo?.updatedAt && (
+              <span className="text-xs text-muted-foreground">
+                Last published {new Date(lastPublishedInfo.updatedAt).toLocaleDateString()}
+                {lastPublishedInfo.updatedBy ? ` by ${lastPublishedInfo.updatedBy}` : ''}
+              </span>
+            )}
+          </div>
           <p className="text-muted-foreground text-sm mt-0.5">
-            Customize the full visual identity of the app — colors, fonts, spacing and more.
+            Customize the organization-wide visual identity — colors, fonts, spacing, and radius
+            saved to the database.
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
           {/* Import */}
           <label className="cursor-pointer">
             <input type="file" accept=".json" onChange={importTheme} className="hidden" />
@@ -517,15 +637,73 @@ export function ThemeEditorPage() {
             <span className="hidden sm:inline">Export</span>
           </Button>
 
-          <Button variant="outline" onClick={resetToDefault} className="gap-2">
-            <RotateCcw className="h-4 w-4" />
+          <Button
+            variant="outline"
+            onClick={resetToDefault}
+            disabled={isResetting || isSaving}
+            className="gap-2"
+          >
+            {isResetting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RotateCcw className="h-4 w-4" />
+            )}
             <span className="hidden sm:inline">Reset</span>
           </Button>
 
-          <Button onClick={handleSave} className="gap-2">
-            Apply Theme
+          <Button
+            onClick={handleSave}
+            disabled={isSaving || isResetting}
+            className="gap-2 shadow-sm"
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Publishing...
+              </>
+            ) : (
+              <>
+                <Globe className="h-4 w-4" />
+                {isAdmin ? 'Publish to All Users' : 'Apply Preview'}
+              </>
+            )}
           </Button>
         </div>
+      </div>
+
+      {/* Organization Scope Banner */}
+      <div className="rounded-xl border border-border/70 bg-card/60 backdrop-blur-sm p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0 mt-0.5">
+            <Globe className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-foreground">
+                Organization-Wide Theme Persistence
+              </h3>
+              <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-muted text-muted-foreground border border-border">
+                Applies to all users
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5 max-w-2xl">
+              Visual styling changes published by an administrator are saved directly to the
+              database and apply to every user in the organization.
+              <span className="text-foreground font-medium">
+                {' '}
+                Individual users retain full control over their personal Dark vs. Light mode
+                selection
+              </span>
+              .
+            </p>
+          </div>
+        </div>
+        {!isAdmin && (
+          <div className="flex items-center gap-2 text-xs text-amber-500 bg-amber-500/10 border border-amber-500/20 px-3 py-2 rounded-lg shrink-0">
+            <Info className="h-4 w-4 shrink-0" />
+            <span>Preview Mode: Admin permissions required to publish globally.</span>
+          </div>
+        )}
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
