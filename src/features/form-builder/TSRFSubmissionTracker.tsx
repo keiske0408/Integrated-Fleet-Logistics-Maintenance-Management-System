@@ -20,6 +20,7 @@ import {
   ChevronsRight,
   Building2,
   Pencil,
+  XCircle,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -27,6 +28,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/features/auth/AuthContext';
+import { useToast } from '@/components/ui/toast';
 import type { FormDefinition, FormValues } from './types';
 
 export interface SubmissionRow {
@@ -110,7 +112,12 @@ function getStatusBadgeStyle(status: string): string {
   if (s.includes('approved') || s.includes('completed') || s.includes('fulfilled')) {
     return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25';
   }
-  if (s.includes('dispatched') || s.includes('in_transit') || s.includes('active')) {
+  if (
+    s.includes('dispatched') ||
+    s.includes('in_transit') ||
+    s.includes('in_progress') ||
+    s.includes('active')
+  ) {
     return 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/25';
   }
   if (
@@ -121,8 +128,14 @@ function getStatusBadgeStyle(status: string): string {
   ) {
     return 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25';
   }
+  if (s.includes('returned')) {
+    return 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25';
+  }
   if (s.includes('reject') || s.includes('cancelled') || s.includes('declined')) {
     return 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/25';
+  }
+  if (s.includes('draft')) {
+    return 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/25';
   }
   return 'bg-muted text-muted-foreground border-border';
 }
@@ -143,11 +156,36 @@ export function TSRFSubmissionTracker({
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { currentUser } = useAuth();
+  const { success: toastSuccess, error: toastError } = useToast();
+  const [activatingVersionId, setActivatingVersionId] = useState<string | null>(null);
 
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
+
+  const handleSetActiveVersion = async (targetId: string, versionNumber: number) => {
+    setActivatingVersionId(targetId);
+    try {
+      const response = await apiFetch(
+        `/api/forms/versions/${encodeURIComponent(targetId)}/activate`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to activate version.');
+      }
+      toastSuccess(`Version v${versionNumber} is now the active live template.`);
+      setReloadToken((c) => c + 1);
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : 'Unable to activate form version.');
+    } finally {
+      setActivatingVersionId(null);
+    }
+  };
 
   const searchQuery = searchParams.get('search') ?? '';
   const statusFilter = searchParams.get('status') ?? 'all';
@@ -161,17 +199,19 @@ export function TSRFSubmissionTracker({
   const [formName, setFormName] = useState(formKey);
   const [summary, setSummary] = useState({
     total: 0,
+    all: 0,
     pending: 0,
     returned: 0,
     approved: 0,
     dispatched: 0,
+    rejected: 0,
     late: 0,
   });
+  const totalCount = summary.all || summary.total;
   const stats = {
     ...summary,
-    onTimePct: summary.total
-      ? Math.round(((summary.total - summary.late) / summary.total) * 100)
-      : 100,
+    totalCount,
+    onTimePct: totalCount ? Math.round(((totalCount - summary.late) / totalCount) * 100) : 100,
   };
   const updateFilter = (key: string, value: string, resetPage = true) => {
     setSearchParams((previous) => {
@@ -228,7 +268,16 @@ export function TSRFSubmissionTracker({
         if (!cancelled) {
           setSubmissions([]);
           setVersions([]);
-          setSummary({ total: 0, pending: 0, returned: 0, approved: 0, dispatched: 0, late: 0 });
+          setSummary({
+            total: 0,
+            all: 0,
+            pending: 0,
+            returned: 0,
+            approved: 0,
+            dispatched: 0,
+            rejected: 0,
+            late: 0,
+          });
           setError(cause instanceof Error ? cause.message : 'Unable to load TSRF requests.');
         }
       })
@@ -302,7 +351,7 @@ export function TSRFSubmissionTracker({
       </div>
 
       {/* ─── KPI Metric Cards Bar ─── */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {/* Total Requests */}
         <Card className="border-border/70 shadow-xs">
           <CardContent className="flex items-center justify-between p-4">
@@ -310,7 +359,9 @@ export function TSRFSubmissionTracker({
               <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                 Total Requests
               </p>
-              <p className="text-2xl font-bold tracking-tight text-foreground">{stats.total}</p>
+              <p className="text-2xl font-bold tracking-tight text-foreground">
+                {stats.totalCount}
+              </p>
               <p className="text-[10px] text-muted-foreground">Registered TSRF entries</p>
             </div>
             <div className="rounded-xl bg-primary/10 p-2.5 text-primary">
@@ -349,6 +400,26 @@ export function TSRFSubmissionTracker({
             </div>
             <div className="rounded-xl bg-emerald-500/15 p-2.5 text-emerald-600 dark:text-emerald-400">
               <CheckCircle2 className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Rejected / Closed */}
+        <Card className="border-rose-500/20 bg-rose-500/5 shadow-xs">
+          <CardContent className="flex items-center justify-between p-4">
+            <div className="space-y-1">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-rose-600 dark:text-rose-400">
+                Rejected / Closed
+              </p>
+              <p className="text-2xl font-bold tracking-tight text-foreground">{stats.rejected}</p>
+              <p className="text-[10px] text-muted-foreground">
+                {stats.returned > 0
+                  ? `${stats.returned} returned for revision`
+                  : 'Declined requests'}
+              </p>
+            </div>
+            <div className="rounded-xl bg-rose-500/15 p-2.5 text-rose-600 dark:text-rose-400">
+              <XCircle className="h-5 w-5" />
             </div>
           </CardContent>
         </Card>
@@ -420,6 +491,26 @@ export function TSRFSubmissionTracker({
                     </option>
                   ))}
                 </select>
+                {(() => {
+                  const selectedVer = versions.find((v) => v.id === versionFilter);
+                  if (!selectedVer || selectedVer.status === 'published') return null;
+                  return (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        void handleSetActiveVersion(selectedVer.id, selectedVer.version)
+                      }
+                      disabled={activatingVersionId === selectedVer.id}
+                      className="h-9 gap-1.5 px-2.5 text-xs font-semibold text-emerald-700 border-emerald-600/40 bg-emerald-50/60 hover:bg-emerald-100 hover:text-emerald-800 dark:text-emerald-400 dark:border-emerald-500/40 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40 shadow-xs"
+                      title={`Set v${selectedVer.version} as the active live published template`}
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                      Set as Active
+                    </Button>
+                  );
+                })()}
               </div>
 
               {/* SLA Filter */}
@@ -457,11 +548,12 @@ export function TSRFSubmissionTracker({
             <span className="text-[11px] text-muted-foreground font-medium mr-1">Status:</span>
             {(
               [
-                { id: 'all', label: 'All', count: stats.total },
+                { id: 'all', label: 'All', count: stats.totalCount },
                 { id: 'pending', label: 'Pending', count: stats.pending },
                 { id: 'returned', label: 'Returned', count: stats.returned },
                 { id: 'approved', label: 'Approved', count: stats.approved },
                 { id: 'dispatched', label: 'Dispatched', count: stats.dispatched },
+                { id: 'rejected', label: 'Rejected', count: stats.rejected },
                 { id: 'late', label: 'Late SLA', count: stats.late },
               ] as const
             ).map((tab) => {

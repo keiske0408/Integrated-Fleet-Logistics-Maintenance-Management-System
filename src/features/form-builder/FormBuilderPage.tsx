@@ -37,8 +37,11 @@ import {
   Edit3,
   FolderKanban,
   Check,
+  CheckCircle2,
   Tag,
+  GitCompare,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -705,6 +708,8 @@ export function FormBuilderPage() {
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [showRenameFormModal, setShowRenameFormModal] = useState(false);
   const [showEditVersionNameModal, setShowEditVersionNameModal] = useState(false);
+  const [showActivateVersionModal, setShowActivateVersionModal] = useState(false);
+  const [isActivatingVersion, setIsActivatingVersion] = useState(false);
   const [editingFormName, setEditingFormName] = useState(definition.name);
   const [editingVersionName, setEditingVersionName] = useState(definition.versionName ?? '');
   const [isUpdatingFormName, setIsUpdatingFormName] = useState(false);
@@ -1244,6 +1249,60 @@ export function FormBuilderPage() {
     }
   };
 
+  const handleSetActiveVersion = async () => {
+    const targetId = selectedVersionId || draftVersionId;
+    if (!targetId) return;
+    setIsActivatingVersion(true);
+    try {
+      const response = await apiFetch(
+        `/api/forms/versions/${encodeURIComponent(targetId)}/activate`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to activate version.');
+      }
+      toastSuccess(`Version v${definition.version} is now the active live form template.`);
+      setShowActivateVersionModal(false);
+
+      // Clear the draft pointer – this version is now published, not a draft.
+      setDraftVersionId(null);
+
+      // Update status without bumping editRevision (which would trigger autosave)
+      dispatchEditorHistory({
+        type: 'replace-present',
+        update: (snapshot) => ({
+          ...snapshot,
+          definition: { ...snapshot.definition, status: 'published' },
+        }),
+      });
+
+      // Sync savedRevision so autosave doesn't re-trigger for the status-only change
+      savedRevisionRef.current = editRevision;
+      autosaveErrorRevisionRef.current = null;
+
+      setAvailableVersions((prev) =>
+        prev.map((v) => {
+          if (v.id === targetId || v.version === definition.version) {
+            return { ...v, status: 'published' };
+          }
+          if (v.status === 'published') {
+            return { ...v, status: 'archived' };
+          }
+          return v;
+        }),
+      );
+      await loadAvailableForms();
+    } catch (error) {
+      toastError(error instanceof Error ? error.message : 'Unable to activate form version.');
+    } finally {
+      setIsActivatingVersion(false);
+    }
+  };
+
   const undoEdit = () => {
     if (editorHistory.past.length === 0) return;
     autosaveErrorRevisionRef.current = null;
@@ -1734,22 +1793,33 @@ export function FormBuilderPage() {
               </Button>
             )}
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground mt-0.5">
-            <span>
-              v{definition.version ?? 'draft'} ·{' '}
-              <span className="capitalize">{definition.status}</span>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-1">
+            <span className="font-mono font-medium px-2 py-0.5 rounded-md bg-muted text-foreground border border-border/60">
+              v{definition.version ?? 'draft'}
             </span>
-            {definition.versionName ? (
-              <span className="inline-flex items-center gap-1 font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full text-xs border border-primary/20">
+            <Badge
+              variant="outline"
+              className={`text-[10px] font-semibold capitalize ${
+                definition.status === 'published'
+                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                  : definition.status === 'draft'
+                    ? 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                    : 'border-muted-foreground/30 bg-muted text-muted-foreground'
+              }`}
+            >
+              {definition.status}
+            </Badge>
+            {definition.versionName && (
+              <span className="inline-flex items-center gap-1 font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-md text-xs border border-primary/20">
                 <Tag className="h-3 w-3" />
                 {definition.versionName}
               </span>
-            ) : null}
+            )}
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              className="h-6 px-2 text-xs text-muted-foreground hover:text-primary gap-1"
+              className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground gap-1"
               onClick={() => {
                 setEditingVersionName(definition.versionName ?? '');
                 setShowEditVersionNameModal(true);
@@ -1757,13 +1827,16 @@ export function FormBuilderPage() {
               title="Set friendly release name for this version"
             >
               <Tag className="h-3 w-3" />
-              {definition.versionName ? 'Edit Release Label' : 'Tag Release Name'}
+              {definition.versionName ? 'Edit Label' : 'Tag Release'}
             </Button>
           </div>
         </div>
+
+        {/* Studio Command Toolbar */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* Version Picker & Activation */}
           {availableVersions.length > 0 && (
-            <div>
+            <div className="flex items-center gap-1.5">
               <label htmlFor="form-version" className="sr-only">
                 Form version
               </label>
@@ -1771,7 +1844,7 @@ export function FormBuilderPage() {
                 id="form-version"
                 value={routeVersion ?? 'working'}
                 onChange={(event) => selectVersion(event.target.value)}
-                className="text-xs h-9 min-w-[210px]"
+                className="text-xs h-9 min-w-[210px] bg-background border-border/70"
               >
                 <option value="working">Current working version</option>
 
@@ -1814,90 +1887,148 @@ export function FormBuilderPage() {
                   </optgroup>
                 )}
               </Select>
+
+              {definition.status !== 'published' && (selectedVersionId || draftVersionId) && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowActivateVersionModal(true)}
+                  disabled={isActivatingVersion || saving}
+                  className="h-9 gap-1.5 px-3 text-xs font-semibold text-emerald-700 border-emerald-600/40 bg-emerald-50/60 hover:bg-emerald-100 hover:text-emerald-800 dark:text-emerald-400 dark:border-emerald-500/40 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40 shadow-xs"
+                  title={`Set version v${definition.version} as the active live template`}
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                  Set as Active
+                </Button>
+              )}
             </div>
           )}
-          <Button variant="outline" onClick={openPreview}>
-            <Eye className="mr-2 h-4 w-4" />
-            Preview
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            title="Undo"
-            aria-label="Undo"
-            disabled={editorHistory.past.length === 0}
-            onClick={undoEdit}
-          >
-            <Undo2 className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            title="Redo"
-            aria-label="Redo"
-            disabled={editorHistory.future.length === 0}
-            onClick={redoEdit}
-          >
-            <Redo2 className="h-4 w-4" />
-          </Button>
-          <Button variant="outline" onClick={exportJson}>
-            <Download className="mr-2 h-4 w-4" />
-            Export JSON
-          </Button>
-          <input
-            ref={importInputRef}
-            type="file"
-            accept=".json,application/json"
-            className="hidden"
-            aria-label="Import form definition JSON"
-            onChange={importJson}
-          />
-          <Button variant="outline" onClick={() => importInputRef.current?.click()}>
-            <Upload className="mr-2 h-4 w-4" />
-            Import JSON
-          </Button>
 
-          {/* Delete Draft Button */}
-          {definition.status === 'draft' && Boolean(draftVersionId) && (
+          <div className="h-5 w-px bg-border/60 hidden sm:block mx-0.5" />
+
+          {/* Canvas Tools */}
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5 text-xs font-medium"
+              onClick={openPreview}
+            >
+              <Eye className="h-3.5 w-3.5" />
+              Preview
+            </Button>
             <Button
               type="button"
-              variant="outline"
-              className="border-red-500/40 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-500/40 dark:text-red-400 dark:hover:bg-red-950/30"
-              onClick={() => setShowDeleteConfirm(true)}
-              disabled={saving || isDeletingDraft}
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 text-muted-foreground hover:text-foreground"
+              title="Undo"
+              aria-label="Undo"
+              disabled={editorHistory.past.length === 0}
+              onClick={undoEdit}
             >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete Draft
+              <Undo2 className="h-4 w-4" />
             </Button>
-          )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 text-muted-foreground hover:text-foreground"
+              title="Redo"
+              aria-label="Redo"
+              disabled={editorHistory.future.length === 0}
+              onClick={redoEdit}
+            >
+              <Redo2 className="h-4 w-4" />
+            </Button>
+          </div>
 
-          <Button
-            onClick={() => void saveDraft()}
-            disabled={
-              saving ||
-              !isDefinitionLoaded ||
-              (Boolean(definitionId) && editRevision <= savedRevisionRef.current)
-            }
-          >
-            <Save className="mr-2 h-4 w-4" />
-            {saving
-              ? 'Saving...'
-              : editRevision > savedRevisionRef.current || !definitionId
-                ? 'Save Draft'
-                : 'Saved'}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => void publish()}
-            disabled={
-              saving || definition.status === 'published' || editRevision > savedRevisionRef.current
-            }
-          >
-            <Send className="mr-2 h-4 w-4" />
-            Publish
-          </Button>
+          <div className="h-5 w-px bg-border/60 hidden sm:block mx-0.5" />
+
+          {/* Import / Export */}
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5 text-xs font-medium"
+              onClick={exportJson}
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export
+            </Button>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              aria-label="Import form definition JSON"
+              onChange={importJson}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5 text-xs font-medium"
+              onClick={() => importInputRef.current?.click()}
+            >
+              <Upload className="h-3.5 w-3.5" />
+              Import
+            </Button>
+          </div>
+
+          <div className="h-5 w-px bg-border/60 hidden sm:block mx-0.5" />
+
+          {/* Actions & Lifecycle */}
+          <div className="flex items-center gap-1.5">
+            {definition.status === 'draft' && Boolean(draftVersionId) && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1.5 text-xs border-red-500/40 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-500/40 dark:text-red-400 dark:hover:bg-red-950/30"
+                onClick={() => setShowDeleteConfirm(true)}
+                disabled={saving || isDeletingDraft}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete Draft
+              </Button>
+            )}
+
+            <Button
+              size="sm"
+              variant={
+                editRevision > savedRevisionRef.current || !definitionId ? 'default' : 'outline'
+              }
+              className="h-9 gap-1.5 text-xs min-w-[88px]"
+              onClick={() => void saveDraft()}
+              disabled={
+                saving ||
+                !isDefinitionLoaded ||
+                (Boolean(definitionId) && editRevision <= savedRevisionRef.current)
+              }
+            >
+              <Save className="h-3.5 w-3.5" />
+              {saving
+                ? 'Saving...'
+                : editRevision > savedRevisionRef.current || !definitionId
+                  ? 'Save Draft'
+                  : 'Saved'}
+            </Button>
+
+            <Button
+              size="sm"
+              className="h-9 gap-1.5 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
+              onClick={() => void publish()}
+              disabled={
+                saving ||
+                definition.status === 'published' ||
+                editRevision > savedRevisionRef.current
+              }
+            >
+              <Send className="h-3.5 w-3.5" />
+              Publish
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -2141,6 +2272,47 @@ export function FormBuilderPage() {
               <span>Target Version:</span>
               <span className="font-mono font-semibold text-foreground">
                 v{definition.version ?? 'draft'}
+              </span>
+            </div>
+          </div>
+        </div>
+      </ConfirmDialog>
+
+      {/* Set as Active Confirmation Modal */}
+      <ConfirmDialog
+        open={showActivateVersionModal}
+        onOpenChange={setShowActivateVersionModal}
+        onCancel={() => setShowActivateVersionModal(false)}
+        onConfirm={() => void handleSetActiveVersion()}
+        variant="primary"
+        icon={CheckCircle2}
+        title={`Set Version v${definition.version ?? 'draft'} as Active?`}
+        badge={
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+            v{definition.version ?? 'draft'} · {definition.status}
+          </span>
+        }
+        description={`Promote version v${definition.version ?? 'draft'} to become the active live published template. Any currently published version will be archived.`}
+        confirmText={isActivatingVersion ? 'Activating...' : 'Set as Active'}
+        cancelText="Cancel"
+        isLoading={isActivatingVersion}
+        className="max-w-md sm:max-w-lg"
+      >
+        <div className="space-y-3 py-2 text-xs text-muted-foreground">
+          <p className="leading-relaxed">
+            New requests submitted by users will immediately use the schema and workflow from{' '}
+            <strong className="text-foreground">Version v{definition.version}</strong>
+            {definition.versionName ? ` ("${definition.versionName}")` : ''}.
+          </p>
+          <div className="rounded-xl border border-border/70 bg-muted/40 p-3 space-y-1">
+            <div className="flex justify-between">
+              <span>Form Template:</span>
+              <span className="font-semibold text-foreground">{definition.name}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Version to Activate:</span>
+              <span className="font-semibold text-foreground">
+                v{definition.version} {definition.versionName ? `(${definition.versionName})` : ''}
               </span>
             </div>
           </div>
@@ -2743,26 +2915,48 @@ export function FormBuilderPage() {
       )}
 
       {definition.status === 'draft' && publishedBaseline && (
-        <details className="rounded-md border border-border px-3 py-2">
-          <summary className="cursor-pointer text-sm font-semibold">
-            Draft v{definition.version ?? 'draft'} compared with published v
-            {publishedBaseline.version}
-            <span className="ml-2 font-normal text-muted-foreground">
-              {versionChanges.length} change(s)
+        <details className="group rounded-xl border border-border/70 bg-card/40 px-3.5 py-2 text-xs transition-colors hover:border-border">
+          <summary className="cursor-pointer list-none flex items-center justify-between gap-2 font-medium text-foreground select-none">
+            <div className="flex items-center gap-2">
+              <GitCompare className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+              <span>
+                Draft v{definition.version ?? 'draft'} compared with Live v
+                {publishedBaseline.version}
+              </span>
+            </div>
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                versionChanges.length === 0
+                  ? 'bg-muted text-muted-foreground'
+                  : 'bg-primary/10 text-primary border border-primary/20'
+              }`}
+            >
+              {versionChanges.length === 0
+                ? 'No changes'
+                : `${versionChanges.length} change${versionChanges.length === 1 ? '' : 's'}`}
             </span>
           </summary>
           {versionChanges.length === 0 ? (
-            <p className="mt-2 text-sm text-muted-foreground">No schema changes.</p>
+            <p className="mt-2 pt-2 border-t border-border/50 text-xs text-muted-foreground">
+              This draft schema and workflow currently match published live v
+              {publishedBaseline.version}.
+            </p>
           ) : (
-            <ul className="mt-2 space-y-1 text-sm">
+            <ul className="mt-2 pt-2 border-t border-border/50 space-y-1.5 text-xs text-muted-foreground">
               {versionChanges.map((change, index) => (
-                <li key={`${change.kind}-${change.path}-${index}`}>
-                  <span className="font-medium capitalize">{change.action}</span>{' '}
+                <li
+                  key={`${change.kind}-${change.path}-${index}`}
+                  className="flex items-start gap-1.5"
+                >
+                  <span className="font-semibold text-foreground capitalize">{change.action}</span>
                   <span>
-                    {change.kind} {change.path}
+                    {change.kind}{' '}
+                    <code className="px-1 py-0.5 rounded bg-muted font-mono text-[11px] text-foreground">
+                      {change.path}
+                    </code>
                   </span>
-                  {change.details && (
-                    <span className="text-muted-foreground"> ({change.details.join(', ')})</span>
+                  {change.details && change.details.length > 0 && (
+                    <span className="text-muted-foreground">({change.details.join(', ')})</span>
                   )}
                 </li>
               ))}

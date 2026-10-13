@@ -19,6 +19,8 @@ import {
   Sparkles,
   ShieldCheck,
   Clock,
+  FileText,
+  ShieldAlert,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -32,6 +34,7 @@ import {
 } from '@/components/ui/dialog';
 import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/features/auth/AuthContext';
+import { useToast } from '@/components/ui/toast';
 import { FormRenderer } from './FormRenderer';
 import { FormPrintView, formatPrintableFieldValue } from './FormPrintView';
 import type { FormField, FormValues } from './types';
@@ -210,20 +213,6 @@ export function WorkflowActions({
               </div>
             </DialogHeader>
 
-            <div className="rounded-xl border border-border/60 bg-muted/30 p-3 flex items-center justify-between gap-2 text-xs">
-              <span className="text-muted-foreground font-medium">Stage Progression</span>
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-foreground">Active</span>
-                <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                <Badge
-                  variant="outline"
-                  className={`font-semibold capitalize ${activeStyle?.pillColor}`}
-                >
-                  {selected.label}
-                </Badge>
-              </div>
-            </div>
-
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label
@@ -353,7 +342,12 @@ function getStatusBadgeStyle(status: string): string {
   if (s.includes('approved') || s.includes('completed') || s.includes('fulfilled')) {
     return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25';
   }
-  if (s.includes('dispatched') || s.includes('in_transit') || s.includes('active')) {
+  if (
+    s.includes('dispatched') ||
+    s.includes('in_transit') ||
+    s.includes('in_progress') ||
+    s.includes('active')
+  ) {
     return 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/25';
   }
   if (
@@ -364,8 +358,14 @@ function getStatusBadgeStyle(status: string): string {
   ) {
     return 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25';
   }
+  if (s.includes('returned')) {
+    return 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25';
+  }
   if (s.includes('reject') || s.includes('cancelled') || s.includes('declined')) {
     return 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/25';
+  }
+  if (s.includes('draft')) {
+    return 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/25';
   }
   return 'bg-muted text-muted-foreground border-border';
 }
@@ -413,6 +413,7 @@ export function TSRFDetailView({ id: propId }: { id?: string }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { currentUser } = useAuth();
+  const { success: toastSuccess, error: toastError } = useToast();
   const submissionId = propId || params.id;
   const requestedEdit = searchParams.get('edit') === 'true';
   const formKey = params.formKey ?? 'tsrf';
@@ -468,52 +469,96 @@ export function TSRFDetailView({ id: propId }: { id?: string }) {
     if (requestedEdit && canEditReturned) setEditing(true);
   }, [requestedEdit, canEditReturned]);
 
+  const latestRejectionEvent = useMemo(() => {
+    return [...events].reverse().find((e) => {
+      const to = (e.toStage || '').toLowerCase();
+      const act = (e.action || '').toLowerCase();
+      return (
+        to.includes('reject') ||
+        act.includes('reject') ||
+        to.includes('cancel') ||
+        act.includes('cancel')
+      );
+    });
+  }, [events]);
+
   const resubmitReturnedRequest = async (changes: FormValues) => {
     if (!detail?.resubmitStage) throw new Error('This request cannot be resubmitted.');
-    if (Object.keys(changes).length > 0) {
-      const editResponse = await apiFetch(
-        `/api/forms/submissions/${encodeURIComponent(detail.id)}/data`,
+    try {
+      if (Object.keys(changes).length > 0) {
+        const editResponse = await apiFetch(
+          `/api/forms/submissions/${encodeURIComponent(detail.id)}/data`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data: changes }),
+          },
+        );
+        if (!editResponse.ok)
+          throw new Error(await apiErrorMessage(editResponse, 'Unable to save request changes.'));
+      }
+
+      const transitionResponse = await apiFetch(
+        `/api/forms/submissions/${encodeURIComponent(detail.id)}/transition`,
         {
-          method: 'PATCH',
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data: changes }),
+          body: JSON.stringify({ toStage: detail.resubmitStage }),
         },
       );
-      if (!editResponse.ok)
-        throw new Error(await apiErrorMessage(editResponse, 'Unable to save request changes.'));
-    }
+      if (!transitionResponse.ok) {
+        const message = await apiErrorMessage(
+          transitionResponse,
+          'Unable to resubmit the request.',
+        );
+        throw new Error(`Changes were saved, but resubmission failed: ${message}`);
+      }
 
-    const transitionResponse = await apiFetch(
-      `/api/forms/submissions/${encodeURIComponent(detail.id)}/transition`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ toStage: detail.resubmitStage }),
-      },
-    );
-    if (!transitionResponse.ok) {
-      const message = await apiErrorMessage(transitionResponse, 'Unable to resubmit the request.');
-      throw new Error(`Changes were saved, but resubmission failed: ${message}`);
+      toastSuccess(`Request ${detail.submissionNumber} resubmitted successfully.`);
+      setEditing(false);
+      navigate(`${registerPath}/${detail.id}?${backParams}`, { replace: true });
+      await loadData();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unable to resubmit request.';
+      toastError(message);
+      throw err;
     }
-
-    setEditing(false);
-    navigate(`${registerPath}/${detail.id}?${backParams}`, { replace: true });
-    await loadData();
   };
 
   const transitionRequest = async (transition: SubmissionTransition, comment: string) => {
     if (!detail) return;
-    const response = await apiFetch(
-      `/api/forms/submissions/${encodeURIComponent(detail.id)}/transition`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ toStage: transition.toStage, comment }),
-      },
-    );
-    if (!response.ok)
-      throw new Error(await apiErrorMessage(response, 'Unable to update the request.'));
-    await loadData();
+    try {
+      const response = await apiFetch(
+        `/api/forms/submissions/${encodeURIComponent(detail.id)}/transition`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ toStage: transition.toStage, comment }),
+        },
+      );
+      if (!response.ok)
+        throw new Error(await apiErrorMessage(response, 'Unable to update the request.'));
+
+      const cat = (transition.statusCategory || '').toLowerCase();
+      const lbl = (transition.label || '').toLowerCase();
+      if (cat === 'rejected' || lbl.includes('reject')) {
+        toastSuccess(`Request ${detail.submissionNumber} has been rejected.`);
+      } else if (cat === 'approved' || lbl.includes('approv')) {
+        toastSuccess(`Request ${detail.submissionNumber} has been approved.`);
+      } else if (cat === 'returned' || lbl.includes('return')) {
+        toastSuccess(`Request ${detail.submissionNumber} returned for revision.`);
+      } else if (cat === 'cancelled' || lbl.includes('cancel')) {
+        toastSuccess(`Request ${detail.submissionNumber} has been cancelled.`);
+      } else {
+        toastSuccess(`Request ${detail.submissionNumber} updated: ${transition.label}.`);
+      }
+
+      await loadData();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unable to update the request.';
+      toastError(message);
+      throw err;
+    }
   };
 
   // Filter out unwanted sections (like intake-notice / TSRF Intake) and sections with no filled data
@@ -623,13 +668,9 @@ export function TSRFDetailView({ id: propId }: { id?: string }) {
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span className="text-muted-foreground/80">TSRF Logistics</span>
-                <span>
-                  {detail.formName} · v{detail.version} {detail.versionName ?? ''} (
-                  {detail.versionStatus})
-                </span>
                 <span className="text-muted-foreground/50">/</span>
-                <span className="font-mono font-medium text-foreground">
-                  {detail.submissionNumber}
+                <span>
+                  {detail.formName} (v{detail.version})
                 </span>
               </div>
 
@@ -639,7 +680,7 @@ export function TSRFDetailView({ id: propId }: { id?: string }) {
                 </h1>
                 <Badge
                   variant="outline"
-                  className={`font-medium ${getStatusBadgeStyle(detail.status)}`}
+                  className={`font-medium capitalize ${getStatusBadgeStyle(detail.status)}`}
                 >
                   {displayStatus(detail.status)}
                 </Badge>
@@ -670,19 +711,7 @@ export function TSRFDetailView({ id: propId }: { id?: string }) {
               <RefreshCw className="h-3.5 w-3.5" /> Refresh
             </Button>
 
-            {canEditReturned && !editing && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-2 text-xs shadow-xs"
-                onClick={() => setEditing(true)}
-              >
-                <Pencil className="h-3.5 w-3.5" /> Edit &amp; Resubmit
-              </Button>
-            )}
-
-            {/* Print Action: Automatically triggers system printout without leaving the view */}
+            {/* Print Action */}
             <Button
               type="button"
               size="sm"
@@ -695,32 +724,110 @@ export function TSRFDetailView({ id: propId }: { id?: string }) {
           </div>
         </div>
 
-        {/* Returned Action Callout Banner */}
+        {/* Returned Action Notice */}
         {canEditReturned && !editing && (
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 p-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-950 dark:text-amber-100 shadow-xs animate-fade-in">
-            <div className="flex items-start gap-3">
-              <div className="p-2 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5">
+          <div
+            role="alert"
+            className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-950 dark:text-amber-100 text-xs shadow-xs animate-fade-in"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="p-1 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 shrink-0">
                 <RotateCcw className="h-4 w-4" />
               </div>
-              <div className="space-y-0.5">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-200">
-                  Request Returned For Revision
-                </h3>
-                <p className="text-xs text-amber-800/90 dark:text-amber-300/90">
-                  Check the audit remarks from your reviewer, update editable fields, and resubmit
-                  for approval.
-                </p>
+              <div className="flex flex-wrap items-center gap-1.5 leading-normal">
+                <span className="font-semibold text-amber-950 dark:text-amber-100">
+                  Returned For Revision:
+                </span>
+                {latestRejectionEvent?.comment ? (
+                  <span className="italic text-amber-900/90 dark:text-amber-200/90">
+                    &ldquo;{latestRejectionEvent.comment}&rdquo;
+                  </span>
+                ) : (
+                  <span className="text-amber-800/90 dark:text-amber-300/90">
+                    Update editable fields and resubmit for approval.
+                  </span>
+                )}
               </div>
             </div>
             <Button
               type="button"
               size="sm"
-              className="gap-2 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white shadow-xs shrink-0 self-start sm:self-auto"
+              className="h-7 px-3 gap-1.5 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white shadow-xs shrink-0 self-start sm:self-auto"
               onClick={() => setEditing(true)}
             >
-              <Pencil className="h-3.5 w-3.5" />
-              <span>Edit &amp; Resubmit Now</span>
+              <Pencil className="h-3 w-3" />
+              <span>Edit &amp; Resubmit</span>
             </Button>
+          </div>
+        )}
+
+        {/* Rejected Status Notice */}
+        {detail.status === 'rejected' && (
+          <div
+            role="alert"
+            className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-950 dark:text-rose-100 text-xs shadow-xs animate-fade-in"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="p-1 rounded-lg bg-rose-500/20 text-rose-600 dark:text-rose-400 shrink-0">
+                <XCircle className="h-4 w-4" />
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 leading-normal">
+                <span className="font-semibold text-rose-900 dark:text-rose-200">
+                  Request Rejected
+                </span>
+                <span className="text-rose-400 dark:text-rose-600">·</span>
+                {latestRejectionEvent?.comment ? (
+                  <span className="text-rose-800/90 dark:text-rose-300/90 italic">
+                    &ldquo;{latestRejectionEvent.comment}&rdquo;
+                    {latestRejectionEvent.actorName && (
+                      <span className="not-italic text-rose-700 dark:text-rose-400 font-medium ml-1">
+                        — {latestRejectionEvent.actorName}
+                      </span>
+                    )}
+                  </span>
+                ) : (
+                  <span className="text-rose-800/90 dark:text-rose-300/90">
+                    This request was rejected and will not proceed to dispatch.
+                  </span>
+                )}
+              </div>
+            </div>
+            <Badge
+              variant="outline"
+              className="text-[10px] bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30 font-semibold shrink-0"
+            >
+              Closed
+            </Badge>
+          </div>
+        )}
+
+        {/* Cancelled Status Notice */}
+        {detail.status === 'cancelled' && (
+          <div
+            role="alert"
+            className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl border border-muted-foreground/30 bg-muted/40 text-foreground text-xs shadow-xs animate-fade-in"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="p-1 rounded-lg bg-muted text-muted-foreground shrink-0">
+                <XCircle className="h-4 w-4" />
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 leading-normal">
+                <span className="font-semibold">Request Cancelled</span>
+                <span className="text-muted-foreground/60">·</span>
+                {latestRejectionEvent?.comment ? (
+                  <span className="italic text-muted-foreground">
+                    &ldquo;{latestRejectionEvent.comment}&rdquo;
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">
+                    Cancelled by requester and no longer active.
+                  </span>
+                )}
+              </div>
+            </div>
+            <Badge variant="outline" className="text-[10px] font-semibold shrink-0">
+              Cancelled
+            </Badge>
           </div>
         )}
 
@@ -766,12 +873,26 @@ export function TSRFDetailView({ id: propId }: { id?: string }) {
                 </p>
               )}
               {filteredSections.length === 0 ? (
-                <Card className="p-6 text-center border-border/70">
-                  <p className="text-xs text-muted-foreground">
-                    {detail.visibility === 'restricted'
-                      ? 'Request details are restricted at this stage.'
-                      : 'No request data has been recorded.'}
-                  </p>
+                <Card className="border-border/70 p-8 text-center shadow-xs">
+                  <div className="mx-auto flex max-w-sm flex-col items-center justify-center space-y-2.5">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-muted-foreground border border-border/60">
+                      {detail.visibility === 'restricted' ? (
+                        <ShieldAlert className="h-5 w-5 text-amber-500" />
+                      ) : (
+                        <FileText className="h-5 w-5" />
+                      )}
+                    </div>
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                      {detail.visibility === 'restricted'
+                        ? 'Stage Details Restricted'
+                        : 'No Request Data'}
+                    </h4>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      {detail.visibility === 'restricted'
+                        ? 'Form submission details are restricted for this stage based on access permissions.'
+                        : 'No request fields or responses have been recorded.'}
+                    </p>
+                  </div>
                 </Card>
               ) : (
                 filteredSections.map((section) => (
@@ -1010,43 +1131,9 @@ export function TSRFDetailView({ id: propId }: { id?: string }) {
                                   </span>
                                 </p>
 
-                                {event.fromStage && (
-                                  <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                                    <span className="rounded bg-muted px-1.5 py-0.5 font-medium">
-                                      {displayStatus(event.fromStage)}
-                                    </span>
-                                    <ArrowRight className="h-2.5 w-2.5 text-muted-foreground" />
-                                    <span className="rounded bg-primary/10 text-primary px-1.5 py-0.5 font-semibold">
-                                      {displayStatus(event.toStage)}
-                                    </span>
-                                  </div>
-                                )}
-
                                 {event.comment && (
-                                  <div
-                                    className={`mt-2 rounded-xl p-3 text-xs border ${
-                                      isReturned
-                                        ? 'bg-amber-500/10 border-amber-500/25 text-amber-950 dark:text-amber-100'
-                                        : isRejected
-                                          ? 'bg-rose-500/10 border-rose-500/25 text-rose-950 dark:text-rose-100'
-                                          : isApproved
-                                            ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-950 dark:text-emerald-100'
-                                            : 'bg-muted/40 border-border/60 text-foreground'
-                                    }`}
-                                  >
-                                    <div className="flex items-center gap-1.5 mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                      <MessageSquare className="h-3 w-3 text-primary" />
-                                      <span>
-                                        {isReturned
-                                          ? 'Return Reason'
-                                          : isRejected
-                                            ? 'Rejection Note'
-                                            : isApproved
-                                              ? 'Approval Remarks'
-                                              : 'Decision Remarks'}
-                                      </span>
-                                    </div>
-                                    <p className="leading-relaxed whitespace-pre-wrap break-words italic">
+                                  <div className="mt-1.5 rounded-lg border border-border/50 bg-muted/30 px-3 py-2 text-xs">
+                                    <p className="text-foreground/90 leading-relaxed italic">
                                       &ldquo;{event.comment}&rdquo;
                                     </p>
                                   </div>
