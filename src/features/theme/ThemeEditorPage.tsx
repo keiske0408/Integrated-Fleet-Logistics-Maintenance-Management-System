@@ -11,6 +11,7 @@ import {
   Moon,
   Download,
   Upload,
+  Check,
   Palette,
   Type,
   Layers,

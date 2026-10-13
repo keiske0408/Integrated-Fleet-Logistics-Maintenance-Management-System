@@ -10,6 +10,30 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
+    <script>
+      (function() {
+        function suppressQuota(event) {
+          try {
+            var reason = event.reason || event.error;
+            var msg = String((reason && reason.message) || reason || (event && event.message) || '');
+            if (
+              msg.indexOf('kQuotaBytes') !== -1 ||
+              msg.indexOf('quota exceeded') !== -1 ||
+              msg.indexOf('QUOTA_BYTES') !== -1 ||
+              (reason && reason.name === 'QuotaExceededError')
+            ) {
+              if (typeof event.preventDefault === 'function') event.preventDefault();
+              if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+              return true;
+            }
+          } catch (_) {
+            // Ignore handler failures
+          }
+        }
+        window.addEventListener('unhandledrejection', suppressQuota, true);
+        window.addEventListener('error', suppressQuota, true);
+      })();
+    </script>
   </head>
   <body class="font-sans antialiased">
     <div id="root"></div>
