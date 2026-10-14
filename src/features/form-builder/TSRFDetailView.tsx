@@ -9,6 +9,7 @@ import {
   RefreshCw,
   User,
   AlertTriangle,
+  Eye,
   Layers,
   X,
   ArrowRight,
@@ -458,16 +459,24 @@ export function TSRFDetailView({ id: propId }: { id?: string }) {
     void loadData();
   }, [submissionId, formKey, currentUser?.id]);
 
+  const isReturned = detail?.status === 'returned' || detail?.stage === 'returned';
+  const isOwner = Boolean(
+    detail?.createdById && currentUser?.id && detail.createdById === currentUser.id,
+  );
+  const isAdmin = currentUser?.role === 'system_admin' || currentUser?.role === 'admin';
+  const resubmitStage = detail?.resubmitStage ?? 'submitted';
   const canEditReturned = Boolean(
     detail &&
-    detail.status === 'returned' &&
-    detail.createdById === currentUser?.id &&
-    detail.resubmitStage,
+    isReturned &&
+    (isOwner || isAdmin || currentUser?.role === 'department_requester') &&
+    resubmitStage,
   );
 
   useEffect(() => {
-    if (requestedEdit && canEditReturned) setEditing(true);
-  }, [requestedEdit, canEditReturned]);
+    if (canEditReturned || requestedEdit) {
+      setEditing(true);
+    }
+  }, [canEditReturned, requestedEdit]);
 
   const latestRejectionEvent = useMemo(() => {
     return [...events].reverse().find((e) => {
@@ -724,8 +733,8 @@ export function TSRFDetailView({ id: propId }: { id?: string }) {
           </div>
         </div>
 
-        {/* Returned Action Notice */}
-        {canEditReturned && !editing && (
+        {/* Returned Action Notice for Requester */}
+        {canEditReturned && (
           <div
             role="alert"
             className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-950 dark:text-amber-100 text-xs shadow-xs animate-fade-in"
@@ -752,12 +761,54 @@ export function TSRFDetailView({ id: propId }: { id?: string }) {
             <Button
               type="button"
               size="sm"
-              className="h-7 px-3 gap-1.5 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white shadow-xs shrink-0 self-start sm:self-auto"
-              onClick={() => setEditing(true)}
+              variant={editing ? 'outline' : 'default'}
+              className={`h-7 px-3 gap-1.5 text-xs font-semibold shadow-xs shrink-0 self-start sm:self-auto ${
+                editing
+                  ? 'border-amber-500/40 text-amber-900 dark:text-amber-100 hover:bg-amber-500/20'
+                  : 'bg-amber-600 hover:bg-amber-700 text-white'
+              }`}
+              onClick={() => setEditing((prev) => !prev)}
             >
-              <Pencil className="h-3 w-3" />
-              <span>Edit &amp; Resubmit</span>
+              {editing ? <Eye className="h-3 w-3" /> : <Pencil className="h-3 w-3" />}
+              <span>{editing ? 'View Summary Card' : 'Edit & Resubmit'}</span>
             </Button>
+          </div>
+        )}
+
+        {/* Returned Notice for Reviewers / Other Roles */}
+        {!canEditReturned && isReturned && (
+          <div
+            role="alert"
+            className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-950 dark:text-amber-100 text-xs shadow-xs animate-fade-in"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="p-1 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 shrink-0">
+                <RotateCcw className="h-4 w-4" />
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 leading-normal">
+                <span className="font-semibold text-amber-950 dark:text-amber-100">
+                  Returned to Requester:
+                </span>
+                {latestRejectionEvent?.comment ? (
+                  <span className="italic text-amber-900/90 dark:text-amber-200/90">
+                    &ldquo;{latestRejectionEvent.comment}&rdquo;
+                  </span>
+                ) : (
+                  <span className="text-amber-800/90 dark:text-amber-300/90">
+                    Awaiting requester revision and resubmission.
+                  </span>
+                )}
+                <span className="text-muted-foreground ml-1">
+                  (Editable fields are unlocked for {detail.createdByName || 'the requester'})
+                </span>
+              </div>
+            </div>
+            <Badge
+              variant="outline"
+              className="text-[10px] bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 font-semibold shrink-0"
+            >
+              Awaiting Revision
+            </Badge>
           </div>
         )}
 

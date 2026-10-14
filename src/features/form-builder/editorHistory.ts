@@ -13,6 +13,7 @@ export interface EditorHistory {
 
 export type EditorHistoryAction =
   | { type: 'edit'; snapshot: EditorSnapshot }
+  | { type: 'apply'; snapshot: EditorSnapshot }
   | { type: 'update'; update: (snapshot: EditorSnapshot) => EditorSnapshot }
   | { type: 'undo' }
   | { type: 'redo' }
@@ -52,7 +53,6 @@ export function editorHistoryReducer(
       future: history.future.slice(1),
     };
   }
-  if (action.type === 'undo' || action.type === 'redo') return history;
   const snapshot = action.type === 'update' ? action.update(history.present) : action.snapshot;
   if (snapshotsEqual(history.present, snapshot)) return history;
   return {

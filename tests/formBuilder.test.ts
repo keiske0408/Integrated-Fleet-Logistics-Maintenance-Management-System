@@ -203,6 +203,12 @@ describe('TSRF form definition', () => {
       snapshot: changed,
     });
     expect(edited.present.definition.name).toBe('Renamed TSRF');
+    const applied = editorHistoryReducer(createEditorHistory(initial), {
+      type: 'apply',
+      snapshot: changed,
+    });
+    expect(applied.present.definition.name).toBe('Renamed TSRF');
+    expect(applied.past).toHaveLength(1);
     const undone = editorHistoryReducer(edited, { type: 'undo' });
     expect(undone.present.definition.name).toBe(TSRF_V1.name);
     const redone = editorHistoryReducer(undone, { type: 'redo' });

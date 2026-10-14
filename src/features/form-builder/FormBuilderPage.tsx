@@ -992,14 +992,31 @@ export function FormBuilderPage() {
     return () => window.clearTimeout(timer);
   }, [editRevision, isDefinitionLoaded, saving]);
 
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (editRevision > savedRevisionRef.current || saving) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [editRevision, saving]);
+
   const removeFieldDirectly = (fieldId: string) => {
-    const updatedSections = definition.sections.map((s) => ({
-      ...s,
-      fields: s.fields.filter((f) => f.id !== fieldId),
-    }));
+    let removedFieldLabel: string | null = null;
+    const updatedSections = definition.sections.map((s) => {
+      const match = s.fields.find((f) => f.id === fieldId);
+      if (match) removedFieldLabel = match.label;
+      return {
+        ...s,
+        fields: s.fields.filter((f) => f.id !== fieldId),
+      };
+    });
     const updatedDefinition = { ...definition, sections: updatedSections };
     const allRemainingFields = updatedSections.flatMap((s) => s.fields);
     const pruned = pruneWorkflowForFields(workflow, allRemainingFields);
+    autosaveErrorRevisionRef.current = null;
+    setEditRevision((revision) => revision + 1);
     dispatchEditorHistory({
       type: 'apply',
       snapshot: { definition: updatedDefinition, workflow: pruned.workflow },
@@ -1007,6 +1024,7 @@ export function FormBuilderPage() {
     if (selectedId === fieldId) {
       setSelectedId('');
     }
+    toastSuccess(removedFieldLabel ? `Field "${removedFieldLabel}" removed.` : 'Field removed.');
   };
 
   const publish = async (bypassRetireCheck = false, acknowledgeRestrictedStages: string[] = []) => {
@@ -1525,14 +1543,25 @@ export function FormBuilderPage() {
   };
 
   const performRemoveSection = (id: string) => {
+    const targetSection = definition.sections.find((section) => section.id !== id);
+    const sectionTitle = targetSection?.title || 'Section';
     const updatedSections = definition.sections.filter((section) => section.id !== id);
     const updatedDefinition = { ...definition, sections: updatedSections };
     const allRemainingFields = updatedSections.flatMap((s) => s.fields);
     const pruned = pruneWorkflowForFields(workflow, allRemainingFields);
+    autosaveErrorRevisionRef.current = null;
+    setEditRevision((revision) => revision + 1);
     dispatchEditorHistory({
       type: 'apply',
       snapshot: { definition: updatedDefinition, workflow: pruned.workflow },
     });
+    if (
+      targetSection?.fields.some((f) => f.id === selectedId) ||
+      !allRemainingFields.some((f) => f.id === selectedId)
+    ) {
+      setSelectedId('');
+    }
+    toastSuccess(`Section "${sectionTitle}" removed.`);
   };
 
   const removeSection = (id: string) => {
