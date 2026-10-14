@@ -3,7 +3,17 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Lock, Unlock, CheckCircle2, Plus, ShieldCheck, ArrowRight, Truck } from 'lucide-react';
+import {
+  Lock,
+  Unlock,
+  CheckCircle2,
+  Plus,
+  ShieldCheck,
+  ArrowRight,
+  Truck,
+  FileText,
+  Wrench,
+} from 'lucide-react';
 
 export interface PurchaseRequisitionItem {
   id: string;
@@ -138,80 +148,139 @@ export function PRGatingDashboard({
           </div>
         </CardHeader>
         <CardContent className="pt-4">
-          <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="min-w-full divide-y divide-border text-left text-xs">
-              <thead className="bg-muted/50">
-                <tr>
-                  <th
-                    scope="col"
-                    className="py-2.5 px-4 font-semibold text-muted-foreground uppercase"
-                  >
-                    Requisition ID
-                  </th>
-                  <th
-                    scope="col"
-                    className="py-2.5 px-4 font-semibold text-muted-foreground uppercase"
-                  >
-                    Unit / Dept
-                  </th>
-                  <th
-                    scope="col"
-                    className="py-2.5 px-4 font-semibold text-muted-foreground uppercase"
-                  >
-                    Expenditure Purpose
-                  </th>
-                  <th
-                    scope="col"
-                    className="py-2.5 px-4 font-semibold text-muted-foreground uppercase"
-                  >
-                    Est. Cost
-                  </th>
-                  <th
-                    scope="col"
-                    className="py-2.5 px-4 font-semibold text-muted-foreground uppercase"
-                  >
-                    PR State
-                  </th>
-                  <th
-                    scope="col"
-                    className="py-2.5 px-4 text-right font-semibold text-muted-foreground uppercase"
-                  >
-                    Decision
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/60">
+          {prs.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-8 text-center border rounded-xl border-dashed border-border/80 bg-muted/10">
+              <div className="rounded-2xl bg-primary/10 p-3 mb-2 text-primary">
+                <FileText className="h-6 w-6" />
+              </div>
+              <h4 className="text-sm font-semibold text-foreground">No Purchase Requisitions</h4>
+              <p className="text-xs text-muted-foreground mt-0.5 max-w-sm">
+                No active or pending purchase requisitions found. Click &quot;Initiate PR&quot;
+                above to request procurement authorization.
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Desktop Table */}
+              <div className="hidden md:block overflow-x-auto rounded-lg border border-border">
+                <table className="min-w-full divide-y divide-border text-left text-xs">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th
+                        scope="col"
+                        className="py-2.5 px-4 font-semibold text-muted-foreground uppercase"
+                      >
+                        Requisition ID
+                      </th>
+                      <th
+                        scope="col"
+                        className="py-2.5 px-4 font-semibold text-muted-foreground uppercase"
+                      >
+                        Unit / Dept
+                      </th>
+                      <th
+                        scope="col"
+                        className="py-2.5 px-4 font-semibold text-muted-foreground uppercase"
+                      >
+                        Expenditure Purpose
+                      </th>
+                      <th
+                        scope="col"
+                        className="py-2.5 px-4 font-semibold text-muted-foreground uppercase"
+                      >
+                        Est. Cost
+                      </th>
+                      <th
+                        scope="col"
+                        className="py-2.5 px-4 font-semibold text-muted-foreground uppercase"
+                      >
+                        PR State
+                      </th>
+                      <th
+                        scope="col"
+                        className="py-2.5 px-4 text-right font-semibold text-muted-foreground uppercase"
+                      >
+                        Decision
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/60">
+                    {prs.map((pr) => (
+                      <tr key={pr.id} className="hover:bg-muted/30 transition-colors">
+                        <td className="py-3 px-4 font-mono font-medium text-foreground">
+                          {pr.prNumber}
+                        </td>
+                        <td className="py-3 px-4 text-foreground/80">{pr.department}</td>
+                        <td className="py-3 px-4 text-foreground">{pr.purpose}</td>
+                        <td className="py-3 px-4 font-mono font-medium">
+                          ₱{pr.amount.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-4">
+                          {pr.status === 'approved' ? (
+                            <Badge variant="success">Approved</Badge>
+                          ) : pr.status === 'rejected' ? (
+                            <Badge variant="destructive">Rejected</Badge>
+                          ) : (
+                            <Badge variant="warning">Pending Finance</Badge>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          {pr.status !== 'approved' && (
+                            <Button size="sm" variant="success" onClick={() => onApprovePr(pr.id)}>
+                              <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Approve Spend
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile Cards */}
+              <div className="md:hidden space-y-3">
                 {prs.map((pr) => (
-                  <tr key={pr.id} className="hover:bg-muted/30 transition-colors">
-                    <td className="py-3 px-4 font-mono font-medium text-foreground">
-                      {pr.prNumber}
-                    </td>
-                    <td className="py-3 px-4 text-foreground/80">{pr.department}</td>
-                    <td className="py-3 px-4 text-foreground">{pr.purpose}</td>
-                    <td className="py-3 px-4 font-mono font-medium">
-                      ₱{pr.amount.toLocaleString()}
-                    </td>
-                    <td className="py-3 px-4">
-                      {pr.status === 'approved' ? (
-                        <Badge variant="success">Approved</Badge>
-                      ) : pr.status === 'rejected' ? (
-                        <Badge variant="destructive">Rejected</Badge>
-                      ) : (
-                        <Badge variant="warning">Pending Finance</Badge>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-right">
+                  <div
+                    key={pr.id}
+                    className="p-3.5 rounded-xl border border-border bg-card/60 shadow-xs space-y-2.5"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="font-mono font-bold text-sm text-foreground">
+                          {pr.prNumber}
+                        </div>
+                        <div className="text-xs text-muted-foreground">{pr.department}</div>
+                      </div>
+                      <div>
+                        {pr.status === 'approved' ? (
+                          <Badge variant="success">Approved</Badge>
+                        ) : pr.status === 'rejected' ? (
+                          <Badge variant="destructive">Rejected</Badge>
+                        ) : (
+                          <Badge variant="warning">Pending Finance</Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="text-xs text-foreground/90 bg-muted/20 p-2 rounded-lg">
+                      {pr.purpose}
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1">
+                      <div className="font-mono font-bold text-sm text-foreground">
+                        ₱{pr.amount.toLocaleString()}
+                      </div>
                       {pr.status !== 'approved' && (
                         <Button size="sm" variant="success" onClick={() => onApprovePr(pr.id)}>
-                          <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Approve Spend
+                          <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Approve
                         </Button>
                       )}
-                    </td>
-                  </tr>
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -229,64 +298,193 @@ export function PRGatingDashboard({
           </div>
         </CardHeader>
         <CardContent className="pt-4">
-          <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-muted/50 border-b border-border uppercase text-muted-foreground font-semibold">
-                  <th className="py-2.5 px-4">Work Order</th>
-                  <th className="py-2.5 px-4">Vehicle</th>
-                  <th className="py-2.5 px-4">Description</th>
-                  <th className="py-2.5 px-4">Linked PR</th>
-                  <th className="py-2.5 px-4">Gatekeeper Status</th>
-                  <th className="py-2.5 px-4 text-right">Fulfillment Progression</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/60">
+          {workOrders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-8 text-center border rounded-xl border-dashed border-border/80 bg-muted/10">
+              <div className="rounded-2xl bg-primary/10 p-3 mb-2 text-primary">
+                <Wrench className="h-6 w-6" />
+              </div>
+              <h4 className="text-sm font-semibold text-foreground">No Maintenance Work Orders</h4>
+              <p className="text-xs text-muted-foreground mt-0.5 max-w-sm">
+                No repair work orders currently require PR gating or procurement fulfillment.
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Desktop Table */}
+              <div className="hidden md:block overflow-x-auto rounded-lg border border-border">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-muted/50 border-b border-border uppercase text-muted-foreground font-semibold">
+                      <th className="py-2.5 px-4">Work Order</th>
+                      <th className="py-2.5 px-4">Vehicle</th>
+                      <th className="py-2.5 px-4">Description</th>
+                      <th className="py-2.5 px-4">Linked PR</th>
+                      <th className="py-2.5 px-4">Gatekeeper Status</th>
+                      <th className="py-2.5 px-4 text-right">Fulfillment Progression</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/60">
+                    {workOrders.map((wo) => {
+                      const linkedPr = prs.find((p) => p.id === wo.linkedPrId);
+                      const isLocked = wo.procurementFulfillmentStatus === 'pending_pr_approval';
+
+                      return (
+                        <tr key={wo.id} className="hover:bg-muted/30 transition-colors">
+                          <td className="py-3 px-4 font-mono font-medium text-foreground">
+                            {wo.workOrderNumber}
+                          </td>
+                          <td className="py-3 px-4 font-bold text-foreground">
+                            {wo.vehiclePlate || 'Fleet Unit'}
+                          </td>
+                          <td className="py-3 px-4 text-muted-foreground">{wo.description}</td>
+                          <td className="py-3 px-4 font-mono">
+                            {linkedPr ? (
+                              <span>
+                                {linkedPr.prNumber}{' '}
+                                {linkedPr.status === 'approved' ? (
+                                  <span className="text-emerald-600 font-semibold">(Approved)</span>
+                                ) : (
+                                  <span className="text-amber-600 font-semibold">(Pending)</span>
+                                )}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground italic">None</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            {isLocked ? (
+                              <Badge
+                                variant="destructive"
+                                className="flex items-center space-x-1 w-max"
+                              >
+                                <Lock className="h-3 w-3 mr-1" /> Locked
+                              </Badge>
+                            ) : (
+                              <Badge
+                                variant="success"
+                                className="flex items-center space-x-1 w-max"
+                              >
+                                <Unlock className="h-3 w-3 mr-1" /> Unlocked
+                              </Badge>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            {isLocked ? (
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  if (linkedPr) onUnlockWorkOrder(wo.id, linkedPr.id);
+                                }}
+                                disabled={!linkedPr || linkedPr.status !== 'approved'}
+                              >
+                                <Unlock className="h-3.5 w-3.5 mr-1" /> Assert PR Gate
+                              </Button>
+                            ) : (
+                              <div className="inline-flex space-x-1.5">
+                                {wo.procurementFulfillmentStatus === 'pr_approved' && (
+                                  <Button
+                                    size="sm"
+                                    variant="warning"
+                                    onClick={() => onUpdateFulfillment(wo.id, 'in_maintenance')}
+                                  >
+                                    Send to Shop <ArrowRight className="h-3.5 w-3.5 ml-1" />
+                                  </Button>
+                                )}
+                                {wo.procurementFulfillmentStatus === 'in_maintenance' && (
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    onClick={() => onUpdateFulfillment(wo.id, 'work_completed')}
+                                  >
+                                    Mark Completed
+                                  </Button>
+                                )}
+                                {wo.procurementFulfillmentStatus === 'work_completed' && (
+                                  <Button
+                                    size="sm"
+                                    variant="success"
+                                    onClick={() =>
+                                      onUpdateFulfillment(wo.id, 'vehicle_operational')
+                                    }
+                                  >
+                                    <Truck className="h-3.5 w-3.5 mr-1" /> Release to Fleet
+                                  </Button>
+                                )}
+                                {wo.procurementFulfillmentStatus === 'vehicle_operational' && (
+                                  <span className="text-xs text-emerald-600 font-bold flex items-center justify-end">
+                                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Operational
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile Cards */}
+              <div className="md:hidden space-y-3.5">
                 {workOrders.map((wo) => {
                   const linkedPr = prs.find((p) => p.id === wo.linkedPrId);
                   const isLocked = wo.procurementFulfillmentStatus === 'pending_pr_approval';
 
                   return (
-                    <tr key={wo.id} className="hover:bg-muted/30 transition-colors">
-                      <td className="py-3 px-4 font-mono font-medium text-foreground">
-                        {wo.workOrderNumber}
-                      </td>
-                      <td className="py-3 px-4 font-bold text-foreground">
-                        {wo.vehiclePlate || 'Fleet Unit'}
-                      </td>
-                      <td className="py-3 px-4 text-muted-foreground">{wo.description}</td>
-                      <td className="py-3 px-4 font-mono">
-                        {linkedPr ? (
-                          <span>
-                            {linkedPr.prNumber}{' '}
-                            {linkedPr.status === 'approved' ? (
-                              <span className="text-emerald-600 font-semibold">(Approved)</span>
-                            ) : (
-                              <span className="text-amber-600 font-semibold">(Pending)</span>
-                            )}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground italic">None</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4">
-                        {isLocked ? (
-                          <Badge
-                            variant="destructive"
-                            className="flex items-center space-x-1 w-max"
-                          >
-                            <Lock className="h-3 w-3 mr-1" /> Locked
-                          </Badge>
-                        ) : (
-                          <Badge variant="success" className="flex items-center space-x-1 w-max">
-                            <Unlock className="h-3 w-3 mr-1" /> Unlocked
-                          </Badge>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-right">
+                    <div
+                      key={wo.id}
+                      className="p-3.5 rounded-xl border border-border bg-card/60 shadow-xs space-y-2.5"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="font-mono font-bold text-sm text-foreground">
+                            {wo.workOrderNumber}
+                          </div>
+                          <div className="text-xs font-semibold text-primary">
+                            {wo.vehiclePlate || 'Fleet Unit'}
+                          </div>
+                        </div>
+                        <div>
+                          {isLocked ? (
+                            <Badge variant="destructive" className="flex items-center space-x-1">
+                              <Lock className="h-3 w-3 mr-1" /> Locked
+                            </Badge>
+                          ) : (
+                            <Badge variant="success" className="flex items-center space-x-1">
+                              <Unlock className="h-3 w-3 mr-1" /> Unlocked
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="text-xs text-foreground/90 bg-muted/20 p-2 rounded-lg">
+                        {wo.description}
+                      </div>
+
+                      <div className="text-xs py-1 border-y border-border/50 flex justify-between items-center">
+                        <span className="text-muted-foreground">Linked PR:</span>
+                        <span className="font-mono font-medium">
+                          {linkedPr ? (
+                            <span>
+                              {linkedPr.prNumber}{' '}
+                              {linkedPr.status === 'approved' ? (
+                                <span className="text-emerald-600 font-semibold">(Approved)</span>
+                              ) : (
+                                <span className="text-amber-600 font-semibold">(Pending)</span>
+                              )}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground italic">None</span>
+                          )}
+                        </span>
+                      </div>
+
+                      <div className="pt-1 flex justify-end">
                         {isLocked ? (
                           <Button
                             size="sm"
+                            className="w-full"
                             onClick={() => {
                               if (linkedPr) onUnlockWorkOrder(wo.id, linkedPr.id);
                             }}
@@ -295,11 +493,12 @@ export function PRGatingDashboard({
                             <Unlock className="h-3.5 w-3.5 mr-1" /> Assert PR Gate
                           </Button>
                         ) : (
-                          <div className="inline-flex space-x-1.5">
+                          <div className="w-full">
                             {wo.procurementFulfillmentStatus === 'pr_approved' && (
                               <Button
                                 size="sm"
                                 variant="warning"
+                                className="w-full"
                                 onClick={() => onUpdateFulfillment(wo.id, 'in_maintenance')}
                               >
                                 Send to Shop <ArrowRight className="h-3.5 w-3.5 ml-1" />
@@ -309,6 +508,7 @@ export function PRGatingDashboard({
                               <Button
                                 size="sm"
                                 variant="secondary"
+                                className="w-full"
                                 onClick={() => onUpdateFulfillment(wo.id, 'work_completed')}
                               >
                                 Mark Completed
@@ -318,25 +518,26 @@ export function PRGatingDashboard({
                               <Button
                                 size="sm"
                                 variant="success"
+                                className="w-full"
                                 onClick={() => onUpdateFulfillment(wo.id, 'vehicle_operational')}
                               >
                                 <Truck className="h-3.5 w-3.5 mr-1" /> Release to Fleet
                               </Button>
                             )}
                             {wo.procurementFulfillmentStatus === 'vehicle_operational' && (
-                              <span className="text-xs text-emerald-600 font-bold flex items-center justify-end">
-                                <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Operational
-                              </span>
+                              <div className="text-xs text-emerald-600 font-bold flex items-center justify-center p-1 bg-emerald-500/10 rounded-lg">
+                                <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Operational in Fleet
+                              </div>
                             )}
                           </div>
                         )}
-                      </td>
-                    </tr>
+                      </div>
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>

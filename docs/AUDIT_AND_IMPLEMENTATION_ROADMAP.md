@@ -424,6 +424,28 @@ _Ratings on a 1–10 scale based on verified repository evidence:_
   2. Dashboard displays real numbers with loading skeletons while fetching.
 - **Definition of Done:** Integration test confirms counters increment when vehicles and PRs are created.
 
+### `TICKET-107`: Responsive Mobile Card Layouts & Rich Empty States for Vehicle Registry
+
+- **Target Release:** Sprint 3 (P2) — **Status:** ✅ Completed (Sprint 3)
+- **User Story:** As a Field Supervisor / Driver using a smartphone or tablet, I need the vehicle registry to display as responsive, touch-friendly cards rather than wide horizontal scrolling tables.
+- **Scope & Affected Files:** [`src/features/fleet/VehicleRegistryTable.tsx`](../src/features/fleet/VehicleRegistryTable.tsx)
+- **Acceptance Criteria:**
+  1. Responsive viewport switching: dense table on desktop (`md:block`), card stack on mobile (`md:hidden`).
+  2. Mobile cards display unit identifier, driver, odometer, visual PMS progress bar, status badges, and quick-action buttons (Log KM, PMS, Repair).
+  3. Rich empty state rendered with icon and guidance when zero vehicles are returned.
+- **Definition of Done:** Verified in mobile viewport; zero regressions in desktop layout.
+
+### `TICKET-108`: Responsive Mobile Card Layout & Empty States for PR Gating Dashboard
+
+- **Target Release:** Sprint 3 (P2) — **Status:** ✅ Completed (Sprint 3)
+- **User Story:** As a Procurement Officer on mobile, I need purchase requisitions and maintenance work orders formatted as responsive action cards with dedicated empty states.
+- **Scope & Affected Files:** [`src/features/procurement/PRGatingDashboard.tsx`](../src/features/procurement/PRGatingDashboard.tsx)
+- **Acceptance Criteria:**
+  1. Dual-mode rendering for both PR list and Work Order handoff table (desktop table + mobile card list).
+  2. Dedicated empty state displays when PR list or work order queue is empty.
+  3. Action buttons (Approve Spend, Assert PR Gate, Send to Shop, Release to Fleet) remain accessible and touch-friendly on mobile.
+- **Definition of Done:** Mobile breakpoint verification; unit and integration tests pass cleanly.
+
 ---
 
 ## Deliverable M: Open Questions & Strategic Resolutions
