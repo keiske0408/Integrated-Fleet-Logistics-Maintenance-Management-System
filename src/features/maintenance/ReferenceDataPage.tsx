@@ -3,6 +3,7 @@ import { useLov } from '@/features/lov';
 import type {
   LovItem,
   LovAttribute,
+  LovList,
   LovItemFormData,
   LovListFormData,
   LovAttributeType,

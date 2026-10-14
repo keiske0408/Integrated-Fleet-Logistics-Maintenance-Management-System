@@ -1,7 +1,16 @@
 import React from 'react';
 import { useAuth } from '@/features/auth/AuthContext';
 import { useRoles } from '@/features/roles/RolesContext';
-import { Truck, Wrench, Shield, Calendar, AlertTriangle, CheckCircle2, Clock, TrendingUp } from 'lucide-react';
+import {
+  Truck,
+  Wrench,
+  Shield,
+  Calendar,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  TrendingUp,
+} from 'lucide-react';
 
 interface StatCardProps {
   title: string;
@@ -14,7 +23,16 @@ interface StatCardProps {
   trendColor?: string;
 }
 
-function StatCard({ title, value, subtitle, icon: Icon, iconColor, iconBg, trend, trendColor }: StatCardProps) {
+function StatCard({
+  title,
+  value,
+  subtitle,
+  icon: Icon,
+  iconColor,
+  iconBg,
+  trend,
+  trendColor,
+}: StatCardProps) {
   return (
     <div className="bg-card border border-border rounded-xl p-5 hover:border-primary/30 transition-colors">
       <div className="flex items-start justify-between mb-3">
@@ -22,7 +40,9 @@ function StatCard({ title, value, subtitle, icon: Icon, iconColor, iconBg, trend
           <Icon className={`h-5 w-5 ${iconColor}`} />
         </div>
         {trend && (
-          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${trendColor}`}>{trend}</span>
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${trendColor}`}>
+            {trend}
+          </span>
         )}
       </div>
       <p className="text-2xl font-bold text-foreground mb-0.5">{value}</p>
@@ -81,11 +101,41 @@ export function DashboardOverview() {
   ];
 
   const recentActivity = [
-    { icon: AlertTriangle, color: 'text-amber-400', bg: 'bg-amber-500/10', text: 'Vehicle XYZ-9876 is overdue for 5,000 KM PMS service', time: '2 hrs ago' },
-    { icon: CheckCircle2, color: 'text-emerald-400', bg: 'bg-emerald-500/10', text: 'PR-2026-1011 approved by Finance Manager (₱6,200)', time: '4 hrs ago' },
-    { icon: Clock, color: 'text-blue-400', bg: 'bg-blue-500/10', text: 'TSRF-0042 dispatched — IT Department → Main Office', time: '5 hrs ago' },
-    { icon: Wrench, color: 'text-violet-400', bg: 'bg-violet-500/10', text: 'Work Order WO-2026-0041 created for brake overhaul', time: 'Yesterday' },
-    { icon: TrendingUp, color: 'text-cyan-400', bg: 'bg-cyan-500/10', text: 'NCR-5566 odometer logged at 9,800 KM (PMS in 200 KM)', time: 'Yesterday' },
+    {
+      icon: AlertTriangle,
+      color: 'text-amber-400',
+      bg: 'bg-amber-500/10',
+      text: 'Vehicle XYZ-9876 is overdue for 5,000 KM PMS service',
+      time: '2 hrs ago',
+    },
+    {
+      icon: CheckCircle2,
+      color: 'text-emerald-400',
+      bg: 'bg-emerald-500/10',
+      text: 'PR-2026-1011 approved by Finance Manager (₱6,200)',
+      time: '4 hrs ago',
+    },
+    {
+      icon: Clock,
+      color: 'text-blue-400',
+      bg: 'bg-blue-500/10',
+      text: 'TSRF-0042 dispatched — IT Department → Main Office',
+      time: '5 hrs ago',
+    },
+    {
+      icon: Wrench,
+      color: 'text-violet-400',
+      bg: 'bg-violet-500/10',
+      text: 'Work Order WO-2026-0041 created for brake overhaul',
+      time: 'Yesterday',
+    },
+    {
+      icon: TrendingUp,
+      color: 'text-cyan-400',
+      bg: 'bg-cyan-500/10',
+      text: 'NCR-5566 odometer logged at 9,800 KM (PMS in 200 KM)',
+      time: 'Yesterday',
+    },
   ];
 
   return (
@@ -102,10 +152,12 @@ export function DashboardOverview() {
             </p>
           </div>
           {currentRoleDef && (
-              <span className={`text-xs font-semibold px-3 py-1.5 rounded-full border shrink-0 ${currentRoleDef.color}`}>
-                {currentRoleDef.label}
-              </span>
-            )}
+            <span
+              className={`text-xs font-semibold px-3 py-1.5 rounded-full border shrink-0 ${currentRoleDef.color}`}
+            >
+              {currentRoleDef.label}
+            </span>
+          )}
         </div>
       </div>
 
@@ -123,7 +175,10 @@ export function DashboardOverview() {
           {recentActivity.map((item, i) => {
             const Icon = item.icon;
             return (
-              <div key={i} className="flex items-start gap-3 py-2 border-b border-border last:border-0">
+              <div
+                key={i}
+                className="flex items-start gap-3 py-2 border-b border-border last:border-0"
+              >
                 <div className={`p-1.5 rounded-lg ${item.bg} shrink-0 mt-0.5`}>
                   <Icon className={`h-3.5 w-3.5 ${item.color}`} />
                 </div>
@@ -142,13 +197,37 @@ export function DashboardOverview() {
         <h2 className="text-base font-semibold text-foreground mb-4">System Modules</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[
-            { icon: Truck, label: 'Fleet & KM Monitoring', desc: 'Track vehicles and PMS schedules', color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20' },
-            { icon: Shield, label: 'PR Gatekeeper', desc: 'Manage purchase requisitions', color: 'text-violet-400', bg: 'bg-violet-500/10', border: 'border-violet-500/20' },
-            { icon: Calendar, label: 'TSRF Logistics', desc: 'Service request & dispatch', color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' },
+            {
+              icon: Truck,
+              label: 'Fleet & KM Monitoring',
+              desc: 'Track vehicles and PMS schedules',
+              color: 'text-blue-400',
+              bg: 'bg-blue-500/10',
+              border: 'border-blue-500/20',
+            },
+            {
+              icon: Shield,
+              label: 'PR Gatekeeper',
+              desc: 'Manage purchase requisitions',
+              color: 'text-violet-400',
+              bg: 'bg-violet-500/10',
+              border: 'border-violet-500/20',
+            },
+            {
+              icon: Calendar,
+              label: 'TSRF Logistics',
+              desc: 'Service request & dispatch',
+              color: 'text-emerald-400',
+              bg: 'bg-emerald-500/10',
+              border: 'border-emerald-500/20',
+            },
           ].map((m) => {
             const Icon = m.icon;
             return (
-              <div key={m.label} className={`p-4 rounded-xl border ${m.border} ${m.bg} hover:scale-[1.02] transition-transform cursor-default`}>
+              <div
+                key={m.label}
+                className={`p-4 rounded-xl border ${m.border} ${m.bg} hover:scale-[1.02] transition-transform cursor-default`}
+              >
                 <Icon className={`h-6 w-6 ${m.color} mb-2`} />
                 <p className="font-semibold text-foreground text-sm">{m.label}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">{m.desc}</p>

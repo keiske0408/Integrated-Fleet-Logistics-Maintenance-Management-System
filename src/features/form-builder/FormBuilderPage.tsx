@@ -523,6 +523,11 @@ export function FormBuilderPage() {
               action: 'Complete',
             },
           ],
+          cutoff: {
+            time: '16:00',
+            timezone: 'Asia/Manila',
+            latePolicy: 'flag',
+          },
         };
       } else {
         // Blank starter
@@ -580,6 +585,11 @@ export function FormBuilderPage() {
               action: 'Complete',
             },
           ],
+          cutoff: {
+            time: '16:00',
+            timezone: 'Asia/Manila',
+            latePolicy: 'flag',
+          },
         };
       }
 
@@ -1246,7 +1256,7 @@ export function FormBuilderPage() {
         snapshot: {
           definition: {
             ...definition,
-            versionName: trimmed,
+            versionName: trimmed ?? undefined,
           },
           workflow,
         },
@@ -1804,7 +1814,7 @@ export function FormBuilderPage() {
                 className="h-7 px-2.5 text-xs text-red-600 border-red-500/30 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:border-red-500/30 dark:hover:bg-red-950/30"
                 onClick={() => {
                   const target = availableForms.find((f) => f.key === definition.key) ?? {
-                    id: definition.id ?? definition.key,
+                    id: definition.key,
                     key: definition.key,
                     name: definition.name,
                     versionCount: availableVersions.length || 1,
@@ -2108,7 +2118,7 @@ export function FormBuilderPage() {
 
           <div className="rounded-xl border border-border/80 bg-muted/40 p-3 sm:p-3.5 space-y-1.5 text-xs">
             <div className="font-semibold text-foreground truncate">
-              {definition.title || 'Form Draft'}
+              {definition.name || 'Form Draft'}
             </div>
             <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-[11px]">
               <span className="font-mono">v{definition.version} (draft)</span>

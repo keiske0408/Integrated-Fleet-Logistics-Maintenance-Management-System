@@ -1,5 +1,11 @@
 import React, { useState } from 'react';
-import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AlertTriangle, ShieldAlert } from 'lucide-react';
@@ -59,17 +65,17 @@ export function IncidentReportModal({
             <DialogTitle>Mandatory Incident Report Required</DialogTitle>
           </div>
           <DialogDescription className="pt-1">
-            Vehicle <strong className="text-foreground">{vehiclePlate}</strong> skipped scheduled PMS or is overdue. Per Fleet Domain
-            Rule 3, repair work orders are locked until an official incident report is filed explaining the
-            circumstances.
+            Vehicle <strong className="text-foreground">{vehiclePlate}</strong> skipped scheduled
+            PMS or is overdue. Per Fleet Domain Rule 3, repair work orders are locked until an
+            official incident report is filed explaining the circumstances.
           </DialogDescription>
         </DialogHeader>
 
         <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive flex items-start space-x-2">
           <ShieldAlert className="h-4 w-4 shrink-0 mt-0.5" />
           <div>
-            <strong>Non-negotiable Audit Rule:</strong> Unauthorized maintenance without prior PMS validation
-            or official explanation is prohibited.
+            <strong>Non-negotiable Audit Rule:</strong> Unauthorized maintenance without prior PMS
+            validation or official explanation is prohibited.
           </div>
         </div>
 
@@ -139,17 +145,10 @@ export function IncidentReportModal({
         </div>
 
         <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onClose}
-          >
+          <Button type="button" variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button
-            type="submit"
-            variant="destructive"
-          >
+          <Button type="submit" variant="destructive">
             File Incident Report & Unlock Audit
           </Button>
         </DialogFooter>

@@ -77,15 +77,13 @@ export function PRGatingDashboard({
               Module C: Approved PR Gatekeeper & Procurement Engine
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Strict Gate: Work orders remain locked in &quot;Pending PR Approval&quot; until Finance formally authorizes
-              the Purchase Requisition. Once unlocked, Procurement coordinates fulfillment and releases the vehicle.
+              Strict Gate: Work orders remain locked in &quot;Pending PR Approval&quot; until
+              Finance formally authorizes the Purchase Requisition. Once unlocked, Procurement
+              coordinates fulfillment and releases the vehicle.
             </p>
           </div>
         </div>
-        <Button
-          size="sm"
-          onClick={() => setShowCreatePr(!showCreatePr)}
-        >
+        <Button size="sm" onClick={() => setShowCreatePr(!showCreatePr)}>
           <Plus className="h-4 w-4 mr-1" /> Draft PR
         </Button>
       </div>
@@ -97,7 +95,10 @@ export function PRGatingDashboard({
             <CardTitle className="text-sm font-bold">Draft New Purchase Requisition</CardTitle>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleCreatePrSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+            <form
+              onSubmit={handleCreatePrSubmit}
+              className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs"
+            >
               <Input
                 placeholder="Department"
                 value={newPrDept}
@@ -141,21 +142,55 @@ export function PRGatingDashboard({
             <table className="min-w-full divide-y divide-border text-left text-xs">
               <thead className="bg-muted/50">
                 <tr>
-                  <th scope="col" className="py-2.5 px-4 font-semibold text-muted-foreground uppercase">Requisition ID</th>
-                  <th scope="col" className="py-2.5 px-4 font-semibold text-muted-foreground uppercase">Unit / Dept</th>
-                  <th scope="col" className="py-2.5 px-4 font-semibold text-muted-foreground uppercase">Expenditure Purpose</th>
-                  <th scope="col" className="py-2.5 px-4 font-semibold text-muted-foreground uppercase">Est. Cost</th>
-                  <th scope="col" className="py-2.5 px-4 font-semibold text-muted-foreground uppercase">PR State</th>
-                  <th scope="col" className="py-2.5 px-4 text-right font-semibold text-muted-foreground uppercase">Decision</th>
+                  <th
+                    scope="col"
+                    className="py-2.5 px-4 font-semibold text-muted-foreground uppercase"
+                  >
+                    Requisition ID
+                  </th>
+                  <th
+                    scope="col"
+                    className="py-2.5 px-4 font-semibold text-muted-foreground uppercase"
+                  >
+                    Unit / Dept
+                  </th>
+                  <th
+                    scope="col"
+                    className="py-2.5 px-4 font-semibold text-muted-foreground uppercase"
+                  >
+                    Expenditure Purpose
+                  </th>
+                  <th
+                    scope="col"
+                    className="py-2.5 px-4 font-semibold text-muted-foreground uppercase"
+                  >
+                    Est. Cost
+                  </th>
+                  <th
+                    scope="col"
+                    className="py-2.5 px-4 font-semibold text-muted-foreground uppercase"
+                  >
+                    PR State
+                  </th>
+                  <th
+                    scope="col"
+                    className="py-2.5 px-4 text-right font-semibold text-muted-foreground uppercase"
+                  >
+                    Decision
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
                 {prs.map((pr) => (
                   <tr key={pr.id} className="hover:bg-muted/30 transition-colors">
-                    <td className="py-3 px-4 font-mono font-medium text-foreground">{pr.prNumber}</td>
+                    <td className="py-3 px-4 font-mono font-medium text-foreground">
+                      {pr.prNumber}
+                    </td>
                     <td className="py-3 px-4 text-foreground/80">{pr.department}</td>
                     <td className="py-3 px-4 text-foreground">{pr.purpose}</td>
-                    <td className="py-3 px-4 font-mono font-medium">₱{pr.amount.toLocaleString()}</td>
+                    <td className="py-3 px-4 font-mono font-medium">
+                      ₱{pr.amount.toLocaleString()}
+                    </td>
                     <td className="py-3 px-4">
                       {pr.status === 'approved' ? (
                         <Badge variant="success">Approved</Badge>
@@ -167,11 +202,7 @@ export function PRGatingDashboard({
                     </td>
                     <td className="py-3 px-4 text-right">
                       {pr.status !== 'approved' && (
-                        <Button
-                          size="sm"
-                          variant="success"
-                          onClick={() => onApprovePr(pr.id)}
-                        >
+                        <Button size="sm" variant="success" onClick={() => onApprovePr(pr.id)}>
                           <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Approve Spend
                         </Button>
                       )}
@@ -217,8 +248,12 @@ export function PRGatingDashboard({
 
                   return (
                     <tr key={wo.id} className="hover:bg-muted/30 transition-colors">
-                      <td className="py-3 px-4 font-mono font-medium text-foreground">{wo.workOrderNumber}</td>
-                      <td className="py-3 px-4 font-bold text-foreground">{wo.vehiclePlate || 'Fleet Unit'}</td>
+                      <td className="py-3 px-4 font-mono font-medium text-foreground">
+                        {wo.workOrderNumber}
+                      </td>
+                      <td className="py-3 px-4 font-bold text-foreground">
+                        {wo.vehiclePlate || 'Fleet Unit'}
+                      </td>
                       <td className="py-3 px-4 text-muted-foreground">{wo.description}</td>
                       <td className="py-3 px-4 font-mono">
                         {linkedPr ? (
@@ -236,7 +271,10 @@ export function PRGatingDashboard({
                       </td>
                       <td className="py-3 px-4">
                         {isLocked ? (
-                          <Badge variant="destructive" className="flex items-center space-x-1 w-max">
+                          <Badge
+                            variant="destructive"
+                            className="flex items-center space-x-1 w-max"
+                          >
                             <Lock className="h-3 w-3 mr-1" /> Locked
                           </Badge>
                         ) : (

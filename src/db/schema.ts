@@ -54,7 +54,9 @@ export const repairWorkOrders = pgTable('repair_work_orders', {
   linkedPrId: uuid('linked_pr_id').references(() => purchaseRequisitions.id),
   hasPmsCompliance: boolean('has_pms_compliance').notNull().default(false),
   incidentReportFiled: boolean('incident_report_filed').notNull().default(false),
-  procurementFulfillmentStatus: text('procurement_fulfillment_status').notNull().default('pending_pr_approval'),
+  procurementFulfillmentStatus: text('procurement_fulfillment_status')
+    .notNull()
+    .default('pending_pr_approval'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 

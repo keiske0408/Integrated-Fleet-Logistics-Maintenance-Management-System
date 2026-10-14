@@ -7,7 +7,7 @@
     "build": "vite build",
     "lint": "eslint . --ext .ts,.tsx,.js,.cjs",
     "lint:unused": "knip",
-    "lint:dup": "jscpd src components",
+    "lint:dup": "jscpd src",
     "api:spec": "tsx src/api/openapi.ts && openapi-typescript openapi.json -o src/api/generated-types.ts",
     "test": "vitest run",
     "prepare": "husky"

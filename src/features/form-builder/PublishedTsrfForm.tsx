@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Calendar, ClipboardList, MapPin, ShieldCheck } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { FormRenderer } from './FormRenderer';
 import { TSRFSubmissionTracker } from './TSRFSubmissionTracker';
 import { TSRFDetailView } from './TSRFDetailView';
@@ -178,7 +177,7 @@ export function PublishedTsrfForm({ onSubmit }: PublishedTsrfFormProps) {
         </div>
 
         {/* Structured Intake Guidelines Banner */}
-        <Card className="border-primary/25 bg-primary/5 shadow-xs">
+        {/* <Card className="border-primary/25 bg-primary/5 shadow-xs">
           <CardContent className="p-4 sm:p-5">
             <div className="flex items-start gap-3">
               <div className="rounded-xl bg-primary/10 p-2.5 text-primary">
@@ -229,7 +228,7 @@ export function PublishedTsrfForm({ onSubmit }: PublishedTsrfFormProps) {
               </div>
             </div>
           </CardContent>
-        </Card>
+        </Card> */}
 
         {/* Form Renderer */}
         {loadingDefinition ? (

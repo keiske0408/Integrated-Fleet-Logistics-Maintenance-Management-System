@@ -65,6 +65,7 @@ export interface SubmissionEvent {
 
 export interface SubmissionDetail extends SubmissionRow {
   createdById: string;
+  createdByName?: string;
   formSchema: FormDefinition;
   data: FormValues;
   labelSnapshots: Record<string, { code: string; label: string }>;

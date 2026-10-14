@@ -69,6 +69,7 @@ function TimeFieldRenderer({ field, value, onChange, disabled }: FieldRendererPr
     if (!timeStr) return '';
     if (/^\d{2}:\d{2}$/.test(timeStr)) return timeStr;
     const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+    if (!match) return timeStr;
     const [, hStr, mStr, meridiem] = match;
     let h = parseInt(hStr, 10);
     if (meridiem) {

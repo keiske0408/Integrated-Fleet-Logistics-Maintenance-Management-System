@@ -56,7 +56,8 @@ export function VehicleRegistryTable({
               <CardTitle>Central Vehicle Registry & Kilometer Monitoring</CardTitle>
             </div>
             <CardDescription className="mt-1">
-              Real-time digital inventory, odometer KM tracking, and automated 5,000 KM PMS interval calculator
+              Real-time digital inventory, odometer KM tracking, and automated 5,000 KM PMS interval
+              calculator
             </CardDescription>
           </div>
           <Badge variant="outline" className="px-3 py-1 font-mono text-xs">
@@ -82,7 +83,10 @@ export function VehicleRegistryTable({
               {vehicles.map((v) => {
                 const nextPmsKm = v.lastPmsKm + v.pmsIntervalKm;
                 const kmSinceLastPms = v.currentKm - v.lastPmsKm;
-                const progressPct = Math.min(100, Math.round((kmSinceLastPms / v.pmsIntervalKm) * 100));
+                const progressPct = Math.min(
+                  100,
+                  Math.round((kmSinceLastPms / v.pmsIntervalKm) * 100),
+                );
 
                 const isDue = v.status === 'pms_due' || v.currentKm >= nextPmsKm;
                 const isApproaching = !isDue && kmSinceLastPms >= v.pmsIntervalKm - 500;
@@ -91,11 +95,15 @@ export function VehicleRegistryTable({
                   <tr key={v.id} className="hover:bg-muted/30 transition-colors">
                     <td className="py-3.5 px-4">
                       <div className="font-semibold text-foreground">{v.plateNumber}</div>
-                      <div className="text-xs text-muted-foreground">{v.model} • {v.vehicleType}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {v.model} • {v.vehicleType}
+                      </div>
                     </td>
 
                     <td className="py-3.5 px-4 text-foreground/80">
-                      {v.assignedDriver || <span className="text-muted-foreground italic">Unassigned</span>}
+                      {v.assignedDriver || (
+                        <span className="text-muted-foreground italic">Unassigned</span>
+                      )}
                     </td>
 
                     <td className="py-3.5 px-4 font-mono font-medium">
@@ -114,8 +122,8 @@ export function VehicleRegistryTable({
                               isDue
                                 ? 'bg-destructive'
                                 : isApproaching
-                                ? 'bg-amber-500'
-                                : 'bg-primary'
+                                  ? 'bg-amber-500'
+                                  : 'bg-primary'
                             }`}
                             style={{ width: `${progressPct}%` }}
                           />
@@ -140,25 +148,13 @@ export function VehicleRegistryTable({
                     </td>
 
                     <td className="py-3.5 px-4 text-right space-x-2 whitespace-nowrap">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleOpenMileage(v)}
-                      >
+                      <Button variant="outline" size="sm" onClick={() => handleOpenMileage(v)}>
                         <Navigation className="h-3.5 w-3.5 mr-1" /> Log KM
                       </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => onSchedulePms(v)}
-                      >
+                      <Button variant="secondary" size="sm" onClick={() => onSchedulePms(v)}>
                         <Plus className="h-3.5 w-3.5 mr-1" /> PMS
                       </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => onRequestRepair(v)}
-                      >
+                      <Button variant="destructive" size="sm" onClick={() => onRequestRepair(v)}>
                         <Wrench className="h-3.5 w-3.5 mr-1" /> Repair
                       </Button>
                     </td>
@@ -179,7 +175,8 @@ export function VehicleRegistryTable({
                   Update Vehicle Odometer Reading
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  Input returning KM. If mileage &gt;= 5,000 KM threshold, PMS is automatically flagged.
+                  Input returning KM. If mileage &gt;= 5,000 KM threshold, PMS is automatically
+                  flagged.
                 </div>
               </div>
             </div>
@@ -193,11 +190,7 @@ export function VehicleRegistryTable({
               <Button size="sm" onClick={handleSaveMileage}>
                 Save Reading
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSelectedVehicleId(null)}
-              >
+              <Button variant="ghost" size="sm" onClick={() => setSelectedVehicleId(null)}>
                 Cancel
               </Button>
             </div>
