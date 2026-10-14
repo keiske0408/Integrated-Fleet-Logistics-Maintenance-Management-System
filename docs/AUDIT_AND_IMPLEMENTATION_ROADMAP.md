@@ -360,7 +360,7 @@ _Ratings on a 1–10 scale based on verified repository evidence:_
 
 ### `TICKET-101`: Direct Backend Persistence for Vehicle Registry & Mileage
 
-- **Target Release:** Sprint 1 (P0)
+- **Target Release:** Sprint 1 (P0) — **Status:** ✅ Completed (Sprint 1 - Commit `9089d1e`)
 - **User Story:** As a Fleet Manager, when I update an odometer or view vehicles, I need real database synchronization so mileage records and PMS statuses persist permanently.
 - **Scope & Affected Files:** [`src/App.tsx`](../src/App.tsx), [`src/features/fleet/VehicleRegistryTable.tsx`](../src/features/fleet/VehicleRegistryTable.tsx)
 - **Acceptance Criteria:**
@@ -372,7 +372,7 @@ _Ratings on a 1–10 scale based on verified repository evidence:_
 
 ### `TICKET-102`: Direct Backend Persistence for PR Gating & Work Orders
 
-- **Target Release:** Sprint 1 (P0)
+- **Target Release:** Sprint 1 (P0) — **Status:** ✅ Completed (Sprint 1 - Commit `9089d1e`)
 - **User Story:** As a Finance Manager, when I approve a Purchase Requisition, I need the work order unlocked on the server so procurement can coordinate repairs.
 - **Scope & Affected Files:** [`src/App.tsx`](../src/App.tsx), [`src/features/procurement/PRGatingDashboard.tsx`](../src/features/procurement/PRGatingDashboard.tsx)
 - **Acceptance Criteria:**
@@ -384,7 +384,7 @@ _Ratings on a 1–10 scale based on verified repository evidence:_
 
 ### `TICKET-103`: Purge Orphaned Components Tree & Fix TypeScript Compilation
 
-- **Target Release:** Sprint 1 (P1)
+- **Target Release:** Sprint 1 (P1) — **Status:** ✅ Completed (Sprint 1 - Commit `9089d1e`)
 - **User Story:** As an Engineering Team, we need a clean build with zero TypeScript and linter errors to enable automated CI/CD.
 - **Scope & Affected Files:** Delete root directory [`components/`](../components), fix lazy imports in [`src/App.tsx`](../src/App.tsx#L16-L78), fix type errors in [`FormBuilderPage.tsx`](../src/features/form-builder/FormBuilderPage.tsx), [`registry.tsx`](../src/features/form-builder/registry.tsx), [`ReferenceDataPage.tsx`](../src/features/maintenance/ReferenceDataPage.tsx).
 - **Acceptance Criteria:**
@@ -396,7 +396,7 @@ _Ratings on a 1–10 scale based on verified repository evidence:_
 
 ### `TICKET-104`: Author GitHub Actions CI Pipeline & Production Dockerfiles
 
-- **Target Release:** Sprint 2 (P1)
+- **Target Release:** Sprint 2 (P1) — **Status:** ✅ Completed (Sprint 2)
 - **User Story:** As a DevOps Engineer, I need automated CI validation on every pull request and reproducible Docker containers for staging/production deployments.
 - **Scope & Affected Files:** Create `.github/workflows/ci.yml`, `Dockerfile` (frontend multi-stage Nginx), `Dockerfile` (backend Node.js Alpine), `docker-compose.yml`.
 - **Acceptance Criteria:**
@@ -406,7 +406,7 @@ _Ratings on a 1–10 scale based on verified repository evidence:_
 
 ### `TICKET-105`: PostgreSQL Foreign Key Indexing & JSONB Migration
 
-- **Target Release:** Sprint 2 (P2)
+- **Target Release:** Sprint 2 (P2) — **Status:** ✅ Completed (Sprint 2)
 - **User Story:** As a Principal Architect, I need relational foreign keys indexed and JSON data optimized to ensure consistent sub-100ms response times at scale.
 - **Scope & Affected Files:** [`fleet-backend/src/db/schema.ts`](../../fleet-backend/src/db/schema.ts), [`fleet-backend/src/db/migrate.ts`](../../fleet-backend/src/db/migrate.ts)
 - **Acceptance Criteria:**
@@ -416,7 +416,7 @@ _Ratings on a 1–10 scale based on verified repository evidence:_
 
 ### `TICKET-106`: Live Dashboard Aggregation API & Real-Time Stats
 
-- **Target Release:** Sprint 2 (P2)
+- **Target Release:** Sprint 2 (P2) — **Status:** ✅ Completed (Sprint 2)
 - **User Story:** As an Executive / Fleet Manager, I need live KPI metrics on vehicle health, overdue PMS alerts, and pending PR expenditures.
 - **Scope & Affected Files:** New backend route `GET /api/dashboard/stats` in [`fleet-backend/src/routes/dashboard.routes.ts`](../../fleet-backend/src/routes/), [`src/features/dashboard/DashboardOverview.tsx`](../src/features/dashboard/DashboardOverview.tsx).
 - **Acceptance Criteria:**
