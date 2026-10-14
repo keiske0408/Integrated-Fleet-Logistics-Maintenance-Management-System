@@ -53,3 +53,19 @@
 - **Reporting verification:** backend build and serial regressions pass (49 passed, 1 skipped); frontend full suite (58), focused lint, generated contracts and Vite build pass. Full frontend typecheck had 16 baseline errors and 17 at final verification, all outside reporting; unrelated concurrent edits were preserved. Do not claim Vite build proves types clean.
 - **Next product work:** reporting business acceptance/auditor provisioning and retention policy; remaining paper-form parity; real staging Entra/SMTP/Arcjet and backup recovery verification; role-based UAT and rollout. Dynamic server-backed role policies require a separate business decision.
 - See [`docs/HYBRID_AUTH.md`](docs/HYBRID_AUTH.md) for configuration, signup/approval, bootstrap, account provisioning/linking, current blockers, and rollout guidance.
+
+## 7. Authoritative Master Roadmap & Implementation Flow (2026-10-14 Audit)
+
+- **Comprehensive Audit Reference:** Full findings, architectural analysis, scorecard, and sprint backlog are documented in [`docs/AUDIT_AND_IMPLEMENTATION_ROADMAP.md`](docs/AUDIT_AND_IMPLEMENTATION_ROADMAP.md).
+- **Core Update Flow & Priorities:**
+  1. **TICKET-101 (P0): Direct Backend Persistence for Vehicle Registry & Mileage:** Wire `FleetPage` / `VehicleRegistryTable` in `App.tsx` directly to `GET /api/vehicles` and `POST /api/vehicles/:id/mileage` so odometer and PMS states persist in PostgreSQL across reloads.
+  2. **TICKET-102 (P0): Direct Backend Persistence for PR Gating & Work Orders:** Wire `ProcurementPage` in `App.tsx` to `GET /api/procurement` and `GET /api/maintenance`, persisting approvals and unlocks to PostgreSQL.
+  3. **TICKET-103 (P1): Purge Dead Root `components/` Tree & Fix TypeScript (`tsc --noEmit`):** Eliminate 29 unused files, 152 duplicate code clones (14.55% duplication), and resolve all 18 frontend TypeScript compiler errors.
+  4. **TICKET-104 (P1): Automated CI/CD & Production Docker Containers:** Implement GitHub Actions (`.github/workflows/ci.yml`) and multi-stage Dockerfiles.
+  5. **TICKET-105 (P2): Database Performance & Indexing:** Add missing foreign key indexes (`pms_records`, `repair_work_orders`, `form_submissions`) and align Drizzle schemas.
+  6. **TICKET-106 (P2): Live Dashboard Aggregations:** Implement `GET /api/dashboard/stats` to replace static mock counters on `DashboardOverview.tsx`.
+- **Approved Strategic Policies (Leadership Decision 2026-10-14):**
+  - **Permanent Hybrid Auth:** Local credential signup remains permanently active for contractors and 3PL drivers alongside corporate Azure Entra ID.
+  - **Driver Mobile Application:** Prepare architecture for a Driver Mobile PWA for offline trip execution and odometer logging; hardware GPS telematics is deferred to future enterprise phases.
+  - **Single Tenant with Multi-Subsidiary Readiness:** Launch initial deployment under single Hulma organizational tenant, with schemas prepared for future `organization_id` subsidiary isolation.
+  - **Configurable Retention:** Data retention periods for TSRFs, trip manifests, and audit logs are configurable via system settings/environment variables rather than hardcoded, with permanent read-only auditor access.
