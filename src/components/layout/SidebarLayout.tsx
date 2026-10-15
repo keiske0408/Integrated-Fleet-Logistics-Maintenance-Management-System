@@ -26,12 +26,14 @@ import {
   ShieldCheck,
   History,
   Paintbrush,
+  Gauge,
 } from 'lucide-react';
 
 // ─── Route config ─────────────────────────────────────────────────────────────
 
 export type AppPage =
   | 'dashboard'
+  | 'driver'
   | 'fleet'
   | 'tsrf'
   | 'procurement'
@@ -46,6 +48,7 @@ export type AppPage =
 /** Maps each AppPage key to its URL path. */
 export const PAGE_ROUTES: Record<AppPage, string> = {
   dashboard: '/dashboard',
+  driver: '/driver',
   fleet: '/fleet',
   tsrf: '/tsrf',
   procurement: '/procurement',
@@ -74,6 +77,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: 'view:dashboard' },
+  { id: 'driver', label: 'Driver Quick-Log', icon: Gauge, permission: 'view:fleet' },
   { id: 'fleet', label: 'Fleet & KM Monitoring', icon: Wrench, permission: 'view:fleet' },
   { id: 'tsrf', label: 'TSRF Logistics', icon: Calendar, permission: 'view:tsrf' },
   { id: 'procurement', label: 'PR Gatekeeper', icon: Shield, permission: 'view:procurement' },

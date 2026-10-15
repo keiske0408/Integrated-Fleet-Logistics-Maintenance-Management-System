@@ -489,6 +489,30 @@ _Ratings on a 1–10 scale based on verified repository evidence:_
   4. All 75 frontend unit and component tests pass cleanly (`npm test`).
 - **Definition of Done:** Clean compilation, 0 lint warnings/errors, all 75 unit tests passing.
 
+### `TICKET-112`: Driver Mobile Quick-Log Application (PWA with Offline Queueing & Odometer Sync)
+
+- **Target Release:** Sprint 5 (P3) — **Status:** ✅ Completed (Sprint 5)
+- **User Story:** As a Field Driver operating in remote or weak-connectivity conditions, I need a touch-first mobile web application to rapidly input vehicle odometer readings and complete trips with background queueing that automatically synchronizes when connectivity is restored.
+- **Scope & Affected Files:**
+  - [`src/lib/offlineQueue.ts`](../src/lib/offlineQueue.ts): Client-side offline mutation queue with persistent local storage, deduplication/supersession of sequential vehicle odometer updates, and automatic synchronization engine on network reconnect.
+  - [`src/features/driver/DriverQuickLogPage.tsx`](../src/features/driver/DriverQuickLogPage.tsx): Dedicated in-cab driver console featuring oversized numeric touch keypad (0–9, Reset, Backspace), quick-increment steppers (+5, +10, +25, +50, +100 KM), 5,000 KM PMS threshold progress gauge, active TSRF trip completions, real-time online/offline badges, and pending sync queue management drawer.
+  - [`src/features/driver/index.ts`](../src/features/driver/index.ts): Module re-export barrel.
+  - [`public/manifest.json`](../public/manifest.json): Progressive Web App web app manifest specifying standalone display mode, orientation, brand theme colors (`#0f172a`), and shortcuts.
+  - [`public/pwa-icon.svg`](../public/pwa-icon.svg): Vector gauge asset for PWA homescreen launch icons.
+  - [`public/sw.js`](../public/sw.js): Service worker implementation providing app shell pre-caching, stale-while-revalidate static asset caching, and network-first `/api/*` bypass.
+  - [`index.html`](../index.html): Added mobile web app meta tags (`apple-mobile-web-app-capable`, `theme-color`), manifest link, and service worker registration script.
+  - [`src/components/layout/SidebarLayout.tsx`](../src/components/layout/SidebarLayout.tsx): Added Driver Quick-Log navigation route and icon in global sidebar navigation.
+  - [`src/App.tsx`](../src/App.tsx): Registered lazy-loaded `/driver` route protected by authenticated session guard.
+  - [`tests/driverQuickLog.test.ts`](../tests/driverQuickLog.test.ts): 8 unit tests covering empty queue initialization, mutation enqueueing, duplicate odometer supersession, independent trip completions, mutation deletion, mock fetcher sync replay, and error retention.
+- **Acceptance Criteria:**
+  1. Driver Quick-Log view (`/driver`) accessible from sidebar and loads cleanly on touch screens and mobile viewports.
+  2. In-cab numeric keypad and steppers provide instant tactile entry for odometer logging with validation against previous vehicle mileage.
+  3. Offline mutations are securely preserved in storage when network is offline and automatically dispatched via `POST /api/vehicles/:id/mileage` upon reconnection.
+  4. Active TSRF trips can be completed with ending KM recorded and queued offline if needed.
+  5. Service worker installs and registers cleanly on browser startup with offline manifest support.
+  6. 100% test pass rate across all 83 frontend tests and 61 backend tests; 0 TypeScript errors and 0 ESLint errors.
+- **Definition of Done:** PWA manifest and service worker active; offline queueing and driver quick-log UI functional with green test suite.
+
 ---
 
 ## Deliverable M: Open Questions & Strategic Resolutions

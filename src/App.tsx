@@ -63,6 +63,11 @@ const PRGatingDashboard = React.lazy(() =>
     default: m.PRGatingDashboard,
   })),
 );
+const DriverQuickLogPage = React.lazy(() =>
+  import('@/features/driver/DriverQuickLogPage').then((m) => ({
+    default: m.DriverQuickLogPage,
+  })),
+);
 
 // ─── Route Loading Fallback ───────────────────────────────────────────────────
 
@@ -838,6 +843,16 @@ function InnerApp() {
             element={
               <ProtectedRoute permission="view:dashboard">
                 <DashboardOverview />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Driver Quick-Log (PWA) */}
+          <Route
+            path={PAGE_ROUTES.driver}
+            element={
+              <ProtectedRoute permission="view:fleet">
+                <DriverQuickLogPage />
               </ProtectedRoute>
             }
           />
