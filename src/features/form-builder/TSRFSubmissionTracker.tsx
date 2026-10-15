@@ -600,7 +600,8 @@ export function TSRFSubmissionTracker({
 
       {/* ─── Data Registry Table (Stage hidden, Department prominent) ─── */}
       <Card className="overflow-hidden border-border/70 shadow-xs">
-        <div className="overflow-x-auto">
+        {/* Desktop Table View (Hidden on mobile < 768px) */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full min-w-[920px] text-left text-xs">
             <thead className="border-b border-border bg-muted/40 font-semibold uppercase tracking-wider text-muted-foreground">
               <tr>
@@ -829,6 +830,170 @@ export function TSRFSubmissionTracker({
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Card List View (Visible only on mobile screens < 768px) */}
+        <div className="md:hidden">
+          {loading ? (
+            <div className="divide-y divide-border/60">
+              {Array.from({ length: 4 }).map((_, idx) => (
+                <div key={idx} className="p-4 space-y-3 animate-pulse">
+                  <div className="flex items-center justify-between">
+                    <div className="h-4 w-28 rounded bg-muted"></div>
+                    <div className="h-5 w-16 rounded-full bg-muted"></div>
+                  </div>
+                  <div className="h-4 w-36 rounded bg-muted"></div>
+                  <div className="h-3 w-48 rounded bg-muted/60"></div>
+                </div>
+              ))}
+            </div>
+          ) : paginatedSubmissions.length === 0 ? (
+            <div className="px-4 py-12 text-center">
+              <div className="mx-auto flex max-w-sm flex-col items-center justify-center space-y-2">
+                <div className="rounded-full bg-muted p-3 text-muted-foreground">
+                  <FileText className="h-6 w-6" />
+                </div>
+                <p className="text-sm font-semibold text-foreground">No TSRF requests found</p>
+                <p className="text-xs text-muted-foreground">
+                  {isFiltered
+                    ? 'No records match your search query or filters.'
+                    : 'No transportation service request forms have been submitted yet.'}
+                </p>
+                {isFiltered ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2 text-xs"
+                    onClick={resetFilters}
+                  >
+                    Clear All Filters
+                  </Button>
+                ) : onNewRequest ? (
+                  <Button size="sm" className="mt-2 text-xs gap-1.5" onClick={onNewRequest}>
+                    <Plus className="h-3.5 w-3.5" />
+                    Submit First Request
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ) : (
+            <div className="divide-y divide-border/60">
+              {paginatedSubmissions.map((submission) => {
+                const dateObj = new Date(submission.createdAt);
+                const restricted =
+                  submission.visibility === 'restricted' ||
+                  submission.visibility === 'partially_restricted';
+                const dept =
+                  formKey === 'tsrf'
+                    ? String(
+                        submission.labelSnapshots?.department?.label ??
+                          submission.data.department ??
+                          (restricted ? 'Restricted at this stage' : '—'),
+                      )
+                    : (submission.formName ?? formName);
+                const proj =
+                  formKey === 'tsrf'
+                    ? String(
+                        submission.data.projectName ??
+                          (restricted ? 'Restricted at this stage' : '—'),
+                      )
+                    : `v${submission.version} ${submission.versionName ?? ''}`;
+
+                return (
+                  <div
+                    key={`m-${submission.id}`}
+                    onClick={() => navigate(detailUrl(submission.id))}
+                    className="p-4 space-y-3 cursor-pointer transition-colors hover:bg-muted/30"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <span className="font-mono text-primary font-bold text-sm tracking-tight hover:underline">
+                          {submission.submissionNumber}
+                        </span>
+                        <div className="flex items-center gap-1.5 mt-0.5 text-xs text-foreground font-semibold">
+                          <Building2 className="h-3.5 w-3.5 text-primary shrink-0" />
+                          <span className="truncate max-w-[200px]">{dept}</span>
+                        </div>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className={`font-medium capitalize text-[11px] shrink-0 ${getStatusBadgeStyle(submission.status)}`}
+                      >
+                        {displayStatus(submission.status)}
+                      </Badge>
+                    </div>
+
+                    <p className="text-xs text-muted-foreground line-clamp-2">
+                      {proj || (restricted ? 'Restricted at this stage' : '—')}
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs py-1.5 border-y border-border/50 text-muted-foreground">
+                      <div className="flex items-center gap-1.5">
+                        <Calendar className="h-3.5 w-3.5 text-muted-foreground/70 shrink-0" />
+                        <span>{dateObj.toLocaleDateString()}</span>
+                      </div>
+                      <div className="flex items-center justify-end">
+                        {submission.isLate ? (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-destructive/10 px-2 py-0.5 text-[10px] font-semibold text-destructive">
+                            <AlertTriangle className="h-3 w-3" />
+                            Late SLA
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                            <CheckCircle2 className="h-3 w-3" />
+                            On Time
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 pt-0.5">
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground min-w-0">
+                        <User className="h-3.5 w-3.5 text-muted-foreground/70 shrink-0" />
+                        <span className="truncate max-w-[150px]">
+                          {displayResponsibility(submission)}
+                        </span>
+                      </div>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          type="button"
+                          variant={
+                            currentUser?.role === 'department_requester' &&
+                            submission.status.toLowerCase() === 'returned'
+                              ? 'default'
+                              : 'outline'
+                          }
+                          size="sm"
+                          className="h-8 gap-1.5 px-3 text-xs font-semibold"
+                          onClick={() =>
+                            navigate(
+                              currentUser?.role === 'department_requester' &&
+                                submission.status.toLowerCase() === 'returned'
+                                ? `${detailUrl(submission.id)}&edit=true`
+                                : detailUrl(submission.id),
+                            )
+                          }
+                        >
+                          {currentUser?.role === 'department_requester' &&
+                          submission.status.toLowerCase() === 'returned' ? (
+                            <>
+                              <Pencil className="h-3 w-3" />
+                              <span>Edit</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>View</span>
+                              <ArrowRight className="h-3 w-3" />
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* ─── Pagination Footer Bar ─── */}

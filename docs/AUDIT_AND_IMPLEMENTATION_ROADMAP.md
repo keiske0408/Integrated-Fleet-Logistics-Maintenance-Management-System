@@ -446,6 +446,17 @@ _Ratings on a 1–10 scale based on verified repository evidence:_
   3. Action buttons (Approve Spend, Assert PR Gate, Send to Shop, Release to Fleet) remain accessible and touch-friendly on mobile.
 - **Definition of Done:** Mobile breakpoint verification; unit and integration tests pass cleanly.
 
+### `TICKET-109`: Responsive Mobile Cards & 4:00 PM Pre-Submission Cutoff Alerting Banner for TSRF Requests
+
+- **Target Release:** Sprint 3 (P2) — **Status:** ✅ Completed (Sprint 3)
+- **User Story:** As a Field Requester / Driver using mobile devices, I need touch-friendly card layouts for TSRF submissions and clear proactive warnings if filing past the 4:00 PM cutoff deadline.
+- **Scope & Affected Files:** [`src/features/form-builder/TSRFSubmissionTracker.tsx`](../src/features/form-builder/TSRFSubmissionTracker.tsx), [`src/features/form-builder/PublishedTsrfForm.tsx`](../src/features/form-builder/PublishedTsrfForm.tsx)
+- **Acceptance Criteria:**
+  1. `TSRFSubmissionTracker` renders touch-friendly cards on screens `< 768px` (`md:hidden`) with request numbers, department, purpose, dates, and SLA badges.
+  2. Desktop wide-table remains preserved on screens `>= 768px` (`hidden md:block`).
+  3. `PublishedTsrfForm` evaluates `evaluateTsrfSubmissionTime(new Date())` when creating a new request and renders an advisory banner when current time exceeds 4:00 PM Asia/Manila.
+- **Definition of Done:** Mobile breakpoint verification; unit and integration tests pass cleanly.
+
 ---
 
 ## Deliverable M: Open Questions & Strategic Resolutions

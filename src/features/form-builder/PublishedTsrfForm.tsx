@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { FormRenderer } from './FormRenderer';
@@ -11,6 +11,7 @@ import type { FormDefinition, FormValues } from './types';
 import type { TSRFFormData } from '@/features/logistics/TSRFForm';
 import { apiFetch } from '@/lib/api';
 import { diffFormDefinitions } from './versionDiff';
+import { evaluateTsrfSubmissionTime } from '@/domain/tsrf';
 
 export function describeIntakeRevision(before: FormDefinition, after: FormDefinition): string[] {
   return diffFormDefinitions(before, after)
@@ -176,7 +177,55 @@ export function PublishedTsrfForm({ onSubmit }: PublishedTsrfFormProps) {
           </Badge>
         </div>
 
-        {/* Structured Intake Guidelines Banner */}
+        {/* Proactive 4:00 PM Cutoff Alerting Banner (TICKET-109 / Deliverable G.2) */}
+        {(() => {
+          const cutoffEval = evaluateTsrfSubmissionTime(new Date());
+          if (cutoffEval.isFlaggedAfterCutoff) {
+            return (
+              <div
+                role="alert"
+                className="flex items-start gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-foreground shadow-xs animate-fade-in"
+              >
+                <div className="rounded-lg bg-amber-500/20 p-2 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5">
+                  <AlertTriangle className="h-5 w-5" />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-bold text-foreground">
+                      Late Intake Cutoff Warning
+                    </h2>
+                    <Badge
+                      variant="destructive"
+                      className="text-[10px] uppercase font-mono px-1.5 py-0"
+                    >
+                      Past 4:00 PM
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    The current submission time is past the standard organization cutoff deadline (
+                    <strong>4:00 PM Asia/Manila</strong>). Requests filed now will be automatically
+                    flagged for late intake and will require mandatory Department Head justification
+                    before logistics dispatch can proceed.
+                  </p>
+                </div>
+              </div>
+            );
+          }
+          return (
+            <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/20 px-4 py-2.5 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-primary" />
+                <span>
+                  Standard Logistics Intake Window: <strong>Until 4:00 PM Today</strong>
+                </span>
+              </div>
+              <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                On-Time Window Open
+              </span>
+            </div>
+          );
+        })()}
         {/* <Card className="border-primary/25 bg-primary/5 shadow-xs">
           <CardContent className="p-4 sm:p-5">
             <div className="flex items-start gap-3">
