@@ -457,6 +457,38 @@ _Ratings on a 1–10 scale based on verified repository evidence:_
   3. `PublishedTsrfForm` evaluates `evaluateTsrfSubmissionTime(new Date())` when creating a new request and renders an advisory banner when current time exceeds 4:00 PM Asia/Manila.
 - **Definition of Done:** Mobile breakpoint verification; unit and integration tests pass cleanly.
 
+### `TICKET-110`: Architectural Decomposition of Backend Monolithic Forms Router (`forms.routes.ts`)
+
+- **Target Release:** Sprint 4 (P1) — **Status:** ✅ Completed (Sprint 4)
+- **User Story:** As a Backend Engineer, I need the monolithic 2,815-line forms routing file partitioned into cohesive sub-routers so domain logic (definitions, access policies, submissions) can be maintained and tested independently.
+- **Scope & Affected Files:**
+  - [`fleet-backend/src/routes/forms-common.ts`](../../fleet-backend/src/routes/forms-common.ts): Shared interfaces, entity resolution (`resolveActiveLovLabel`, `resolveDepartmentHeadUserId`), load policies, and projection helpers.
+  - [`fleet-backend/src/routes/forms-access.routes.ts`](../../fleet-backend/src/routes/forms-access.routes.ts): Version read-access policies, revision history, and audit-logged policy corrections.
+  - [`fleet-backend/src/routes/forms-definition.routes.ts`](../../fleet-backend/src/routes/forms-definition.routes.ts): Form definition listing, version inspection, draft creation, release label mutations, version publication, and version activation.
+  - [`fleet-backend/src/routes/forms-submission.routes.ts`](../../fleet-backend/src/routes/forms-submission.routes.ts): TSRF report generation, register search with SLA counters, intake cutoff validation, stage transitions, and audit trails.
+  - [`fleet-backend/src/routes/forms.routes.ts`](../../fleet-backend/src/routes/forms.routes.ts): Streamlined router coordinator mounting sub-routers in exact precedence order.
+- **Acceptance Criteria:**
+  1. 100% backward compatibility maintained across all public and internal REST routes.
+  2. Zero TypeScript errors and zero regressions in database migration/transaction logic.
+  3. All 61 backend unit and integration tests pass cleanly (`npm test`).
+- **Definition of Done:** Lean coordinator router verified; all test suites pass green.
+
+### `TICKET-111`: Architectural Decomposition of Frontend Monolithic FormBuilderPage (`FormBuilderPage.tsx`)
+
+- **Target Release:** Sprint 4 (P1) — **Status:** ✅ Completed (Sprint 4)
+- **User Story:** As a Frontend Engineer, I need the 4,825-line `FormBuilderPage.tsx` modularized into dedicated subcomponents for the sidebar palette, dialog modals, and workflow stage matrix to improve maintainability and render efficiency.
+- **Scope & Affected Files:**
+  - [`src/features/form-builder/components/FieldPaletteSidebar.tsx`](../src/features/form-builder/components/FieldPaletteSidebar.tsx): Extracted component library, fuzzy search filter, drag-and-drop triggers, and section structure outline.
+  - [`src/features/form-builder/components/FormBuilderModals.tsx`](../src/features/form-builder/components/FormBuilderModals.tsx): Extracted 11 dialog and confirmation modals (draft deletion, retirement, version rollback, permissions, template renaming).
+  - [`src/features/form-builder/components/WorkflowStageMatrix.tsx`](../src/features/form-builder/components/WorkflowStageMatrix.tsx): Extracted workflow preview diagram, stage configuration matrix, 4:00 PM daily cutoff policy controls, and transition rules.
+  - [`src/features/form-builder/FormBuilderPage.tsx`](../src/features/form-builder/FormBuilderPage.tsx): Orchestrator page refactored with modular component integrations.
+- **Acceptance Criteria:**
+  1. `FormBuilderPage.tsx` file size reduced significantly while preserving all existing studio features and behaviors.
+  2. `npx tsc --noEmit` exits with 0 errors across the entire frontend.
+  3. `npm run lint` reports 0 errors.
+  4. All 75 frontend unit and component tests pass cleanly (`npm test`).
+- **Definition of Done:** Clean compilation, 0 lint warnings/errors, all 75 unit tests passing.
+
 ---
 
 ## Deliverable M: Open Questions & Strategic Resolutions

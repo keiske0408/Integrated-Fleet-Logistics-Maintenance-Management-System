@@ -92,3 +92,16 @@ export interface FormWorkflow {
 
 export type FormValue = string | number | boolean | FormValues[] | undefined;
 export type FormValues = Record<string, FormValue>;
+
+export interface FormDirectoryItem {
+  id: string;
+  key: string;
+  name: string;
+  createdAt?: string;
+  updatedAt?: string;
+  versionCount: number;
+  publishedVersion: number | null;
+  publishedVersionName: string | null;
+  hasDraft: boolean;
+  latestVersion: number;
+}

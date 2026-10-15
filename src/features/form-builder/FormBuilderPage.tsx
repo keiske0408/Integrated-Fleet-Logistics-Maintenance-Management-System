@@ -20,23 +20,12 @@ import {
   X,
   Layers,
   Type,
-  AlignLeft,
-  Hash,
-  Calendar,
-  Clock,
-  ListFilter,
-  CheckSquare,
-  Database,
-  Truck,
-  Info,
   ShieldCheck,
   GitBranch,
   Lock,
   ArrowLeft,
-  AlertTriangle,
   Edit3,
   FolderKanban,
-  Check,
   CheckCircle2,
   Tag,
   GitCompare,
@@ -47,31 +36,22 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { useToast } from '@/components/ui/toast';
-import {
-  ConfirmDialog,
-  Dialog,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
 import { FormRenderer } from './FormRenderer';
-import { WorkflowDiagramPreview } from './WorkflowDiagramPreview';
 import { TSRF_V1, TSRF_WORKFLOW } from './seed';
 import { useLov } from '@/features/lov';
 import { useAuth } from '@/features/auth/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { cn } from '@/lib/utils';
 import { validateFormDefinition, validateFormWorkflow, pruneWorkflowForFields } from './validation';
 import { projectFormForRoleStage } from './preview';
 import type {
   FieldType,
   FormDefinition,
+  FormDirectoryItem,
   FormField,
   FormWorkflow,
   StageFieldPermission,
-  SystemStatusCategory,
 } from './types';
+export type { FormDirectoryItem };
 import type { FieldRule, RuleOperator } from './rules';
 import { moveFieldWithinSections } from './reorder';
 import { parseFormDefinitionImport } from './importSchema';
@@ -80,55 +60,9 @@ import { resolveDraftSaveRequest } from './draftPersistence';
 import { VersionReadAccess } from './VersionReadAccess';
 import { createEditorHistory, editorHistoryReducer } from './editorHistory';
 import { formatFieldOptions, parseFieldOptions } from './fieldConfiguration';
-
-const PALETTE: Array<{ type: FieldType; label: string }> = [
-  { type: 'text', label: 'Text' },
-  { type: 'textarea', label: 'Textarea' },
-  { type: 'number', label: 'Number' },
-  { type: 'date', label: 'Date' },
-  { type: 'time', label: 'Time' },
-  { type: 'select', label: 'Select' },
-  { type: 'checkbox', label: 'Checkbox' },
-  { type: 'repeater', label: 'Repeater' },
-  { type: 'lookup', label: 'LOV Lookup' },
-  { type: 'entity_lookup', label: 'Fleet Vehicle' },
-  { type: 'notice', label: 'Notice' },
-];
-
-const PALETTE_META: Record<
-  FieldType,
-  { label: string; icon: React.ComponentType<{ className?: string }>; description: string }
-> = {
-  text: { label: 'Text Input', icon: Type, description: 'Single line text' },
-  textarea: { label: 'Long Text', icon: AlignLeft, description: 'Multi-line notes' },
-  number: { label: 'Number', icon: Hash, description: 'Numeric values' },
-  date: { label: 'Date', icon: Calendar, description: 'Calendar picker' },
-  time: { label: 'Time', icon: Clock, description: 'Time selector' },
-  select: { label: 'Select Dropdown', icon: ListFilter, description: 'Predefined choices' },
-  checkbox: { label: 'Checkbox', icon: CheckSquare, description: 'Yes / No toggle' },
-  repeater: { label: 'Repeater Table', icon: Layers, description: 'Dynamic row items' },
-  lookup: { label: 'LOV Lookup', icon: Database, description: 'System reference data' },
-  entity_lookup: { label: 'Fleet Vehicle', icon: Truck, description: 'Vehicle / driver records' },
-  notice: { label: 'Notice Banner', icon: Info, description: 'Read-only guidance' },
-};
-const WORKFLOW_ROLES = [
-  'department_requester',
-  'approver',
-  'finance',
-  'fleet_team',
-  'procurement',
-  'admin',
-];
-const STATUS_CATEGORIES: SystemStatusCategory[] = [
-  'draft',
-  'in_review',
-  'returned',
-  'approved',
-  'in_progress',
-  'completed',
-  'rejected',
-  'cancelled',
-];
+import { FieldPaletteSidebar, PALETTE, PALETTE_META } from './components/FieldPaletteSidebar';
+import { FormBuilderModals } from './components/FormBuilderModals';
+import { WorkflowStageMatrix, WORKFLOW_ROLES } from './components/WorkflowStageMatrix';
 
 function flattenPermissionFields(
   fields: FormField[],
@@ -165,19 +99,6 @@ function extractAllFieldKeys(def: FormDefinition | null | undefined): Set<string
     }
   });
   return keys;
-}
-
-export interface FormDirectoryItem {
-  id: string;
-  key: string;
-  name: string;
-  createdAt?: string;
-  updatedAt?: string;
-  versionCount: number;
-  publishedVersion: number | null;
-  publishedVersionName: string | null;
-  hasDraft: boolean;
-  latestVersion: number;
 }
 
 function cloneDefinition(): FormDefinition {
@@ -2071,887 +1992,85 @@ export function FormBuilderPage() {
         </div>
       </div>
 
-      {/* Delete Draft Confirmation Modal */}
-      <ConfirmDialog
-        open={showRestrictedConfirm}
-        onOpenChange={setShowRestrictedConfirm}
-        onCancel={() => setShowRestrictedConfirm(false)}
-        onConfirm={() => void publish(true, restrictedStagesToConfirm)}
-        variant="warning"
-        icon={ShieldCheck}
-        title="Confirm Restricted Requestor Access"
-        confirmText="Publish with Restricted Access"
-        cancelText="Review Permissions"
-        isLoading={saving}
-      >
-        <p className="text-sm">Missing permissions will hide request fields in these stages:</p>
-        <ul className="list-disc pl-5 text-sm">
-          {restrictedStagesToConfirm.map((stage) => (
-            <li key={stage}>{stage}</li>
-          ))}
-        </ul>
-      </ConfirmDialog>
-      <ConfirmDialog
-        open={showDeleteConfirm}
-        onOpenChange={setShowDeleteConfirm}
-        onCancel={() => setShowDeleteConfirm(false)}
-        onConfirm={() => void deleteDraft()}
-        variant="destructive"
-        icon={Trash2}
-        title={`Delete Draft v${definition.version}?`}
-        badge={
-          <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-semibold text-red-700 dark:text-red-400 border border-red-500/20">
-            v{definition.version} Draft
-          </span>
-        }
-        confirmText="Delete Draft"
-        cancelText="Cancel"
-        isLoading={isDeletingDraft}
-        className="max-w-md sm:max-w-lg"
-      >
-        <div className="space-y-3.5">
-          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-            Are you sure you want to delete this draft? Any unsaved edits or customizations in{' '}
-            <strong className="text-foreground font-semibold">draft v{definition.version}</strong>{' '}
-            will be permanently wiped.
-          </p>
-
-          <div className="rounded-xl border border-border/80 bg-muted/40 p-3 sm:p-3.5 space-y-1.5 text-xs">
-            <div className="font-semibold text-foreground truncate">
-              {definition.name || 'Form Draft'}
-            </div>
-            <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-[11px]">
-              <span className="font-mono">v{definition.version} (draft)</span>
-              <span>·</span>
-              <span>
-                {definition.sections.length} section{definition.sections.length === 1 ? '' : 's'}
-              </span>
-              <span>·</span>
-              <span>
-                {fields.length} field{fields.length === 1 ? '' : 's'}
-              </span>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-red-500/20 bg-red-500/10 dark:bg-red-950/20 p-3 text-xs text-red-700 dark:text-red-300 flex items-start gap-2.5">
-            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-red-600 dark:text-red-400" />
-            <span className="leading-relaxed">
-              Published baseline and historical form submissions are unaffected. This draft cannot
-              be recovered once removed.
-            </span>
-          </div>
-        </div>
-      </ConfirmDialog>
-
-      {/* Confirm Field Retirement Modal */}
-      <ConfirmDialog
-        open={showRetireConfirmModal}
-        onOpenChange={setShowRetireConfirmModal}
-        onCancel={() => setShowRetireConfirmModal(false)}
-        onConfirm={() => void publish(true)}
-        variant="warning"
-        icon={ShieldCheck}
-        title="Confirm Field Retirement"
-        badge={
-          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400 border border-amber-500/20">
-            v{definition.version} Release
-          </span>
-        }
-        description={
-          <>
-            Publishing v{definition.version} will decommission{' '}
-            <strong className="text-foreground font-semibold">
-              {retiredKeysToConfirm.length} published field
-              {retiredKeysToConfirm.length === 1 ? '' : 's'}
-            </strong>
-            .
-          </>
-        }
-        confirmText={`Acknowledge & Publish v${definition.version}`}
-        cancelText="Cancel"
-        isLoading={saving}
-        className="max-w-lg sm:max-w-xl"
-      >
-        <div className="space-y-3">
-          <div className="rounded-xl border border-border bg-muted/30 p-3 sm:p-3.5 space-y-2">
-            <p className="text-xs font-semibold text-foreground">
-              Fields being retired in this release:
-            </p>
-            <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto overscroll-contain pr-1">
-              {retiredKeysToConfirm.map((key) => (
-                <span
-                  key={key}
-                  className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-2 py-0.5 font-mono text-xs font-semibold text-amber-700 dark:text-amber-300 border border-amber-500/30"
-                >
-                  <Lock className="h-3 w-3 opacity-60" />
-                  {key}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-2 text-xs text-muted-foreground bg-card border border-border/70 rounded-xl p-3">
-            <div className="flex items-start gap-2">
-              <span className="font-bold text-emerald-600 dark:text-emerald-400 shrink-0">✓</span>
-              <span>
-                <strong className="text-foreground">Historical Data Preserved:</strong> All previous
-                submissions retain their data for these fields for audit and compliance.
-              </span>
-            </div>
-            <div className="flex items-start gap-2">
-              <span className="font-bold text-emerald-600 dark:text-emerald-400 shrink-0">✓</span>
-              <span>
-                <strong className="text-foreground">Clean Future Submissions:</strong> New
-                submissions under version {definition.version} will no longer show or require these
-                fields.
-              </span>
-            </div>
-          </div>
-        </div>
-      </ConfirmDialog>
-
-      {/* Rename Form Template Modal */}
-      <ConfirmDialog
-        open={showRenameFormModal}
-        onOpenChange={setShowRenameFormModal}
-        onCancel={() => setShowRenameFormModal(false)}
-        onConfirm={() => void handleRenameForm()}
-        variant="primary"
-        icon={Edit3}
-        title="Rename Form Template"
-        badge={
-          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary border border-primary/20 font-mono">
-            {definition.key}
-          </span>
-        }
-        description="Update the master form template title. This change updates the name across system navigation, forms directories, and all versions."
-        confirmText={isUpdatingFormName ? 'Saving...' : 'Save Form Name'}
-        cancelText="Cancel"
-        isLoading={isUpdatingFormName}
-        className="max-w-md sm:max-w-lg"
-      >
-        <div className="space-y-4 py-2">
-          <div className="space-y-1.5">
-            <label htmlFor="edit-form-name" className="text-xs font-semibold text-foreground">
-              Form Template Name
-            </label>
-            <Input
-              id="edit-form-name"
-              value={editingFormName}
-              onChange={(e) => setEditingFormName(e.target.value)}
-              placeholder="e.g. Transportation Service Request Form"
-              className="h-9 text-sm"
-              autoFocus
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Master title for this form definition across the application.
-            </p>
-          </div>
-
-          <div className="rounded-xl border border-border/70 bg-muted/40 p-3 text-xs text-muted-foreground space-y-1">
-            <div className="flex justify-between">
-              <span>Form Identifier (Key):</span>
-              <span className="font-mono font-semibold text-foreground">{definition.key}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Active Version:</span>
-              <span className="font-semibold text-foreground">
-                v{definition.version ?? 'draft'} ({definition.status})
-              </span>
-            </div>
-          </div>
-        </div>
-      </ConfirmDialog>
-
-      {/* Edit Version Release Label Modal */}
-      <ConfirmDialog
-        open={showEditVersionNameModal}
-        onOpenChange={setShowEditVersionNameModal}
-        onCancel={() => setShowEditVersionNameModal(false)}
-        onConfirm={() => void handleEditVersionName()}
-        variant="primary"
-        icon={Tag}
-        title={`Release Label for v${definition.version ?? 'draft'}`}
-        badge={
-          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary border border-primary/20">
-            v{definition.version ?? 'draft'} · {definition.status}
-          </span>
-        }
-        description="Give this specific version snapshot a friendly release tag (e.g. 'Standard', 'Q4 2026 Audit Revision'). This helps identify this release in audit logs, diffs, and reports."
-        confirmText={isUpdatingVersionName ? 'Saving...' : 'Save Release Label'}
-        cancelText="Cancel"
-        isLoading={isUpdatingVersionName}
-        className="max-w-md sm:max-w-lg"
-      >
-        <div className="space-y-4 py-2">
-          <div className="space-y-1.5">
-            <label htmlFor="edit-version-name" className="text-xs font-semibold text-foreground">
-              Version / Release Name
-            </label>
-            <Input
-              id="edit-version-name"
-              value={editingVersionName}
-              onChange={(e) => setEditingVersionName(e.target.value)}
-              placeholder="e.g. Standard, Q4 2026 Audit Revision, Phase 2"
-              className="h-9 text-sm"
-              autoFocus
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Descriptive release tag for this version snapshot. Leave empty to use default version
-              number.
-            </p>
-          </div>
-
-          <div className="rounded-xl border border-border/70 bg-muted/40 p-3 text-xs text-muted-foreground space-y-1">
-            <div className="flex justify-between">
-              <span>Form Template:</span>
-              <span className="font-semibold text-foreground">{definition.name}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Target Version:</span>
-              <span className="font-mono font-semibold text-foreground">
-                v{definition.version ?? 'draft'}
-              </span>
-            </div>
-          </div>
-        </div>
-      </ConfirmDialog>
-
-      {/* Set as Active Confirmation Modal */}
-      <ConfirmDialog
-        open={showActivateVersionModal}
-        onOpenChange={setShowActivateVersionModal}
-        onCancel={() => setShowActivateVersionModal(false)}
-        onConfirm={() => void handleSetActiveVersion()}
-        variant="primary"
-        icon={CheckCircle2}
-        title={`Set Version v${definition.version ?? 'draft'} as Active?`}
-        badge={
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
-            v{definition.version ?? 'draft'} · {definition.status}
-          </span>
-        }
-        description={`Promote version v${definition.version ?? 'draft'} to become the active live published template. Any currently published version will be archived.`}
-        confirmText={isActivatingVersion ? 'Activating...' : 'Set as Active'}
-        cancelText="Cancel"
-        isLoading={isActivatingVersion}
-        className="max-w-md sm:max-w-lg"
-      >
-        <div className="space-y-3 py-2 text-xs text-muted-foreground">
-          <p className="leading-relaxed">
-            New requests submitted by users will immediately use the schema and workflow from{' '}
-            <strong className="text-foreground">Version v{definition.version}</strong>
-            {definition.versionName ? ` ("${definition.versionName}")` : ''}.
-          </p>
-          <div className="rounded-xl border border-border/70 bg-muted/40 p-3 space-y-1">
-            <div className="flex justify-between">
-              <span>Form Template:</span>
-              <span className="font-semibold text-foreground">{definition.name}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Version to Activate:</span>
-              <span className="font-semibold text-foreground">
-                v{definition.version} {definition.versionName ? `(${definition.versionName})` : ''}
-              </span>
-            </div>
-          </div>
-        </div>
-      </ConfirmDialog>
-
-      {/* Forms Directory Modal */}
-      <Dialog
-        open={formsDirectoryOpen}
-        onOpenChange={setFormsDirectoryOpen}
-        className="max-w-2xl sm:max-w-3xl"
-      >
-        <DialogHeader className="mb-3">
-          <div className="flex flex-wrap items-center justify-between gap-3 pr-6">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20">
-                <FolderKanban className="h-5 w-5" />
-              </div>
-              <div>
-                <DialogTitle className="text-lg sm:text-xl font-bold">Forms Directory</DialogTitle>
-                <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                  Browse, search, and switch between form definitions across the system.
-                </DialogDescription>
-              </div>
-            </div>
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => {
-                setFormsDirectoryOpen(false);
-                setNewFormTitle('');
-                setNewFormKey('');
-                setNewFormVersionName('');
-                setIsKeyManuallyEdited(false);
-                setNewFormModalOpen(true);
-              }}
-              className="h-8 gap-1.5 text-xs font-semibold"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              New Form
-            </Button>
-          </div>
-        </DialogHeader>
-
-        <div className="space-y-3 pt-1">
-          {/* Search bar & Sort Controls */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
-              <Input
-                type="text"
-                placeholder="Search forms by name, key, or release..."
-                value={formsDirectorySearch}
-                onChange={(e) => setFormsDirectorySearch(e.target.value)}
-                className="pl-9 pr-8 h-9 text-xs bg-background"
-              />
-              {formsDirectorySearch && (
-                <button
-                  type="button"
-                  onClick={() => setFormsDirectorySearch('')}
-                  className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground p-0.5 rounded"
-                  title="Clear search"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-
-            <div className="flex items-center gap-1.5 shrink-0">
-              <span className="text-xs text-muted-foreground hidden sm:inline">Sort:</span>
-              <Select
-                value={formsDirectorySort}
-                onChange={(e) =>
-                  setFormsDirectorySort(e.target.value as 'name-asc' | 'name-desc' | 'versions')
-                }
-                className="h-9 text-xs bg-background w-full sm:w-auto min-w-[130px]"
-              >
-                <option value="name-asc">Name (A-Z)</option>
-                <option value="name-desc">Name (Z-A)</option>
-                <option value="versions">Most Versions</option>
-              </Select>
-            </div>
-          </div>
-
-          {/* Filter Pills & Result Summary */}
-          <div className="flex flex-wrap items-center justify-between gap-2 text-xs pt-0.5">
-            <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg border border-border/60">
-              <button
-                type="button"
-                onClick={() => setFormsDirectoryFilter('all')}
-                className={cn(
-                  'px-2.5 py-1 rounded-md text-xs font-medium transition-all',
-                  formsDirectoryFilter === 'all'
-                    ? 'bg-background text-foreground shadow-xs font-semibold'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                All ({formsDirectoryCounts.total})
-              </button>
-              <button
-                type="button"
-                onClick={() => setFormsDirectoryFilter('published')}
-                className={cn(
-                  'px-2.5 py-1 rounded-md text-xs font-medium transition-all inline-flex items-center gap-1.5',
-                  formsDirectoryFilter === 'published'
-                    ? 'bg-background text-emerald-600 dark:text-emerald-400 shadow-xs font-semibold'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                Published ({formsDirectoryCounts.published})
-              </button>
-              <button
-                type="button"
-                onClick={() => setFormsDirectoryFilter('draft')}
-                className={cn(
-                  'px-2.5 py-1 rounded-md text-xs font-medium transition-all inline-flex items-center gap-1.5',
-                  formsDirectoryFilter === 'draft'
-                    ? 'bg-background text-amber-600 dark:text-amber-400 shadow-xs font-semibold'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                Draft Only ({formsDirectoryCounts.draft})
-              </button>
-            </div>
-
-            <div className="flex items-center gap-2 text-muted-foreground text-[11px]">
-              <span>
-                Showing {filteredFormsDirectory.length} of {allFormsList.length}
-              </span>
-              {(formsDirectorySearch || formsDirectoryFilter !== 'all') && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFormsDirectorySearch('');
-                    setFormsDirectoryFilter('all');
-                  }}
-                  className="text-primary hover:underline font-medium"
-                >
-                  Reset filters
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Forms List Grid */}
-          <div className="max-h-[55vh] overflow-y-auto space-y-2 pr-1 overscroll-contain">
-            {filteredFormsDirectory.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border p-8 text-center space-y-3">
-                <FolderKanban className="mx-auto h-8 w-8 text-muted-foreground opacity-50" />
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-foreground">
-                    No forms match your criteria
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Try adjusting the filter keyword or resetting active filters.
-                  </p>
-                </div>
-                {(formsDirectorySearch || formsDirectoryFilter !== 'all') && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setFormsDirectorySearch('');
-                      setFormsDirectoryFilter('all');
-                    }}
-                    className="h-8 text-xs"
-                  >
-                    Clear All Filters
-                  </Button>
-                )}
-              </div>
-            ) : (
-              filteredFormsDirectory.map((form) => {
-                const isCurrent = form.key === definition.key;
-                return (
-                  <div
-                    key={form.key}
-                    className={cn(
-                      'flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border p-3 sm:p-3.5 transition-all text-left',
-                      isCurrent
-                        ? 'border-primary/50 bg-primary/5 ring-1 ring-primary/20'
-                        : 'border-border bg-card hover:border-border/80 hover:bg-muted/30',
-                    )}
-                  >
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm text-foreground truncate">
-                          {form.name}
-                        </span>
-                        <span className="font-mono text-[10px] bg-muted px-1.5 py-0.5 rounded border border-border text-muted-foreground">
-                          {form.key}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                        {form.publishedVersion ? (
-                          <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />v
-                            {form.publishedVersion} Published
-                            {form.publishedVersionName ? ` (${form.publishedVersionName})` : ''}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium">
-                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                            Draft only (v{form.latestVersion})
-                          </span>
-                        )}
-                        <span>·</span>
-                        <span>
-                          {form.versionCount} version{form.versionCount === 1 ? '' : 's'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="shrink-0 flex items-center gap-2">
-                      {isCurrent ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary border border-primary/20">
-                          <Check className="h-3 w-3" />
-                          Currently Editing
-                        </span>
-                      ) : (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => switchForm(form.key)}
-                          className="h-8 text-xs font-medium"
-                        >
-                          Switch to Form
-                        </Button>
-                      )}
-
-                      {form.key !== 'tsrf' ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setFormToDelete(form);
-                          }}
-                          className="h-8 w-8 p-0 text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
-                          title={`Delete form template "${form.name}"`}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      ) : (
-                        <span
-                          className="text-[10px] font-semibold text-muted-foreground/50 uppercase px-1.5 py-0.5 rounded border border-border/40 select-none"
-                          title="Core system form cannot be deleted"
-                        >
-                          System
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-      </Dialog>
-
-      {/* Delete Form Confirmation Modal */}
-      {formToDelete && (
-        <ConfirmDialog
-          open={Boolean(formToDelete)}
-          onOpenChange={(open) => !open && setFormToDelete(null)}
-          onCancel={() => setFormToDelete(null)}
-          onConfirm={() => void deleteForm()}
-          variant="destructive"
-          icon={Trash2}
-          title={`Delete Form "${formToDelete.name}"?`}
-          badge={
-            <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-semibold text-red-700 dark:text-red-400 border border-red-500/20 font-mono">
-              {formToDelete.key}
-            </span>
-          }
-          confirmText="Delete Form"
-          cancelText="Cancel"
-          isLoading={isDeletingForm}
-          className="max-w-md sm:max-w-lg"
-        >
-          <div className="space-y-3.5">
-            <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-              Are you sure you want to delete{' '}
-              <strong className="text-foreground">{formToDelete.name}</strong>? This will
-              permanently remove the form template, all schema configurations, and its{' '}
-              <strong className="text-foreground">{formToDelete.versionCount} version(s)</strong>.
-            </p>
-
-            {formToDelete.key === activeFormKey && (
-              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
-                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
-                <span>
-                  This form is currently open in the editor. Upon deletion, you will be redirected
-                  back to the default Transportation Service Request Form.
-                </span>
-              </div>
-            )}
-
-            <div className="rounded-xl border border-border/80 bg-muted/40 p-3 text-xs text-muted-foreground space-y-1">
-              <div className="flex justify-between">
-                <span>Form Key:</span>
-                <span className="font-mono font-semibold text-foreground">{formToDelete.key}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Total Versions:</span>
-                <span className="font-semibold text-foreground">{formToDelete.versionCount}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Status:</span>
-                <span className="font-semibold text-foreground">
-                  {formToDelete.publishedVersion
-                    ? `Published (v${formToDelete.publishedVersion})`
-                    : 'Draft only'}
-                </span>
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-red-500/20 bg-red-500/10 dark:bg-red-950/20 p-3 text-xs text-red-700 dark:text-red-300 flex items-start gap-2">
-              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-red-600 dark:text-red-400" />
-              <span>
-                <strong>Audit Protection:</strong> If this form has existing workflow submissions,
-                deletion is blocked by policy to preserve enterprise audit records.
-              </span>
-            </div>
-          </div>
-        </ConfirmDialog>
-      )}
-
-      {/* Create New Form Modal */}
-      <Dialog
-        open={newFormModalOpen}
-        onOpenChange={setNewFormModalOpen}
-        className="max-w-lg sm:max-w-xl"
-      >
-        <DialogHeader className="mb-2">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20">
-              <Plus className="h-5 w-5" />
-            </div>
-            <div>
-              <DialogTitle className="text-lg font-bold">Create New Form</DialogTitle>
-              <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                Set up a new form definition with its key, release name, and starting template.
-              </DialogDescription>
-            </div>
-          </div>
-        </DialogHeader>
-
-        <form onSubmit={handleCreateNewForm} className="space-y-4 pt-1">
-          <div className="space-y-1.5">
-            <label htmlFor="new-form-name" className="text-xs font-semibold text-foreground">
-              Form Name *
-            </label>
-            <Input
-              id="new-form-name"
-              value={newFormTitle}
-              onChange={handleTitleChange}
-              placeholder="e.g. Vehicle Pre-Trip Inspection"
-              required
-              className="h-9 text-sm"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label htmlFor="new-form-key" className="text-xs font-semibold text-foreground">
-              Form Identifier (Slug / Key) *
-            </label>
-            <Input
-              id="new-form-key"
-              value={newFormKey}
-              onChange={(e) => {
-                setIsKeyManuallyEdited(true);
-                setNewFormKey(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '_'));
-              }}
-              placeholder="e.g. vehicle_pre_trip_inspection"
-              required
-              className="h-9 text-xs font-mono"
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Unique slug used for URL routes, submissions, and API endpoints. Letters, numbers, and
-              underscores only.
-            </p>
-          </div>
-
-          <div className="space-y-1.5">
-            <label
-              htmlFor="new-form-version-name"
-              className="text-xs font-semibold text-foreground"
-            >
-              Initial Release Name
-            </label>
-            <Input
-              id="new-form-version-name"
-              value={newFormVersionName}
-              onChange={(e) => setNewFormVersionName(e.target.value)}
-              placeholder="e.g. Initial v1, 2026 Q4 Launch"
-              className="h-9 text-sm"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-xs font-semibold text-foreground block">Starting Template</label>
-            <div className="grid gap-2 sm:grid-cols-3">
-              <div
-                onClick={() => setNewFormTemplate('blank')}
-                className={cn(
-                  'cursor-pointer rounded-xl border p-3 text-left transition-all',
-                  newFormTemplate === 'blank'
-                    ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
-                    : 'border-border hover:bg-muted/30',
-                )}
-              >
-                <div className="font-semibold text-xs text-foreground flex items-center justify-between">
-                  <span>Blank Form</span>
-                  {newFormTemplate === 'blank' && <Check className="h-3.5 w-3.5 text-primary" />}
-                </div>
-                <p className="text-[11px] text-muted-foreground mt-1 leading-snug">
-                  Clean canvas with 1 initial section.
-                </p>
-              </div>
-
-              <div
-                onClick={() => setNewFormTemplate('inspection')}
-                className={cn(
-                  'cursor-pointer rounded-xl border p-3 text-left transition-all',
-                  newFormTemplate === 'inspection'
-                    ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
-                    : 'border-border hover:bg-muted/30',
-                )}
-              >
-                <div className="font-semibold text-xs text-foreground flex items-center justify-between">
-                  <span>Inspection</span>
-                  {newFormTemplate === 'inspection' && (
-                    <Check className="h-3.5 w-3.5 text-primary" />
-                  )}
-                </div>
-                <p className="text-[11px] text-muted-foreground mt-1 leading-snug">
-                  Vehicle lookup, odometer & checklist.
-                </p>
-              </div>
-
-              <div
-                onClick={() => setNewFormTemplate('tsrf')}
-                className={cn(
-                  'cursor-pointer rounded-xl border p-3 text-left transition-all',
-                  newFormTemplate === 'tsrf'
-                    ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
-                    : 'border-border hover:bg-muted/30',
-                )}
-              >
-                <div className="font-semibold text-xs text-foreground flex items-center justify-between">
-                  <span>TSRF Clone</span>
-                  {newFormTemplate === 'tsrf' && <Check className="h-3.5 w-3.5 text-primary" />}
-                </div>
-                <p className="text-[11px] text-muted-foreground mt-1 leading-snug">
-                  Full multi-stop fleet request workflow.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter className="pt-3">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setNewFormModalOpen(false)}
-              disabled={isCreatingForm}
-              className="h-9 text-xs"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={isCreatingForm || !newFormTitle.trim() || !newFormKey.trim()}
-              className="h-9 text-xs font-semibold"
-            >
-              {isCreatingForm ? 'Creating...' : 'Create Form'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </Dialog>
-
-      {/* Field Deletion / Retirement Prompt Modal */}
-      {fieldToDeletePrompt && (
-        <ConfirmDialog
-          open={Boolean(fieldToDeletePrompt)}
-          onOpenChange={(open) => !open && setFieldToDeletePrompt(null)}
-          onCancel={() => setFieldToDeletePrompt(null)}
-          onConfirm={() => {
-            removeFieldDirectly(fieldToDeletePrompt.field.id);
-            setFieldToDeletePrompt(null);
-          }}
-          variant="warning"
-          icon={Lock}
-          title="Remove Published Field?"
-          badge={
-            publishedBaseline?.version ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400 border border-amber-500/20">
-                <Lock className="h-2.5 w-2.5" /> v{publishedBaseline.version} Published
-              </span>
-            ) : undefined
-          }
-          confirmText="Remove from Draft"
-          cancelText="Cancel"
-        >
-          <div className="space-y-3">
-            <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 dark:bg-amber-950/20 p-3.5 space-y-2">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
-                <span className="text-sm font-semibold text-foreground break-words">
-                  "{fieldToDeletePrompt.field.label}"
-                </span>
-                <code className="text-xs font-mono px-2 py-0.5 rounded bg-background border border-border text-foreground shrink-0 w-fit">
-                  {fieldToDeletePrompt.field.key}
-                </code>
-              </div>
-              <p className="text-xs text-amber-700 dark:text-amber-300">
-                This field is part of published baseline{' '}
-                <strong>v{publishedBaseline?.version}</strong>.
-              </p>
-            </div>
-
-            <div className="space-y-2 text-xs text-muted-foreground bg-muted/40 rounded-xl p-3 border border-border/60">
-              <div className="flex items-start gap-2">
-                <span className="text-amber-600 dark:text-amber-400 font-bold shrink-0">⚠️</span>
-                <p className="leading-relaxed">
-                  Removing it from this draft will{' '}
-                  <strong className="text-foreground">schedule it for retirement</strong> when you
-                  publish this release.
-                </p>
-              </div>
-              <div className="flex items-start gap-2">
-                <span className="text-emerald-600 dark:text-emerald-400 font-bold shrink-0">✓</span>
-                <p className="leading-relaxed">
-                  <strong className="text-foreground">Historical data preserved:</strong> Existing
-                  submissions will retain all past values for audit and compliance.
-                </p>
-              </div>
-            </div>
-          </div>
-        </ConfirmDialog>
-      )}
-
-      {/* Section Deletion with Published Fields Confirmation Modal */}
-      {sectionToDeletePrompt && (
-        <ConfirmDialog
-          open={Boolean(sectionToDeletePrompt)}
-          onOpenChange={(open) => !open && setSectionToDeletePrompt(null)}
-          onCancel={() => setSectionToDeletePrompt(null)}
-          onConfirm={() => {
-            performRemoveSection(sectionToDeletePrompt.sectionId);
-            setSectionToDeletePrompt(null);
-          }}
-          variant="warning"
-          icon={Lock}
-          title={`Remove Section "${sectionToDeletePrompt.title}"?`}
-          confirmText="Remove Section & Retire Fields"
-          cancelText="Cancel"
-        >
-          <div className="space-y-3">
-            <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 dark:bg-amber-950/20 p-3.5 space-y-2">
-              <p className="text-xs text-amber-700 dark:text-amber-300">
-                This section contains {sectionToDeletePrompt.publishedFieldKeys.length} published
-                field
-                {sectionToDeletePrompt.publishedFieldKeys.length === 1 ? '' : 's'}:
-              </p>
-              <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
-                {sectionToDeletePrompt.publishedFieldKeys.map((key) => (
-                  <span
-                    key={key}
-                    className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-2 py-0.5 font-mono text-xs font-semibold text-amber-700 dark:text-amber-300 border border-amber-500/30"
-                  >
-                    <Lock className="h-3 w-3 opacity-60" />
-                    {key}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <div className="space-y-2 text-xs text-muted-foreground bg-muted/40 rounded-xl p-3 border border-border/60">
-              <div className="flex items-start gap-2">
-                <span className="text-amber-600 dark:text-amber-400 font-bold shrink-0">⚠️</span>
-                <p className="leading-relaxed">
-                  Removing this section will schedule these published fields for retirement upon
-                  publishing.
-                </p>
-              </div>
-              <div className="flex items-start gap-2">
-                <span className="text-emerald-600 dark:text-emerald-400 font-bold shrink-0">✓</span>
-                <p className="leading-relaxed">
-                  Existing submissions will retain all past values for audit and compliance.
-                </p>
-              </div>
-            </div>
-          </div>
-        </ConfirmDialog>
-      )}
+      {/* Modal Dialogs */}
+      <FormBuilderModals
+        showRestrictedConfirm={showRestrictedConfirm}
+        setShowRestrictedConfirm={setShowRestrictedConfirm}
+        restrictedStagesToConfirm={restrictedStagesToConfirm}
+        onConfirmRestrictedPublish={() => void publish(true, restrictedStagesToConfirm)}
+        saving={saving}
+        showDeleteConfirm={showDeleteConfirm}
+        setShowDeleteConfirm={setShowDeleteConfirm}
+        onConfirmDeleteDraft={() => void deleteDraft()}
+        isDeletingDraft={isDeletingDraft}
+        definition={definition}
+        fieldsCount={fields.length}
+        showRetireConfirmModal={showRetireConfirmModal}
+        setShowRetireConfirmModal={setShowRetireConfirmModal}
+        retiredKeysToConfirm={retiredKeysToConfirm}
+        onConfirmRetirePublish={() => void publish(true)}
+        showRenameFormModal={showRenameFormModal}
+        setShowRenameFormModal={setShowRenameFormModal}
+        editingFormName={editingFormName}
+        setEditingFormName={setEditingFormName}
+        onConfirmRenameForm={() => void handleRenameForm()}
+        isUpdatingFormName={isUpdatingFormName}
+        showEditVersionNameModal={showEditVersionNameModal}
+        setShowEditVersionNameModal={setShowEditVersionNameModal}
+        editingVersionName={editingVersionName}
+        setEditingVersionName={setEditingVersionName}
+        onConfirmEditVersionName={() => void handleEditVersionName()}
+        isUpdatingVersionName={isUpdatingVersionName}
+        showActivateVersionModal={showActivateVersionModal}
+        setShowActivateVersionModal={setShowActivateVersionModal}
+        onConfirmSetActiveVersion={() => void handleSetActiveVersion()}
+        isActivatingVersion={isActivatingVersion}
+        formsDirectoryOpen={formsDirectoryOpen}
+        setFormsDirectoryOpen={setFormsDirectoryOpen}
+        formsDirectorySearch={formsDirectorySearch}
+        setFormsDirectorySearch={setFormsDirectorySearch}
+        formsDirectorySort={formsDirectorySort}
+        setFormsDirectorySort={setFormsDirectorySort}
+        formsDirectoryFilter={formsDirectoryFilter}
+        setFormsDirectoryFilter={setFormsDirectoryFilter}
+        formsDirectoryCounts={formsDirectoryCounts}
+        filteredFormsDirectory={filteredFormsDirectory}
+        allFormsListLength={allFormsList.length}
+        onSwitchForm={switchForm}
+        onOpenNewFormModal={() => {
+          setFormsDirectoryOpen(false);
+          setNewFormTitle('');
+          setNewFormKey('');
+          setNewFormVersionName('');
+          setIsKeyManuallyEdited(false);
+          setNewFormModalOpen(true);
+        }}
+        formToDelete={formToDelete}
+        setFormToDelete={setFormToDelete}
+        onConfirmDeleteForm={() => void deleteForm()}
+        isDeletingForm={isDeletingForm}
+        activeFormKey={activeFormKey}
+        newFormModalOpen={newFormModalOpen}
+        setNewFormModalOpen={setNewFormModalOpen}
+        newFormTitle={newFormTitle}
+        newFormKey={newFormKey}
+        newFormVersionName={newFormVersionName}
+        newFormTemplate={newFormTemplate}
+        setNewFormVersionName={setNewFormVersionName}
+        setNewFormTemplate={setNewFormTemplate}
+        setIsKeyManuallyEdited={setIsKeyManuallyEdited}
+        handleTitleChange={handleTitleChange}
+        setNewFormKey={setNewFormKey}
+        handleCreateNewForm={handleCreateNewForm}
+        isCreatingForm={isCreatingForm}
+        fieldToDeletePrompt={fieldToDeletePrompt}
+        setFieldToDeletePrompt={setFieldToDeletePrompt}
+        onRemoveFieldDirectly={removeFieldDirectly}
+        publishedBaseline={publishedBaseline}
+        sectionToDeletePrompt={sectionToDeletePrompt}
+        setSectionToDeletePrompt={setSectionToDeletePrompt}
+        onPerformRemoveSection={performRemoveSection}
+      />
 
       {definition.status === 'draft' && publishedBaseline && (
         <details className="group rounded-xl border border-border/70 bg-card/40 px-3.5 py-2 text-xs transition-colors hover:border-border">
@@ -3113,142 +2232,17 @@ export function FormBuilderPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)_300px] xl:grid-cols-[260px_minmax(0,1fr)_340px] items-start gap-5">
             {/* Left Column: Component Library & Structure Outline */}
-            <div
-              className={`sticky top-0 self-start max-h-[calc(100vh-8.5rem)] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm ${
-                mobileStudioView === 'palette' ? 'flex' : 'hidden lg:flex'
-              }`}
-            >
-              <div className="p-3 border-b border-border bg-muted/20 shrink-0">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Components
-                  </h3>
-                  <div className="flex rounded-md bg-muted p-0.5 text-xs">
-                    <button
-                      type="button"
-                      onClick={() => setSidebarTab('palette')}
-                      className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
-                        sidebarTab === 'palette'
-                          ? 'bg-background text-foreground shadow-xs'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      Library
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSidebarTab('outline')}
-                      className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
-                        sidebarTab === 'outline'
-                          ? 'bg-background text-foreground shadow-xs'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      Outline
-                    </button>
-                  </div>
-                </div>
-                {sidebarTab === 'palette' && (
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
-                    <Input
-                      value={paletteSearch}
-                      onChange={(e) => setPaletteSearch(e.target.value)}
-                      placeholder="Filter components..."
-                      className="h-7 pl-8 text-xs bg-background"
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5">
-                {sidebarTab === 'palette' ? (
-                  PALETTE.filter(
-                    (item) =>
-                      item.label.toLowerCase().includes(paletteSearch.toLowerCase()) ||
-                      item.type.toLowerCase().includes(paletteSearch.toLowerCase()),
-                  ).map((item) => {
-                    const meta = PALETTE_META[item.type] || {
-                      label: item.label,
-                      icon: Type,
-                      description: '',
-                    };
-                    const Icon = meta.icon;
-                    return (
-                      <div
-                        key={item.type}
-                        draggable
-                        onDragStart={(e) => {
-                          e.dataTransfer.setData('field-type', item.type);
-                        }}
-                        className="group flex items-center justify-between gap-2 rounded-lg border border-border bg-card p-2 text-left text-sm transition-all hover:border-primary/50 hover:bg-muted/40 cursor-grab active:cursor-grabbing shadow-2xs"
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
-                            <Icon className="h-3.5 w-3.5" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-xs font-medium leading-none truncate">
-                              {meta.label}
-                            </p>
-                            <p className="text-[10px] text-muted-foreground truncate mt-0.5">
-                              {meta.description}
-                            </p>
-                          </div>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 shrink-0 opacity-40 group-hover:opacity-100"
-                          title={`Add ${meta.label}`}
-                          onClick={() => addField(item.type)}
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="space-y-3 p-1">
-                    {definition.sections.map((sec, secIdx) => (
-                      <div key={sec.id} className="space-y-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            document.getElementById(sec.id)?.scrollIntoView({ behavior: 'smooth' });
-                          }}
-                          className="w-full text-left flex items-center justify-between text-xs font-semibold py-1 px-1.5 rounded hover:bg-muted/50"
-                        >
-                          <span className="truncate">
-                            §{secIdx + 1} {sec.title}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground font-normal bg-muted px-1.5 py-0.2 rounded">
-                            {sec.fields.length}
-                          </span>
-                        </button>
-                        <div className="pl-3 space-y-0.5 border-l border-border/60 ml-2">
-                          {sec.fields.map((f) => (
-                            <button
-                              key={f.id}
-                              type="button"
-                              onClick={() => selectFieldAndScroll(f.id)}
-                              className={`w-full text-left text-[11px] py-1 px-1.5 rounded truncate transition-colors ${
-                                selectedId === f.id
-                                  ? 'bg-primary/10 text-primary font-medium'
-                                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
-                              }`}
-                            >
-                              {f.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+            <FieldPaletteSidebar
+              mobileStudioView={mobileStudioView}
+              sidebarTab={sidebarTab}
+              setSidebarTab={setSidebarTab}
+              paletteSearch={paletteSearch}
+              setPaletteSearch={setPaletteSearch}
+              definition={definition}
+              selectedId={selectedId}
+              addField={addField}
+              selectFieldAndScroll={selectFieldAndScroll}
+            />
 
             {/* Center Column: Canvas */}
             <div
@@ -4262,420 +3256,13 @@ export function FormBuilderPage() {
 
       {/* Workflow & Lifecycle Tab */}
       {activeTab === 'workflow' && (
-        <div className="space-y-6 animate-fade-in">
-          {/* Workflow Approval Flow Diagram Preview */}
-          <WorkflowDiagramPreview
-            workflow={workflow}
-            fields={fields}
-            onSelectStage={(stageId) => {
-              const el = document.getElementById(`stage-label-${stageId}`);
-              el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              el?.focus();
-            }}
-          />
-
-          <div className="grid gap-6 xl:grid-cols-2">
-            <div className="space-y-6">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-3">
-                  <div>
-                    <CardTitle className="text-base">Stages</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Define approval and handling states
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const id = `stage_${Date.now()}`;
-                      updateWorkflow({
-                        stages: [
-                          ...workflow.stages,
-                          { id, label: 'New Stage', statusCategory: 'in_review' },
-                        ],
-                      });
-                    }}
-                  >
-                    <Plus className="mr-1.5 h-3.5 w-3.5" />
-                    Add Stage
-                  </Button>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <label
-                      htmlFor="workflow-initial-stage"
-                      className="mb-1 block text-xs font-semibold"
-                    >
-                      Initial Entry Stage
-                    </label>
-                    <Select
-                      id="workflow-initial-stage"
-                      value={workflow.initialStage}
-                      onChange={(event) => updateWorkflow({ initialStage: event.target.value })}
-                    >
-                      {workflow.stages.map((stage) => (
-                        <option key={stage.id} value={stage.id}>
-                          {stage.label}
-                        </option>
-                      ))}
-                    </Select>
-                  </div>
-                  <div className="space-y-2.5">
-                    {workflow.stages.map((stage, index) => (
-                      <div
-                        key={stage.id}
-                        id={`stage-card-${stage.id}`}
-                        className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_140px_auto] gap-2 items-end rounded-lg border border-border p-3 bg-card transition-all"
-                      >
-                        <div>
-                          <label
-                            htmlFor={`stage-label-${stage.id}`}
-                            className="mb-1 block text-xs font-semibold"
-                          >
-                            Stage label
-                          </label>
-                          <Input
-                            id={`stage-label-${stage.id}`}
-                            value={stage.label}
-                            onChange={(event) => updateStage(index, { label: event.target.value })}
-                          />
-                        </div>
-                        <div>
-                          <label
-                            htmlFor={`stage-id-${stage.id}`}
-                            className="mb-1 block text-xs font-semibold"
-                          >
-                            Stage key
-                          </label>
-                          <Input
-                            id={`stage-id-${stage.id}`}
-                            value={stage.id}
-                            onChange={(event) => {
-                              const oldId = stage.id;
-                              const nextId = event.target.value;
-                              updateStage(index, { id: nextId });
-                              updateWorkflow({
-                                initialStage:
-                                  workflow.initialStage === oldId ? nextId : workflow.initialStage,
-                                transitions: workflow.transitions.map((item) => ({
-                                  ...item,
-                                  from: item.from === oldId ? nextId : item.from,
-                                  to: item.to === oldId ? nextId : item.to,
-                                })),
-                              });
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <label
-                            htmlFor={`stage-category-${stage.id}`}
-                            className="mb-1 block text-xs font-semibold"
-                          >
-                            Status
-                          </label>
-                          <Select
-                            id={`stage-category-${stage.id}`}
-                            value={stage.statusCategory}
-                            onChange={(event) =>
-                              updateStage(index, {
-                                statusCategory: event.target.value as SystemStatusCategory,
-                              })
-                            }
-                          >
-                            {STATUS_CATEGORIES.map((status) => (
-                              <option key={status} value={status}>
-                                {status.replaceAll('_', ' ')}
-                              </option>
-                            ))}
-                          </Select>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          title="Remove stage"
-                          className="text-destructive hover:bg-destructive/10"
-                          disabled={workflow.stages.length <= 1}
-                          onClick={() => {
-                            const remaining = workflow.stages.filter(
-                              (_, stageIndex) => stageIndex !== index,
-                            );
-                            updateWorkflow({
-                              stages: remaining,
-                              initialStage:
-                                workflow.initialStage === stage.id
-                                  ? remaining[0].id
-                                  : workflow.initialStage,
-                              transitions: workflow.transitions.filter(
-                                (item) => item.from !== stage.id && item.to !== stage.id,
-                              ),
-                            });
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Daily Cut-off Policy</CardTitle>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Set same-day dispatch cutoff requirements
-                  </p>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <div>
-                      <label htmlFor="cutoff-time" className="mb-1 block text-xs font-semibold">
-                        Cut-off time
-                      </label>
-                      <Input
-                        id="cutoff-time"
-                        type="time"
-                        value={workflow.cutoff.time}
-                        onChange={(event) =>
-                          updateWorkflow({
-                            cutoff: { ...workflow.cutoff, time: event.target.value },
-                          })
-                        }
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="cutoff-timezone" className="mb-1 block text-xs font-semibold">
-                        Timezone
-                      </label>
-                      <Input
-                        id="cutoff-timezone"
-                        value={workflow.cutoff.timezone}
-                        onChange={(event) =>
-                          updateWorkflow({
-                            cutoff: { ...workflow.cutoff, timezone: event.target.value },
-                          })
-                        }
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="cutoff-policy" className="mb-1 block text-xs font-semibold">
-                        Late policy
-                      </label>
-                      <Select
-                        id="cutoff-policy"
-                        value={workflow.cutoff.latePolicy}
-                        onChange={(event) =>
-                          updateWorkflow({
-                            cutoff: {
-                              ...workflow.cutoff,
-                              latePolicy: event.target
-                                .value as FormWorkflow['cutoff']['latePolicy'],
-                            },
-                          })
-                        }
-                      >
-                        <option value="flag">Flag late</option>
-                        <option value="flag_and_exception_approval">
-                          Flag and require exception approval
-                        </option>
-                      </Select>
-                    </div>
-                  </div>
-                  {workflow.cutoff.latePolicy === 'flag_and_exception_approval' && (
-                    <div>
-                      <label
-                        htmlFor="cutoff-exception-stage"
-                        className="mb-1 block text-xs font-semibold"
-                      >
-                        Exception review stage
-                      </label>
-                      <Select
-                        id="cutoff-exception-stage"
-                        value={workflow.cutoff.exceptionStage ?? ''}
-                        onChange={(event) =>
-                          updateWorkflow({
-                            cutoff: { ...workflow.cutoff, exceptionStage: event.target.value },
-                          })
-                        }
-                      >
-                        {workflow.stages.map((stage) => (
-                          <option key={stage.id} value={stage.id}>
-                            {stage.label}
-                          </option>
-                        ))}
-                      </Select>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            <div>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-3">
-                  <div>
-                    <CardTitle className="text-base">Transitions</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Authorized stage progressions and requirements
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={workflow.stages.length < 2}
-                    onClick={() =>
-                      updateWorkflow({
-                        transitions: [
-                          ...workflow.transitions,
-                          { from: workflow.stages[0].id, to: workflow.stages[1].id, roles: [] },
-                        ],
-                      })
-                    }
-                  >
-                    <Plus className="mr-1.5 h-3.5 w-3.5" />
-                    Add Transition
-                  </Button>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {workflow.transitions.map((transition, index) => (
-                    <div
-                      key={`${transition.from}-${transition.to}-${index}`}
-                      className="space-y-2.5 rounded-lg border border-border p-3.5 bg-card"
-                    >
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label
-                            htmlFor={`transition-from-${index}`}
-                            className="mb-1 block text-xs font-semibold"
-                          >
-                            From Stage
-                          </label>
-                          <Select
-                            id={`transition-from-${index}`}
-                            value={transition.from}
-                            onChange={(event) =>
-                              updateTransition(index, { from: event.target.value })
-                            }
-                          >
-                            {workflow.stages.map((stage) => (
-                              <option key={stage.id} value={stage.id}>
-                                {stage.label}
-                              </option>
-                            ))}
-                          </Select>
-                        </div>
-                        <div>
-                          <label
-                            htmlFor={`transition-to-${index}`}
-                            className="mb-1 block text-xs font-semibold"
-                          >
-                            To Stage
-                          </label>
-                          <Select
-                            id={`transition-to-${index}`}
-                            value={transition.to}
-                            onChange={(event) =>
-                              updateTransition(index, { to: event.target.value })
-                            }
-                          >
-                            {workflow.stages.map((stage) => (
-                              <option key={stage.id} value={stage.id}>
-                                {stage.label}
-                              </option>
-                            ))}
-                          </Select>
-                        </div>
-                      </div>
-                      <div>
-                        <span className="mb-1 block text-xs font-semibold">Allowed Roles</span>
-                        <div className="flex flex-wrap gap-x-3 gap-y-1.5">
-                          {WORKFLOW_ROLES.map((role) => (
-                            <label key={role} className="flex items-center gap-1.5 text-xs">
-                              <input
-                                type="checkbox"
-                                className="rounded border-input text-primary"
-                                checked={transition.roles.includes(role)}
-                                onChange={(event) =>
-                                  updateTransition(index, {
-                                    roles: event.target.checked
-                                      ? [...transition.roles, role]
-                                      : transition.roles.filter((value) => value !== role),
-                                  })
-                                }
-                              />
-                              {role.replaceAll('_', ' ')}
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                      <div>
-                        <label
-                          htmlFor={`transition-required-${index}`}
-                          className="mb-1 block text-xs font-semibold"
-                        >
-                          Required Fields Before Progression
-                        </label>
-                        <Select
-                          id={`transition-required-${index}`}
-                          multiple
-                          value={transition.requiredFields ?? []}
-                          onChange={(event) =>
-                            updateTransition(index, {
-                              requiredFields: Array.from(
-                                event.currentTarget.selectedOptions,
-                                (option) => option.value,
-                              ),
-                            })
-                          }
-                        >
-                          {fields
-                            .filter((field) => field.type !== 'notice')
-                            .map((field) => (
-                              <option key={field.key} value={field.key}>
-                                {field.label}
-                              </option>
-                            ))}
-                        </Select>
-                      </div>
-                      <div className="flex items-center justify-between pt-1 border-t border-border/50">
-                        <label className="flex items-center gap-2 text-xs cursor-pointer">
-                          <input
-                            type="checkbox"
-                            className="rounded border-input text-primary"
-                            checked={transition.reasonRequired ?? false}
-                            onChange={(event) =>
-                              updateTransition(index, { reasonRequired: event.target.checked })
-                            }
-                          />
-                          Require user reason / justification
-                        </label>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive h-7 text-xs hover:bg-destructive/10"
-                          onClick={() =>
-                            updateWorkflow({
-                              transitions: workflow.transitions.filter(
-                                (_, transitionIndex) => transitionIndex !== index,
-                              ),
-                            })
-                          }
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        </div>
+        <WorkflowStageMatrix
+          workflow={workflow}
+          fields={fields}
+          updateWorkflow={updateWorkflow}
+          updateStage={updateStage}
+          updateTransition={updateTransition}
+        />
       )}
 
       {/* Stage Field Access Tab */}
