@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Pagination } from '@/components/ui/pagination';
 import {
   Lock,
   Unlock,
@@ -13,6 +14,10 @@ import {
   Truck,
   FileText,
   Wrench,
+  Search,
+  Filter,
+  RotateCcw,
+  X,
 } from 'lucide-react';
 
 export interface PurchaseRequisitionItem {
@@ -67,6 +72,131 @@ export function PRGatingDashboard({
   const [newPrPurpose, setNewPrPurpose] = useState('');
   const [newPrAmount, setNewPrAmount] = useState(15000);
   const [showCreatePr, setShowCreatePr] = useState(false);
+
+  // ─── Section 1: PR Search, Filter, Sort & Pagination State ──────────────────
+  const [prSearchQuery, setPrSearchQuery] = useState('');
+  const [prStatusFilter, setPrStatusFilter] = useState('all');
+  const [prDeptFilter, setPrDeptFilter] = useState('all');
+  const [prSortBy, setPrSortBy] = useState<'newest' | 'amount_desc' | 'amount_asc' | 'dept'>(
+    'newest',
+  );
+  const [prCurrentPage, setPrCurrentPage] = useState(1);
+  const [prPageSize, setPrPageSize] = useState(5);
+
+  const prDepartments = useMemo(() => {
+    const depts = new Set<string>();
+    prs.forEach((p) => {
+      if (p.department) depts.add(p.department);
+    });
+    return Array.from(depts).sort();
+  }, [prs]);
+
+  const hasPrActiveFilters =
+    prSearchQuery.trim() !== '' ||
+    prStatusFilter !== 'all' ||
+    prDeptFilter !== 'all' ||
+    prSortBy !== 'newest';
+
+  const handleResetPrFilters = () => {
+    setPrSearchQuery('');
+    setPrStatusFilter('all');
+    setPrDeptFilter('all');
+    setPrSortBy('newest');
+    setPrCurrentPage(1);
+  };
+
+  useEffect(() => {
+    setPrCurrentPage(1);
+  }, [prSearchQuery, prStatusFilter, prDeptFilter, prSortBy]);
+
+  const filteredPrs = useMemo(() => {
+    return prs
+      .filter((pr) => {
+        if (prSearchQuery.trim()) {
+          const q = prSearchQuery.toLowerCase();
+          const matchNumber = pr.prNumber?.toLowerCase().includes(q);
+          const matchDept = pr.department?.toLowerCase().includes(q);
+          const matchPurpose = pr.purpose?.toLowerCase().includes(q);
+          const matchApprover = pr.approvedBy?.toLowerCase().includes(q);
+          if (!matchNumber && !matchDept && !matchPurpose && !matchApprover) return false;
+        }
+        if (prStatusFilter !== 'all' && pr.status !== prStatusFilter) return false;
+        if (prDeptFilter !== 'all' && pr.department !== prDeptFilter) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        if (prSortBy === 'amount_desc') return b.amount - a.amount;
+        if (prSortBy === 'amount_asc') return a.amount - b.amount;
+        if (prSortBy === 'dept') return a.department.localeCompare(b.department);
+        return 0;
+      });
+  }, [prs, prSearchQuery, prStatusFilter, prDeptFilter, prSortBy]);
+
+  const paginatedPrs = useMemo(() => {
+    const startIndex = (prCurrentPage - 1) * prPageSize;
+    return filteredPrs.slice(startIndex, startIndex + prPageSize);
+  }, [filteredPrs, prCurrentPage, prPageSize]);
+
+  // ─── Section 2: Work Order Search, Filter & Pagination State ────────────────
+  const [woSearchQuery, setWoSearchQuery] = useState('');
+  const [woStatusFilter, setWoStatusFilter] = useState('all');
+  const [woSortBy, setWoSortBy] = useState<'number_asc' | 'plate_asc'>('number_asc');
+  const [woCurrentPage, setWoCurrentPage] = useState(1);
+  const [woPageSize, setWoPageSize] = useState(5);
+
+  const hasWoActiveFilters =
+    woSearchQuery.trim() !== '' || woStatusFilter !== 'all' || woSortBy !== 'number_asc';
+
+  const handleResetWoFilters = () => {
+    setWoSearchQuery('');
+    setWoStatusFilter('all');
+    setWoSortBy('number_asc');
+    setWoCurrentPage(1);
+  };
+
+  useEffect(() => {
+    setWoCurrentPage(1);
+  }, [woSearchQuery, woStatusFilter, woSortBy]);
+
+  const filteredWorkOrders = useMemo(() => {
+    return workOrders
+      .filter((wo) => {
+        if (woSearchQuery.trim()) {
+          const q = woSearchQuery.toLowerCase();
+          const matchNumber = wo.workOrderNumber?.toLowerCase().includes(q);
+          const matchPlate = wo.vehiclePlate?.toLowerCase().includes(q);
+          const matchDesc = wo.description?.toLowerCase().includes(q);
+          if (!matchNumber && !matchPlate && !matchDesc) return false;
+        }
+        if (woStatusFilter !== 'all') {
+          const isLocked = wo.procurementFulfillmentStatus === 'pending_pr_approval';
+          if (woStatusFilter === 'locked' && !isLocked) return false;
+          if (woStatusFilter === 'unlocked' && isLocked) return false;
+          if (
+            woStatusFilter === 'in_maintenance' &&
+            wo.procurementFulfillmentStatus !== 'in_maintenance'
+          )
+            return false;
+          if (
+            woStatusFilter === 'completed' &&
+            wo.procurementFulfillmentStatus !== 'work_completed' &&
+            wo.procurementFulfillmentStatus !== 'vehicle_operational'
+          )
+            return false;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        if (woSortBy === 'plate_asc')
+          return (a.vehiclePlate || '').localeCompare(b.vehiclePlate || '');
+        return a.workOrderNumber.localeCompare(b.workOrderNumber);
+      });
+  }, [workOrders, woSearchQuery, woStatusFilter, woSortBy]);
+
+  const paginatedWorkOrders = useMemo(() => {
+    const startIndex = (woCurrentPage - 1) * woPageSize;
+    return filteredWorkOrders.slice(startIndex, startIndex + woPageSize);
+  }, [filteredWorkOrders, woCurrentPage, woPageSize]);
 
   const handleCreatePrSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -136,17 +266,117 @@ export function PRGatingDashboard({
         </Card>
       )}
 
-      {/* Section 1: Purchase Requisitions */}
+      {/* ─── Section 1: Purchase Requisitions ────────────────────────────── */}
       <Card className="shadow-md">
         <CardHeader className="border-b border-border/40 pb-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <CardTitle>1. Purchase Requisitions (Finance Spend Queue)</CardTitle>
               <CardDescription>Mandatory financial spend authorization gate</CardDescription>
             </div>
-            <Badge variant="outline">{prs.length} Requisitions</Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="font-mono text-xs">
+                {prs.length} Requisitions
+              </Badge>
+              {prs.filter((p) => p.status === 'pending').length > 0 && (
+                <Badge variant="warning" className="text-xs">
+                  {prs.filter((p) => p.status === 'pending').length} Pending Approval
+                </Badge>
+              )}
+            </div>
           </div>
         </CardHeader>
+
+        {/* PR Toolbar: Search, Filter, Sort */}
+        <div className="p-4 bg-muted/20 border-b border-border/40 space-y-3">
+          <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search PR #, purpose, department, or approver..."
+                value={prSearchQuery}
+                onChange={(e) => setPrSearchQuery(e.target.value)}
+                className="pl-9 pr-8 h-9 text-xs bg-background"
+              />
+              {prSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setPrSearchQuery('')}
+                  className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={prStatusFilter}
+                onChange={(e) => setPrStatusFilter(e.target.value)}
+                aria-label="Filter by PR status"
+                className="h-9 rounded-lg border border-border bg-background px-2.5 py-1 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer shadow-xs"
+              >
+                <option value="all">All PR States</option>
+                <option value="pending">Pending Finance</option>
+                <option value="approved">Approved</option>
+                <option value="draft">Draft</option>
+                <option value="rejected">Rejected</option>
+              </select>
+
+              <select
+                value={prDeptFilter}
+                onChange={(e) => setPrDeptFilter(e.target.value)}
+                aria-label="Filter by department"
+                className="h-9 rounded-lg border border-border bg-background px-2.5 py-1 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer shadow-xs"
+              >
+                <option value="all">All Departments</option>
+                {prDepartments.map((dept) => (
+                  <option key={dept} value={dept}>
+                    {dept}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={prSortBy}
+                onChange={(e) =>
+                  setPrSortBy(e.target.value as 'newest' | 'amount_desc' | 'amount_asc' | 'dept')
+                }
+                aria-label="Sort purchase requisitions"
+                className="h-9 rounded-lg border border-border bg-background px-2.5 py-1 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer shadow-xs"
+              >
+                <option value="newest">Sort: Default</option>
+                <option value="amount_desc">Amount (High to Low)</option>
+                <option value="amount_asc">Amount (Low to High)</option>
+                <option value="dept">Department (A → Z)</option>
+              </select>
+
+              {hasPrActiveFilters && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleResetPrFilters}
+                  className="h-9 text-xs text-muted-foreground hover:text-foreground px-2.5"
+                >
+                  <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reset
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
+            <span>
+              Showing <strong className="text-foreground">{filteredPrs.length}</strong> of{' '}
+              <strong className="text-foreground">{prs.length}</strong> requisitions
+              {hasPrActiveFilters && (
+                <span className="ml-2 px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[10px] font-medium">
+                  Filtered
+                </span>
+              )}
+            </span>
+          </div>
+        </div>
+
         <CardContent className="pt-4">
           {prs.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-8 text-center border rounded-xl border-dashed border-border/80 bg-muted/10">
@@ -155,9 +385,29 @@ export function PRGatingDashboard({
               </div>
               <h4 className="text-sm font-semibold text-foreground">No Purchase Requisitions</h4>
               <p className="text-xs text-muted-foreground mt-0.5 max-w-sm">
-                No active or pending purchase requisitions found. Click &quot;Initiate PR&quot;
-                above to request procurement authorization.
+                No active or pending purchase requisitions found. Click &quot;Draft PR&quot; above
+                to request procurement authorization.
               </p>
+            </div>
+          ) : filteredPrs.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-8 text-center border rounded-xl border-dashed border-border/80 bg-muted/10">
+              <div className="rounded-2xl bg-muted/30 p-3 mb-2 text-muted-foreground">
+                <Filter className="h-6 w-6" />
+              </div>
+              <h4 className="text-sm font-semibold text-foreground">
+                No Matching Purchase Requisitions
+              </h4>
+              <p className="text-xs text-muted-foreground mt-0.5 max-w-sm">
+                No purchase requisitions matched your search query or status filter.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleResetPrFilters}
+                className="mt-3 text-xs"
+              >
+                <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Clear Filters
+              </Button>
             </div>
           ) : (
             <>
@@ -205,7 +455,7 @@ export function PRGatingDashboard({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/60">
-                    {prs.map((pr) => (
+                    {paginatedPrs.map((pr) => (
                       <tr key={pr.id} className="hover:bg-muted/30 transition-colors">
                         <td className="py-3 px-4 font-mono font-medium text-foreground">
                           {pr.prNumber}
@@ -239,7 +489,7 @@ export function PRGatingDashboard({
 
               {/* Mobile Cards */}
               <div className="md:hidden space-y-3">
-                {prs.map((pr) => (
+                {paginatedPrs.map((pr) => (
                   <div
                     key={pr.id}
                     className="p-3.5 rounded-xl border border-border bg-card/60 shadow-xs space-y-2.5"
@@ -279,24 +529,129 @@ export function PRGatingDashboard({
                   </div>
                 ))}
               </div>
+
+              {/* PR Pagination Controls */}
+              {filteredPrs.length > 0 && (
+                <div className="pt-3 border-t border-border/40 mt-3">
+                  <Pagination
+                    currentPage={prCurrentPage}
+                    totalItems={filteredPrs.length}
+                    itemsPerPage={prPageSize}
+                    onPageChange={setPrCurrentPage}
+                    onItemsPerPageChange={(newSize) => {
+                      setPrPageSize(newSize);
+                      setPrCurrentPage(1);
+                    }}
+                    itemsPerPageOptions={[5, 10, 20]}
+                  />
+                </div>
+              )}
             </>
           )}
         </CardContent>
       </Card>
 
-      {/* Section 2: Work Orders & PR Gatekeeper Unlock */}
+      {/* ─── Section 2: Work Orders & PR Gatekeeper Unlock ───────────────── */}
       <Card className="shadow-md">
         <CardHeader className="border-b border-border/40 pb-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <CardTitle>2. Maintenance Work Orders & Procurement Hand-off</CardTitle>
               <CardDescription>
                 Work orders gated by PR approval before Procurement fulfillment can proceed
               </CardDescription>
             </div>
-            <Badge variant="outline">{workOrders.length} Work Orders</Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="font-mono text-xs">
+                {workOrders.length} Work Orders
+              </Badge>
+              {workOrders.filter((w) => w.procurementFulfillmentStatus === 'pending_pr_approval')
+                .length > 0 && (
+                <Badge variant="destructive" className="text-xs">
+                  {
+                    workOrders.filter(
+                      (w) => w.procurementFulfillmentStatus === 'pending_pr_approval',
+                    ).length
+                  }{' '}
+                  Locked
+                </Badge>
+              )}
+            </div>
           </div>
         </CardHeader>
+
+        {/* Work Order Toolbar */}
+        <div className="p-4 bg-muted/20 border-b border-border/40 space-y-3">
+          <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search work order #, vehicle plate, or repair description..."
+                value={woSearchQuery}
+                onChange={(e) => setWoSearchQuery(e.target.value)}
+                className="pl-9 pr-8 h-9 text-xs bg-background"
+              />
+              {woSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setWoSearchQuery('')}
+                  className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={woStatusFilter}
+                onChange={(e) => setWoStatusFilter(e.target.value)}
+                aria-label="Filter by work order status"
+                className="h-9 rounded-lg border border-border bg-background px-2.5 py-1 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer shadow-xs"
+              >
+                <option value="all">All Gatekeeper States</option>
+                <option value="locked">Locked (Needs PR Approval)</option>
+                <option value="unlocked">Unlocked (PR Approved)</option>
+                <option value="in_maintenance">In Maintenance (In Shop)</option>
+                <option value="completed">Work Completed / Operational</option>
+              </select>
+
+              <select
+                value={woSortBy}
+                onChange={(e) => setWoSortBy(e.target.value as 'number_asc' | 'plate_asc')}
+                aria-label="Sort work orders"
+                className="h-9 rounded-lg border border-border bg-background px-2.5 py-1 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer shadow-xs"
+              >
+                <option value="number_asc">Sort: Work Order #</option>
+                <option value="plate_asc">Sort: Vehicle Plate (A → Z)</option>
+              </select>
+
+              {hasWoActiveFilters && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleResetWoFilters}
+                  className="h-9 text-xs text-muted-foreground hover:text-foreground px-2.5"
+                >
+                  <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reset
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
+            <span>
+              Showing <strong className="text-foreground">{filteredWorkOrders.length}</strong> of{' '}
+              <strong className="text-foreground">{workOrders.length}</strong> work orders
+              {hasWoActiveFilters && (
+                <span className="ml-2 px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[10px] font-medium">
+                  Filtered
+                </span>
+              )}
+            </span>
+          </div>
+        </div>
+
         <CardContent className="pt-4">
           {workOrders.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-8 text-center border rounded-xl border-dashed border-border/80 bg-muted/10">
@@ -307,6 +662,24 @@ export function PRGatingDashboard({
               <p className="text-xs text-muted-foreground mt-0.5 max-w-sm">
                 No repair work orders currently require PR gating or procurement fulfillment.
               </p>
+            </div>
+          ) : filteredWorkOrders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-8 text-center border rounded-xl border-dashed border-border/80 bg-muted/10">
+              <div className="rounded-2xl bg-muted/30 p-3 mb-2 text-muted-foreground">
+                <Filter className="h-6 w-6" />
+              </div>
+              <h4 className="text-sm font-semibold text-foreground">No Matching Work Orders</h4>
+              <p className="text-xs text-muted-foreground mt-0.5 max-w-sm">
+                No maintenance work orders matched your search query or status filter.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleResetWoFilters}
+                className="mt-3 text-xs"
+              >
+                <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Clear Filters
+              </Button>
             </div>
           ) : (
             <>
@@ -324,7 +697,7 @@ export function PRGatingDashboard({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/60">
-                    {workOrders.map((wo) => {
+                    {paginatedWorkOrders.map((wo) => {
                       const linkedPr = prs.find((p) => p.id === wo.linkedPrId);
                       const isLocked = wo.procurementFulfillmentStatus === 'pending_pr_approval';
 
@@ -380,7 +753,7 @@ export function PRGatingDashboard({
                                 <Unlock className="h-3.5 w-3.5 mr-1" /> Assert PR Gate
                               </Button>
                             ) : (
-                              <div className="inline-flex space-x-1.5">
+                              <div className="flex items-center justify-end space-x-2">
                                 {wo.procurementFulfillmentStatus === 'pr_approved' && (
                                   <Button
                                     size="sm"
@@ -411,9 +784,12 @@ export function PRGatingDashboard({
                                   </Button>
                                 )}
                                 {wo.procurementFulfillmentStatus === 'vehicle_operational' && (
-                                  <span className="text-xs text-emerald-600 font-bold flex items-center justify-end">
+                                  <Badge
+                                    variant="outline"
+                                    className="text-emerald-600 border-emerald-500/40"
+                                  >
                                     <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Operational
-                                  </span>
+                                  </Badge>
                                 )}
                               </div>
                             )}
@@ -426,8 +802,8 @@ export function PRGatingDashboard({
               </div>
 
               {/* Mobile Cards */}
-              <div className="md:hidden space-y-3.5">
-                {workOrders.map((wo) => {
+              <div className="md:hidden space-y-3">
+                {paginatedWorkOrders.map((wo) => {
                   const linkedPr = prs.find((p) => p.id === wo.linkedPrId);
                   const isLocked = wo.procurementFulfillmentStatus === 'pending_pr_approval';
 
@@ -441,7 +817,7 @@ export function PRGatingDashboard({
                           <div className="font-mono font-bold text-sm text-foreground">
                             {wo.workOrderNumber}
                           </div>
-                          <div className="text-xs font-semibold text-primary">
+                          <div className="text-xs text-muted-foreground font-semibold">
                             {wo.vehiclePlate || 'Fleet Unit'}
                           </div>
                         </div>
@@ -536,6 +912,23 @@ export function PRGatingDashboard({
                   );
                 })}
               </div>
+
+              {/* Work Orders Pagination Controls */}
+              {filteredWorkOrders.length > 0 && (
+                <div className="pt-3 border-t border-border/40 mt-3">
+                  <Pagination
+                    currentPage={woCurrentPage}
+                    totalItems={filteredWorkOrders.length}
+                    itemsPerPage={woPageSize}
+                    onPageChange={setWoCurrentPage}
+                    onItemsPerPageChange={(newSize) => {
+                      setWoPageSize(newSize);
+                      setWoCurrentPage(1);
+                    }}
+                    itemsPerPageOptions={[5, 10, 20]}
+                  />
+                </div>
+              )}
             </>
           )}
         </CardContent>
