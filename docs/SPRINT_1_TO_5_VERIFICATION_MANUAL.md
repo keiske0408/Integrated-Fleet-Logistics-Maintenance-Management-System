@@ -260,11 +260,56 @@ _Objective:_ Confirm Progressive Web App assets are active in the browser.
 
 ---
 
+### Sprint 6: Fleet Total Cost of Ownership (TCO) & Cost-per-Kilometer (CPK) Analytics (`TICKET-113`)
+
+#### Test Case 6.1: Executive KPI Cards & Category Benchmarks (`/analytics`)
+
+_Objective:_ Verify fleet-wide maintenance spend, recorded distance, and average CPK calculations.
+
+1. Log in as **Fleet Manager** (`marco.reyes@hulma.com`) or **Finance Manager** (`sandra.cruz@hulma.com`).
+2. Navigate to **TCO & Cost / KM** (`/analytics`) from the sidebar.
+3. Verify the 4 top KPI cards display aggregated metrics:
+   - **Fleet Avg. Cost / KM:** Calculated in ₱/km across all tracked vehicle mileage.
+   - **Total Fleet Spend:** Sum of all approved PRs and completed routine PMS packages.
+   - **Total Tracked Distance:** Total cumulative odometer distance.
+   - **High Cost Outliers:** Count of units exceeding 135% of fleet benchmark.
+4. Check the visual comparison charts:
+   - **CPK by Vehicle Category:** Visual horizontal comparison bars showing vans vs 4W vs 6W vs 10W trucks.
+   - **Monthly Maintenance Spend Trend:** 6-month historical investment bar chart.
+   - **Spend by Department:** Allocation across Logistics, Warehouse, Operations, etc.
+
+#### Test Case 6.2: Outlier Watchlist & Vehicle Drilldown Modal
+
+_Objective:_ Verify outlier detection and drilldown into individual vehicle repair vouchers.
+
+1. Under the top KPIs, look for the **"High-Cost Vehicle Watchlist"** banner (if outlier units exist).
+2. Locate a vehicle card and click **"Inspect Repair History"** (or click **"Inspect"** in the master table).
+3. Verify the drilldown dialog opens:
+   - Displays plate number, model, and chassis category.
+   - Displays summary card: Current KM, Cost/KM, Total Spend, Repair / PMS counts.
+   - Lists all individual repair work orders with linked PR numbers and individual spend.
+   - Lists all scheduled and completed PMS intervals.
+
+#### Test Case 6.3: Search, Filtering & Audit-Ready CSV Export
+
+_Objective:_ Verify multi-criteria table filtering, pagination, and spreadsheet export.
+
+1. In the **Vehicle TCO Register**:
+   - Test search filter by typing a plate number (e.g. `ABC`) or model.
+   - Filter by **Vehicle Category** or **Efficiency Rating** (`Optimal`, `Elevated`, `Critical Outlier`).
+   - Change sort order to **Highest Cost / KM First** and **Lowest Cost / KM First**.
+   - Test pagination controls (`5, 10, 25, 50` rows per page).
+2. Click **"Export CSV"** in the top action bar:
+   - Verify browser downloads `fleet_tco_report_YYYY-MM-DD.csv`.
+   - Open CSV in Excel / text editor to confirm all 14 columns are formatted correctly.
+
+---
+
 ## 3. Automated Test Verification Summary
 
 To execute all automated verification checks across the full codebase:
 
-### Frontend Test Suites (83 Tests)
+### Frontend Test Suites (91 Tests)
 
 ```powershell
 cd d:\Fleet\Integrated-Fleet-Logistics-Maintenance-Management-System
@@ -274,8 +319,8 @@ npm test -- --run
 Expected output:
 
 ```
- Test Files  9 passed (9)
-      Tests  83 passed (83)
+ Test Files  10 passed (10)
+      Tests  91 passed (91)
 ```
 
 ### Frontend TypeScript & Lint Checks
@@ -287,7 +332,7 @@ npm run lint
 
 Expected output: Exits with 0 errors.
 
-### Backend Test Suites (61 Tests)
+### Backend Test Suites (66 Tests)
 
 ```powershell
 cd d:\Fleet\fleet-backend
@@ -297,8 +342,8 @@ npm test
 Expected output:
 
 ```
- Test Files  5 passed (5)
-      Tests  61 passed | 1 skipped (62)
+ Test Files  6 passed (6)
+      Tests  66 passed | 1 skipped (67)
 ```
 
 ---
@@ -321,3 +366,6 @@ Expected output:
 | **Sprint 5** | `TICKET-112` | In-Cab Driver Console & Odometer Keypad       |    [ ]    | Available at `/driver`                   |
 | **Sprint 5** | `TICKET-112` | Offline Queue & Auto-Sync Engine              |    [ ]    | Tested with DevTools Offline toggle      |
 | **Sprint 5** | `TICKET-112` | PWA Manifest & Service Worker (`sw.js`)       |    [ ]    | Verified in Application DevTools panel   |
+| **Sprint 6** | `TICKET-113` | Fleet TCO & Cost-per-KM Analytics Dashboard   |    [ ]    | Available at `/analytics`                |
+| **Sprint 6** | `TICKET-113` | Outlier Watchlist & Vehicle Drilldown Modal   |    [ ]    | Flags units exceeding 135% of benchmark  |
+| **Sprint 6** | `TICKET-113` | Audit-Ready CSV Spreadsheet Export            |    [ ]    | Full 14-column financial dataset export  |

@@ -27,6 +27,7 @@ import {
   History,
   Paintbrush,
   Gauge,
+  TrendingUp,
 } from 'lucide-react';
 
 // ─── Route config ─────────────────────────────────────────────────────────────
@@ -35,6 +36,7 @@ export type AppPage =
   | 'dashboard'
   | 'driver'
   | 'fleet'
+  | 'analytics'
   | 'tsrf'
   | 'procurement'
   | 'maintenance_ref'
@@ -50,6 +52,7 @@ export const PAGE_ROUTES: Record<AppPage, string> = {
   dashboard: '/dashboard',
   driver: '/driver',
   fleet: '/fleet',
+  analytics: '/analytics',
   tsrf: '/tsrf',
   procurement: '/procurement',
   reports: '/reports',
@@ -79,6 +82,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: 'view:dashboard' },
   { id: 'driver', label: 'Driver Quick-Log', icon: Gauge, permission: 'view:fleet' },
   { id: 'fleet', label: 'Fleet & KM Monitoring', icon: Wrench, permission: 'view:fleet' },
+  { id: 'analytics', label: 'TCO & Cost / KM', icon: TrendingUp, permission: 'view:fleet' },
   { id: 'tsrf', label: 'TSRF Logistics', icon: Calendar, permission: 'view:tsrf' },
   { id: 'procurement', label: 'PR Gatekeeper', icon: Shield, permission: 'view:procurement' },
   { id: 'reports', label: 'Reports', icon: Package, permission: 'view:reports' },

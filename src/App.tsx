@@ -68,6 +68,11 @@ const DriverQuickLogPage = React.lazy(() =>
     default: m.DriverQuickLogPage,
   })),
 );
+const AnalyticsPage = React.lazy(() =>
+  import('@/features/analytics/AnalyticsPage').then((m) => ({
+    default: m.AnalyticsPage,
+  })),
+);
 
 // ─── Route Loading Fallback ───────────────────────────────────────────────────
 
@@ -872,6 +877,16 @@ function InnerApp() {
                   onIncidentClose={handleIncidentClose}
                   onIncidentSubmit={handleIncidentSubmit}
                 />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Fleet TCO & Cost-per-Kilometer Analytics (TICKET-113) */}
+          <Route
+            path={PAGE_ROUTES.analytics}
+            element={
+              <ProtectedRoute permission="view:fleet">
+                <AnalyticsPage />
               </ProtectedRoute>
             }
           />

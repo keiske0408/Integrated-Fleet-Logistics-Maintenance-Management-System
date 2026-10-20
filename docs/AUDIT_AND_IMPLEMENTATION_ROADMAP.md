@@ -513,6 +513,30 @@ _Ratings on a 1–10 scale based on verified repository evidence:_
   6. 100% test pass rate across all 83 frontend tests and 61 backend tests; 0 TypeScript errors and 0 ESLint errors.
 - **Definition of Done:** PWA manifest and service worker active; offline queueing and driver quick-log UI functional with green test suite.
 
+### `TICKET-113`: Fleet Total Cost of Ownership (TCO) & Cost-per-Kilometer (CPK) Analytics Dashboard
+
+- **Target Release:** Sprint 6 (P3) — **Status:** ✅ Completed (Sprint 6)
+- **User Story:** As a CFO, Finance Manager, or Fleet Head, I need an executive analytics dashboard calculating Total Cost of Ownership (TCO) and Cost-per-Kilometer (CPK) across vehicles, chassis categories, and departments to identify disproportionate maintenance outliers ("Money Pits") and inform fleet renewal decisions.
+- **Scope & Affected Files:**
+  - [`fleet-backend/src/domain/tco.ts`](../../fleet-backend/src/domain/tco.ts): Standardized Cost-per-Kilometer formula with zero-KM edge case safeguards, outlier risk categorization (`optimal`, `elevated`, `critical_outlier`), and aggregation models.
+  - [`fleet-backend/src/services/analytics.service.ts`](../../fleet-backend/src/services/analytics.service.ts): Aggregates vehicle mileage, repair PR spend, standard PMS package investments, department attributions, and 6-month historical trends.
+  - [`fleet-backend/src/routes/analytics.routes.ts`](../../fleet-backend/src/routes/analytics.routes.ts): REST endpoints `GET /api/analytics/tco` and `GET /api/analytics/vehicles/:id` guarded by role capabilities.
+  - [`fleet-backend/src/app.ts`](../../fleet-backend/src/app.ts): Mounted `/api/analytics` route.
+  - [`fleet-backend/tests/analytics.test.ts`](../../fleet-backend/tests/analytics.test.ts): 5 unit and integration tests asserting formula accuracy, outlier thresholds, and API response structures.
+  - [`src/features/analytics/AnalyticsPage.tsx`](../src/features/analytics/AnalyticsPage.tsx): Interactive executive analytics console featuring top KPI cards (Fleet CPK, Cumulative Spend, Tracked Distance, Outlier Count), Outlier Watchlist banner, category benchmark bar comparison, 6-month trend chart, department cost allocation, vehicle TCO register table with multi-field search, category/rating filters, CPK sorting, responsive mobile touch cards, CSV spreadsheet export, and vehicle maintenance drilldown dialog.
+  - [`src/features/analytics/index.ts`](../src/features/analytics/index.ts): Feature module barrel export.
+  - [`src/components/layout/SidebarLayout.tsx`](../src/components/layout/SidebarLayout.tsx): Added `TCO & Cost / KM` navigation item and route `/analytics` with `view:fleet` permission.
+  - [`src/App.tsx`](../src/App.tsx): Registered lazy-loaded `/analytics` route.
+  - [`tests/analytics.test.tsx`](../tests/analytics.test.tsx): 5 frontend tests asserting KPI rendering, outlier criteria, category coverage, and CSV export.
+- **Acceptance Criteria:**
+  1. Fleet average CPK and total cumulative maintenance spend calculated dynamically from approved PRs and completed PMS overhauls.
+  2. Vehicles exceeding 135% of fleet benchmark automatically flagged in Outlier Watchlist with operational recommendations.
+  3. Interactive category benchmarks, department cost allocations, and 6-month monthly trends displayed visually.
+  4. Master vehicle register table supports instant search, category filtering, rating filtering, and multi-column sorting.
+  5. Audit-ready CSV report export downloads with complete financial and odometer fields.
+  6. 100% test pass rate across 91 frontend tests and 66 backend tests; 0 TypeScript errors and 0 ESLint errors.
+- **Definition of Done:** End-to-end TCO dashboard operational on `/analytics`; 66 backend tests and 91 frontend tests passing green.
+
 ---
 
 ## Deliverable M: Open Questions & Strategic Resolutions
