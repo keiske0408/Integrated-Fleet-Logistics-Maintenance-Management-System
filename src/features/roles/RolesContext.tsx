@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { apiFetch } from '@/lib/api';
+import { toBackendRole } from '@/features/auth/backendRole';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -12,6 +14,7 @@ export interface RoleDefinition {
   color: string;
   permissions: Permission[];
   isSystem: boolean;
+  landingPage?: string;
   createdAt: string;
 }
 
@@ -113,6 +116,7 @@ export const DEFAULT_ROLES: RoleDefinition[] = [
     color: 'bg-violet-500/20 text-violet-400 border-violet-500/30',
     permissions: [...DEFAULT_ALL_PERMISSIONS],
     isSystem: true,
+    landingPage: '/dashboard',
     createdAt: '2026-01-01',
   },
   {
@@ -136,6 +140,7 @@ export const DEFAULT_ROLES: RoleDefinition[] = [
       'create:pr',
     ],
     isSystem: true,
+    landingPage: '/fleet',
     createdAt: '2026-01-01',
   },
   {
@@ -155,6 +160,7 @@ export const DEFAULT_ROLES: RoleDefinition[] = [
       'schedule:pms',
     ],
     isSystem: true,
+    landingPage: '/tsrf',
     createdAt: '2026-01-01',
   },
   {
@@ -165,6 +171,7 @@ export const DEFAULT_ROLES: RoleDefinition[] = [
     color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
     permissions: ['view:dashboard', 'view:procurement', 'view:reports', 'approve:pr'],
     isSystem: true,
+    landingPage: '/procurement',
     createdAt: '2026-01-01',
   },
   {
@@ -181,6 +188,7 @@ export const DEFAULT_ROLES: RoleDefinition[] = [
       'approve:work_order',
     ],
     isSystem: true,
+    landingPage: '/procurement',
     createdAt: '2026-01-01',
   },
   {
@@ -191,6 +199,7 @@ export const DEFAULT_ROLES: RoleDefinition[] = [
     color: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
     permissions: ['view:dashboard', 'view:tsrf', 'view:reports', 'create:tsrf'],
     isSystem: true,
+    landingPage: '/tsrf',
     createdAt: '2026-01-01',
   },
   {
@@ -201,6 +210,7 @@ export const DEFAULT_ROLES: RoleDefinition[] = [
     color: 'bg-slate-500/20 text-slate-400 border-slate-500/30',
     permissions: ['view:dashboard', 'view:fleet', 'view:reports', 'update:vehicle_km'],
     isSystem: true,
+    landingPage: '/fleet',
     createdAt: '2026-01-01',
   },
   {
@@ -211,6 +221,7 @@ export const DEFAULT_ROLES: RoleDefinition[] = [
     color: 'bg-teal-500/20 text-teal-400 border-teal-500/30',
     permissions: ['view:dashboard', 'view:tsrf', 'view:reports', 'approve:tsrf'],
     isSystem: true,
+    landingPage: '/tsrf',
     createdAt: '2026-10-05',
   },
   {
@@ -221,6 +232,7 @@ export const DEFAULT_ROLES: RoleDefinition[] = [
     color: 'bg-teal-500/20 text-teal-600 border-teal-500/30',
     permissions: ['view:reports', 'view:audit'],
     isSystem: true,
+    landingPage: '/reports',
     createdAt: '2026-10-12',
   },
 ];
@@ -244,10 +256,59 @@ interface RolesContextValue {
 const RolesContext = createContext<RolesContextValue | null>(null);
 
 export function RolesProvider({ children }: { children: React.ReactNode }) {
-  const [roles, setRoles] = useState<RoleDefinition[]>(DEFAULT_ROLES);
+  const [roles, setRoles] = useState<RoleDefinition[]>(() => {
+    try {
+      const saved = localStorage.getItem('fleet_roles_catalog');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((role: RoleDefinition) => {
+            const defaultMatch = DEFAULT_ROLES.find((d) => d.key === role.key);
+            return {
+              ...role,
+              landingPage: role.landingPage || defaultMatch?.landingPage || '/dashboard',
+            };
+          });
+        }
+      }
+    } catch {
+      // fallback to DEFAULT_ROLES
+    }
+    return DEFAULT_ROLES;
+  });
   const [allPermissions, setAllPermissions] = useState<Permission[]>(DEFAULT_ALL_PERMISSIONS);
   const [permissionGroups, setPermissionGroups] = useState(DEFAULT_PERMISSION_GROUPS);
   const [permissionLabels, setPermissionLabels] = useState(DEFAULT_PERMISSION_LABELS);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('fleet_roles_catalog', JSON.stringify(roles));
+    } catch {
+      // ignore
+    }
+  }, [roles]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void apiFetch('/api/roles/login-redirects', { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return (await response.json()) as Array<{ role: string; landingPage: string }>;
+      })
+      .then((data) => {
+        if (!data || controller.signal.aborted) return;
+        setRoles((prev) =>
+          prev.map((role) => {
+            const match = data.find(
+              (item) => item.role === role.key || item.role === toBackendRole(role.key),
+            );
+            return match && match.landingPage ? { ...role, landingPage: match.landingPage } : role;
+          }),
+        );
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
 
   const addRole = (role: Omit<RoleDefinition, 'id' | 'createdAt'>) => {
     setRoles((prev) => [

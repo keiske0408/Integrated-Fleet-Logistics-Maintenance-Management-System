@@ -7,10 +7,38 @@ interface DevelopmentPrincipal {
   department?: string;
 }
 
-let developmentPrincipal: DevelopmentPrincipal | null = null;
+const DEV_PRINCIPAL_KEY = 'hulma_dev_principal_v1';
+
+function loadStoredPrincipal(): DevelopmentPrincipal | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw =
+      window.sessionStorage?.getItem(DEV_PRINCIPAL_KEY) ||
+      window.localStorage?.getItem(DEV_PRINCIPAL_KEY);
+    return raw ? (JSON.parse(raw) as DevelopmentPrincipal) : null;
+  } catch {
+    return null;
+  }
+}
+
+let developmentPrincipal: DevelopmentPrincipal | null = loadStoredPrincipal();
 
 export function setDevelopmentPrincipal(principal: DevelopmentPrincipal | null) {
   developmentPrincipal = principal;
+  if (typeof window !== 'undefined') {
+    try {
+      if (principal) {
+        const serialized = JSON.stringify(principal);
+        window.sessionStorage?.setItem(DEV_PRINCIPAL_KEY, serialized);
+        window.localStorage?.setItem(DEV_PRINCIPAL_KEY, serialized);
+      } else {
+        window.sessionStorage?.removeItem(DEV_PRINCIPAL_KEY);
+        window.localStorage?.removeItem(DEV_PRINCIPAL_KEY);
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }
 }
 
 function readCookie(name: string): string | undefined {

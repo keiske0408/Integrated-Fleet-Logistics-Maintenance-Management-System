@@ -31,6 +31,8 @@ import {
   ShieldOff,
   Search,
   KeyRound,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { SignupApprovalQueue } from './SignupApprovalQueue';
 import { FLEET_DEPARTMENTS } from './departments';
@@ -111,12 +113,17 @@ export function UserManagementPage() {
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [passwordBusy, setPasswordBusy] = useState(false);
+  const [showAdminNewPassword, setShowAdminNewPassword] = useState(false);
+  const [showAdminConfirmPassword, setShowAdminConfirmPassword] = useState(false);
+  const [showUserFormPassword, setShowUserFormPassword] = useState(false);
 
   function closePasswordDialog() {
     setPasswordUser(null);
     setNewPassword('');
     setPasswordConfirmation('');
     setPasswordError('');
+    setShowAdminNewPassword(false);
+    setShowAdminConfirmPassword(false);
   }
 
   async function changePassword(event: React.FormEvent) {
@@ -198,6 +205,7 @@ export function UserManagementPage() {
   const openAddForm = () => {
     setForm({ ...EMPTY_FORM, role: roles[0]?.key || 'department_requester' });
     setEditingId(null);
+    setShowUserFormPassword(false);
     setShowForm(true);
   };
 
@@ -560,33 +568,67 @@ export function UserManagementPage() {
               onSubmit={(event) => void changePassword(event)}
               className="space-y-4"
             >
-              <div>
+              <div className="space-y-1.5">
                 <Label htmlFor="admin-new-password">New Password</Label>
-                <Input
-                  id="admin-new-password"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  minLength={12}
-                  maxLength={256}
-                  disabled={passwordBusy}
-                  value={newPassword}
-                  onChange={(event) => setNewPassword(event.target.value)}
-                />
+                <div className="relative">
+                  <Input
+                    id="admin-new-password"
+                    type={showAdminNewPassword ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    required
+                    minLength={12}
+                    maxLength={256}
+                    disabled={passwordBusy}
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    className="pr-9"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminNewPassword(!showAdminNewPassword)}
+                    aria-label={showAdminNewPassword ? 'Hide password' : 'Show password'}
+                    disabled={passwordBusy}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                  >
+                    {showAdminNewPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
               </div>
-              <div>
+              <div className="space-y-1.5">
                 <Label htmlFor="admin-confirm-password">Confirm Password</Label>
-                <Input
-                  id="admin-confirm-password"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  minLength={12}
-                  maxLength={256}
-                  disabled={passwordBusy}
-                  value={passwordConfirmation}
-                  onChange={(event) => setPasswordConfirmation(event.target.value)}
-                />
+                <div className="relative">
+                  <Input
+                    id="admin-confirm-password"
+                    type={showAdminConfirmPassword ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    required
+                    minLength={12}
+                    maxLength={256}
+                    disabled={passwordBusy}
+                    value={passwordConfirmation}
+                    onChange={(event) => setPasswordConfirmation(event.target.value)}
+                    className="pr-9"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminConfirmPassword(!showAdminConfirmPassword)}
+                    aria-label={
+                      showAdminConfirmPassword ? 'Hide confirm password' : 'Show confirm password'
+                    }
+                    disabled={passwordBusy}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                  >
+                    {showAdminConfirmPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
               </div>
               {passwordError && (
                 <p role="alert" className="text-sm text-destructive">
@@ -665,15 +707,32 @@ export function UserManagementPage() {
           {!editingId && (
             <div className="space-y-1.5">
               <Label htmlFor="user-password">Temporary Password</Label>
-              <Input
-                id="user-password"
-                type="password"
-                value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
-                placeholder="At least 12 characters"
-                required
-                minLength={12}
-              />
+              <div className="relative">
+                <Input
+                  id="user-password"
+                  type={showUserFormPassword ? 'text' : 'password'}
+                  value={form.password}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  placeholder="At least 12 characters"
+                  required
+                  minLength={12}
+                  className="pr-9"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowUserFormPassword(!showUserFormPassword)}
+                  aria-label={
+                    showUserFormPassword ? 'Hide temporary password' : 'Show temporary password'
+                  }
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {showUserFormPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
             </div>
           )}
 

@@ -35,8 +35,12 @@ export function VehicleRegistryTable({
   const [mileageInput, setMileageInput] = useState<number>(0);
 
   const handleOpenMileage = (v: VehicleItem) => {
-    setSelectedVehicleId(v.id);
-    setMileageInput(v.currentKm + 50);
+    if (selectedVehicleId === v.id) {
+      setSelectedVehicleId(null);
+    } else {
+      setSelectedVehicleId(v.id);
+      setMileageInput(v.currentKm + 50);
+    }
   };
 
   const handleSaveMileage = () => {
@@ -288,6 +292,42 @@ export function VehicleRegistryTable({
                         <Wrench className="h-3 w-3 mr-1" /> Repair
                       </Button>
                     </div>
+
+                    {/* Mobile Inline Quick Log Mileage Panel */}
+                    {selectedVehicleId === v.id && (
+                      <div className="mt-3 p-3 rounded-lg border border-primary/40 bg-primary/10 space-y-2 animate-fade-in">
+                        <div className="flex items-center justify-between text-xs font-semibold text-primary">
+                          <span>Log Odometer ({v.plateNumber})</span>
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            Current: {v.currentKm.toLocaleString()} KM
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            value={mileageInput}
+                            onChange={(e) => setMileageInput(parseInt(e.target.value, 10) || 0)}
+                            className="h-8 bg-background font-mono text-xs flex-1"
+                            autoFocus
+                          />
+                          <Button
+                            size="sm"
+                            className="h-8 text-xs shrink-0"
+                            onClick={handleSaveMileage}
+                          >
+                            Save
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 text-xs shrink-0"
+                            onClick={() => setSelectedVehicleId(null)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -295,9 +335,9 @@ export function VehicleRegistryTable({
           </>
         )}
 
-        {/* Quick Log Mileage Panel */}
+        {/* Desktop Quick Log Mileage Panel */}
         {selectedVehicleId && (
-          <div className="mt-5 p-4 rounded-xl border border-primary/30 bg-primary/5 flex flex-col md:flex-row items-center justify-between gap-3 animate-fade-in">
+          <div className="hidden md:flex mt-5 p-4 rounded-xl border border-primary/30 bg-primary/5 flex-col md:flex-row items-center justify-between gap-3 animate-fade-in">
             <div className="flex items-center space-x-3">
               <Navigation className="h-5 w-5 text-primary" />
               <div>

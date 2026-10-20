@@ -5,7 +5,18 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
-import { Truck, Lock, Mail, Eye, EyeOff, AlertCircle, Building2 } from 'lucide-react';
+import {
+  Truck,
+  Lock,
+  Mail,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  Building2,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
 import { entraEnabled } from '@/lib/authClient';
 import { apiFetch } from '@/lib/api';
 
@@ -28,6 +39,8 @@ export function LoginPage() {
   const [signupOptionsLoading, setSignupOptionsLoading] = useState(false);
   const [isSignup, setIsSignup] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showDemoAccounts, setShowDemoAccounts] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [verificationUrl, setVerificationUrl] = useState('');
@@ -376,6 +389,7 @@ export function LoginPage() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -387,14 +401,33 @@ export function LoginPage() {
             {(resetToken || isSignup) && (
               <div className="space-y-1.5">
                 <Label htmlFor="confirm-password">Confirm password</Label>
-                <Input
-                  id="confirm-password"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                  minLength={12}
-                  required
-                />
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="confirm-password"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    placeholder="Re-enter your password"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    className="pl-9 pr-9"
+                    minLength={12}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    aria-label={
+                      showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'
+                    }
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -440,6 +473,8 @@ export function LoginPage() {
                 setError('');
                 setNotice('');
                 setVerificationUrl('');
+                setShowPassword(false);
+                setShowConfirmPassword(false);
                 setIsSignup((value) => !value);
               }}
               disabled={loading}
@@ -453,27 +488,63 @@ export function LoginPage() {
           {/* Demo accounts */}
           {!isSignup && !resetToken && !signupVerificationToken && demoAccounts.length > 0 && (
             <div className="mt-6 pt-6 border-t border-border">
-              <p className="text-xs text-muted-foreground mb-3 font-medium uppercase tracking-wide">
-                Quick Access — Demo Accounts
-              </p>
-              <div className="space-y-1.5">
-                {demoAccounts.map((acc) => (
-                  <button
-                    key={acc.email}
-                    type="button"
-                    onClick={() => {
-                      setEmail(acc.email);
-                      setPassword(acc.password);
-                    }}
-                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-accent transition-colors flex items-center justify-between text-xs group"
-                  >
-                    <span className={`font-semibold ${acc.color}`}>{acc.role}</span>
-                    <span className="text-muted-foreground group-hover:text-foreground transition-colors font-mono">
-                      {acc.email}
-                    </span>
-                  </button>
-                ))}
-              </div>
+              {!showDemoAccounts ? (
+                <button
+                  type="button"
+                  id="toggle-demo-accounts-show"
+                  onClick={() => setShowDemoAccounts(true)}
+                  className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg border border-dashed border-border bg-card/50 hover:bg-accent text-muted-foreground hover:text-foreground transition-colors text-xs font-medium group"
+                >
+                  <span className="flex items-center gap-2">
+                    <Sparkles className="h-3.5 w-3.5 text-primary group-hover:scale-110 transition-transform" />
+                    Quick Access — Show Demo Accounts
+                  </span>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-transform group-hover:translate-y-0.5" />
+                </button>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5 text-primary" />
+                      Quick Access — Demo Accounts
+                    </p>
+                    <button
+                      type="button"
+                      id="toggle-demo-accounts-hide"
+                      onClick={() => setShowDemoAccounts(false)}
+                      className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded-md hover:bg-accent transition-colors"
+                      aria-label="Hide demo accounts"
+                    >
+                      <span>Hide Demo Accounts</span>
+                      <ChevronUp className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <div className="space-y-1.5">
+                    {demoAccounts.map((acc) => (
+                      <button
+                        key={acc.email}
+                        type="button"
+                        onClick={() => {
+                          setEmail(acc.email);
+                          setPassword(acc.password);
+                        }}
+                        title={`Click to fill: ${acc.email} / ${acc.password}`}
+                        className="w-full text-left px-3 py-2 rounded-lg hover:bg-accent transition-colors flex items-center justify-between text-xs group"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className={`font-semibold ${acc.color}`}>{acc.role}</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono">
+                            {acc.password}
+                          </span>
+                        </div>
+                        <span className="text-muted-foreground group-hover:text-foreground transition-colors font-mono">
+                          {acc.email}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

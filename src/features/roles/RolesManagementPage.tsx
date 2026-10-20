@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import type { paths } from '@/api/generated-types';
 import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/features/auth/AuthContext';
+import { toBackendRole } from '@/features/auth/backendRole';
 import { Select } from '@/components/ui/select';
 import { useRoles, type Permission, type RoleDefinition } from './RolesContext';
 import { Button } from '@/components/ui/button';
@@ -34,6 +35,46 @@ import {
 type LandingSettings =
   paths['/api/roles/login-redirects']['get']['responses'][200]['content']['application/json'];
 
+export const AVAILABLE_LANDING_PAGES: Array<{ path: string; label: string; name: string }> = [
+  { path: '/dashboard', label: 'Dashboard (/dashboard)', name: 'Dashboard' },
+  { path: '/fleet', label: 'Fleet & KM Monitoring (/fleet)', name: 'Fleet & KM' },
+  { path: '/driver', label: 'Driver Quick Log (/driver)', name: 'Driver Quick Log' },
+  { path: '/tsrf', label: 'TSRF Logistics (/tsrf)', name: 'TSRF Logistics' },
+  { path: '/procurement', label: 'PR Gatekeeper (/procurement)', name: 'PR Gatekeeper' },
+  { path: '/reports', label: 'Reports (/reports)', name: 'Reports' },
+  { path: '/users', label: 'User Management (/users)', name: 'User Management' },
+  { path: '/roles', label: 'Roles Management (/roles)', name: 'Roles Management' },
+  { path: '/reference-data', label: 'Reference Data (/reference-data)', name: 'Reference Data' },
+  { path: '/history', label: 'Activity History (/history)', name: 'Activity History' },
+  { path: '/form-builder', label: 'Form Builder (/form-builder)', name: 'Form Builder' },
+  { path: '/theme-editor', label: 'Theme Editor (/theme-editor)', name: 'Theme Editor' },
+];
+
+export function getLandingPageLabel(path: string | undefined): string {
+  if (!path) return 'Dashboard';
+  const found = AVAILABLE_LANDING_PAGES.find((p) => p.path === path);
+  return found ? found.name : path;
+}
+
+export function getDefaultLandingPage(roleKey: string): string {
+  const defaults: Record<string, string> = {
+    system_admin: '/dashboard',
+    admin: '/dashboard',
+    fleet_manager: '/fleet',
+    fleet_team: '/fleet',
+    logistics_manager: '/tsrf',
+    finance_manager: '/procurement',
+    finance: '/procurement',
+    procurement_officer: '/procurement',
+    procurement: '/procurement',
+    department_requester: '/tsrf',
+    driver: '/fleet',
+    approver: '/tsrf',
+    auditor: '/reports',
+  };
+  return defaults[roleKey] || '/dashboard';
+}
+
 export function RoleLandingPageSettings() {
   const { currentUser } = useAuth();
   const { success: toastSuccess } = useToast();
@@ -43,7 +84,7 @@ export function RoleLandingPageSettings() {
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
-  const isAdmin = currentUser?.role === 'system_admin';
+  const isAdmin = currentUser?.role === 'system_admin' || currentUser?.role === 'admin';
   useEffect(() => {
     if (!isAdmin) return;
     const controller = new AbortController();
@@ -180,6 +221,7 @@ interface RoleFormState {
   label: string;
   description: string;
   color: string;
+  landingPage: string;
   permissions: Permission[];
   isSystem: boolean;
 }
@@ -189,6 +231,7 @@ const EMPTY_FORM: RoleFormState = {
   label: '',
   description: '',
   color: BADGE_COLOR_OPTIONS[1].value,
+  landingPage: '/dashboard',
   permissions: ['view:dashboard'],
   isSystem: false,
 };
@@ -206,8 +249,11 @@ export function RolesManagementPage() {
     updateSystemPermission,
     deleteSystemPermission,
   } = useRoles();
+  const { currentUser, updateUser } = useAuth();
   const { success: toastSuccess } = useToast();
-  const roleCatalogReadOnly = true;
+  const isAdmin = currentUser?.role === 'system_admin' || currentUser?.role === 'admin';
+  const roleCatalogReadOnly = !isAdmin;
+  const [isSaving, setIsSaving] = useState(false);
 
   const [view, setView] = useState<View>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -223,7 +269,10 @@ export function RolesManagementPage() {
   const showToast = (msg: string) => toastSuccess(msg);
 
   const openAdd = () => {
-    setForm(EMPTY_FORM);
+    setForm({
+      ...EMPTY_FORM,
+      landingPage: '/dashboard',
+    });
     setEditingId(null);
     setView('edit');
   };
@@ -234,6 +283,7 @@ export function RolesManagementPage() {
       label: role.label,
       description: role.description,
       color: role.color,
+      landingPage: role.landingPage || getDefaultLandingPage(role.key),
       permissions: [...role.permissions],
       isSystem: role.isSystem,
     });
@@ -241,18 +291,50 @@ export function RolesManagementPage() {
     setView('edit');
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.label.trim()) return;
-    if (editingId) {
-      updateRole(editingId, form);
-      showToast(`Role "${form.label}" updated.`);
-    } else {
-      const key = form.key || form.label.toLowerCase().replace(/\s+/g, '_');
-      addRole({ ...form, key });
-      showToast(`Role "${form.label}" created.`);
+    setIsSaving(true);
+    const landingPage = form.landingPage || getDefaultLandingPage(form.key || form.label);
+    const key = form.key || form.label.toLowerCase().replace(/\s+/g, '_');
+
+    try {
+      if (isAdmin) {
+        try {
+          const backendRole = toBackendRole(key);
+          await apiFetch(`/api/roles/login-redirects/${encodeURIComponent(backendRole)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ landingPage }),
+          });
+        } catch {
+          // Ignore background role landing sync failures
+        }
+      }
+
+      if (editingId) {
+        updateRole(editingId, { ...form, key, landingPage });
+        showToast(
+          `Role "${form.label}" updated with landing page "${getLandingPageLabel(landingPage)}".`,
+        );
+      } else {
+        addRole({ ...form, key, landingPage });
+        showToast(
+          `Role "${form.label}" created with landing page "${getLandingPageLabel(landingPage)}".`,
+        );
+      }
+
+      if (
+        currentUser &&
+        (currentUser.role === key || toBackendRole(currentUser.role) === toBackendRole(key))
+      ) {
+        updateUser(currentUser.id, { landingPage });
+      }
+
+      setView('list');
+      setEditingId(null);
+    } finally {
+      setIsSaving(false);
     }
-    setView('list');
-    setEditingId(null);
   };
 
   const handleDelete = (id: string, label: string) => {
@@ -342,7 +424,8 @@ export function RolesManagementPage() {
           <div>
             <h1 className="text-2xl font-bold text-foreground">Roles Management</h1>
             <p className="text-muted-foreground text-sm mt-0.5">
-              View the application role and permission defaults.
+              Define and manage application roles, customize permissions, and set post-login landing
+              pages.
             </p>
           </div>
           <Button
@@ -356,18 +439,27 @@ export function RolesManagementPage() {
           </Button>
         </div>
 
-        <div
-          role="status"
-          className="flex items-start gap-2 border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
-        >
-          <Lock className="mt-0.5 h-4 w-4 shrink-0" />
-          <p>
-            Role and permission policy edits are disabled. Landing-page settings do not change
-            server access permissions.
-          </p>
-        </div>
-
-        <RoleLandingPageSettings />
+        {!isAdmin ? (
+          <div
+            role="status"
+            className="flex items-start gap-2 border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground rounded-lg"
+          >
+            <Lock className="mt-0.5 h-4 w-4 shrink-0" />
+            <p>
+              Role management is view-only for non-administrators. Contact a System Administrator to
+              request role or landing page modifications.
+            </p>
+          </div>
+        ) : (
+          <div className="flex items-start gap-2 border border-primary/20 bg-primary/5 px-3.5 py-2.5 text-sm text-muted-foreground rounded-lg">
+            <ShieldCheck className="mt-0.5 h-4 w-4 text-primary shrink-0" />
+            <p className="text-xs text-foreground">
+              Administrator Controls Active: You can create new roles, customize permissions, and
+              set post-login landing pages for each role. Click <strong>Edit</strong> on any role
+              below to modify its configuration.
+            </p>
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -397,6 +489,7 @@ export function RolesManagementPage() {
             <TableRow>
               <TableHead>Role</TableHead>
               <TableHead className="hidden sm:table-cell">Description</TableHead>
+              <TableHead>Post-Login Landing Page</TableHead>
               <TableHead>Permissions</TableHead>
               <TableHead>Type</TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -417,6 +510,16 @@ export function RolesManagementPage() {
                 </TableCell>
                 <TableCell className="hidden sm:table-cell text-sm text-muted-foreground max-w-xs truncate">
                   {role.description}
+                </TableCell>
+                <TableCell>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs font-semibold text-foreground">
+                      {getLandingPageLabel(role.landingPage || getDefaultLandingPage(role.key))}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground font-mono">
+                      {role.landingPage || getDefaultLandingPage(role.key)}
+                    </span>
+                  </div>
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-1.5">
@@ -448,15 +551,19 @@ export function RolesManagementPage() {
                   )}
                 </TableCell>
                 <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-1">
-                    <button
-                      title="Edit Permissions"
+                  <div className="flex items-center justify-end gap-1.5">
+                    <Button
+                      id={`btn-edit-${role.key}`}
+                      size="sm"
+                      variant="outline"
                       onClick={() => openEdit(role)}
                       disabled={roleCatalogReadOnly}
-                      className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                      className="h-8 px-2.5 text-xs gap-1.5 border-border hover:border-primary/50 text-foreground hover:text-primary transition-colors"
+                      title={`Edit ${role.label}`}
                     >
-                      <Pencil className="h-4 w-4" />
-                    </button>
+                      <Pencil className="h-3.5 w-3.5" />
+                      <span>Edit</span>
+                    </Button>
                     {!role.isSystem &&
                       (deleteConfirmId === role.id ? (
                         <>
@@ -464,12 +571,14 @@ export function RolesManagementPage() {
                             onClick={() => handleDelete(role.id, role.label)}
                             disabled={roleCatalogReadOnly}
                             className="p-1.5 rounded-lg text-destructive hover:bg-destructive/10 transition-colors"
+                            title="Confirm delete"
                           >
                             <Check className="h-4 w-4" />
                           </button>
                           <button
                             onClick={() => setDeleteConfirmId(null)}
                             className="p-1.5 rounded-lg text-muted-foreground hover:bg-accent transition-colors"
+                            title="Cancel delete"
                           >
                             <X className="h-4 w-4" />
                           </button>
@@ -479,6 +588,7 @@ export function RolesManagementPage() {
                           onClick={() => setDeleteConfirmId(role.id)}
                           disabled={roleCatalogReadOnly}
                           className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                          title="Delete role"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -727,6 +837,35 @@ export function RolesManagementPage() {
               />
             </div>
 
+            {/* Post-Login Landing Page Selector */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="role-landing-page">Post-Login Landing Page *</Label>
+                <Badge
+                  variant="outline"
+                  className="font-mono text-[10px] text-muted-foreground px-1.5 py-0"
+                >
+                  {form.landingPage}
+                </Badge>
+              </div>
+              <Select
+                id="role-landing-page"
+                aria-label="Post-Login Landing Page"
+                value={form.landingPage}
+                onChange={(e) => setForm({ ...form, landingPage: e.target.value })}
+                className="w-full"
+              >
+                {AVAILABLE_LANDING_PAGES.map((page) => (
+                  <option key={page.path} value={page.path}>
+                    {page.label}
+                  </option>
+                ))}
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                Users assigned this role will automatically land on this page upon logging in.
+              </p>
+            </div>
+
             {/* Badge color picker */}
             <div className="space-y-2">
               <Label>Badge Color</Label>
@@ -752,12 +891,24 @@ export function RolesManagementPage() {
             {/* Preview */}
             <div className="space-y-2">
               <Label>Preview</Label>
-              <div className="flex items-center gap-2">
-                <span
-                  className={`inline-flex text-[11px] font-semibold px-2.5 py-1 rounded-full border ${form.color}`}
-                >
-                  {form.label || 'Role Name'}
-                </span>
+              <div className="flex flex-col gap-2 p-3 rounded-lg bg-muted/30 border border-border">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`inline-flex text-[11px] font-semibold px-2.5 py-1 rounded-full border ${form.color}`}
+                  >
+                    {form.label || 'Role Name'}
+                  </span>
+                  <span className="text-xs text-muted-foreground font-mono">
+                    {form.key || 'role_key'}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Default Landing:{' '}
+                  <strong className="text-foreground">
+                    {getLandingPageLabel(form.landingPage)}
+                  </strong>{' '}
+                  ({form.landingPage})
+                </p>
               </div>
             </div>
 
@@ -808,9 +959,14 @@ export function RolesManagementPage() {
             <Button variant="outline" onClick={() => setView('list')} className="flex-1">
               Cancel
             </Button>
-            <Button onClick={handleSave} className="flex-1 gap-2" disabled={!form.label.trim()}>
+            <Button
+              id="btn-save-role"
+              onClick={() => void handleSave()}
+              className="flex-1 gap-2"
+              disabled={!form.label.trim() || isSaving}
+            >
               <ShieldCheck className="h-4 w-4" />
-              {editingId ? 'Save Changes' : 'Create Role'}
+              {isSaving ? 'Saving...' : editingId ? 'Save Changes' : 'Create Role'}
             </Button>
           </div>
         </div>

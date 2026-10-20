@@ -157,11 +157,54 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+const DEMO_USER_STORAGE_KEY = 'hulma_demo_user_v1';
+
+function loadStoredDemoUser(): User | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw =
+      window.sessionStorage?.getItem(DEMO_USER_STORAGE_KEY) ||
+      window.localStorage?.getItem(DEMO_USER_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as User) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveStoredDemoUser(user: User | null): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (user) {
+      const serialized = JSON.stringify(user);
+      window.sessionStorage?.setItem(DEMO_USER_STORAGE_KEY, serialized);
+      window.localStorage?.setItem(DEMO_USER_STORAGE_KEY, serialized);
+    } else {
+      window.sessionStorage?.removeItem(DEMO_USER_STORAGE_KEY);
+      window.localStorage?.removeItem(DEMO_USER_STORAGE_KEY);
+    }
+  } catch {
+    // ignore
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const initialStoredUser = loadStoredDemoUser();
+  const [currentUser, setCurrentUser] = useState<User | null>(initialStoredUser);
   const [allUsers, setAllUsers] = useState<User[]>(DEFAULT_USERS);
   const [roleDefinitions, setRoleDefinitions] = useState<RoleDefinition[]>(DEFAULT_ROLES);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!initialStoredUser);
+
+  // Sync developmentPrincipal if stored demo user exists
+  useEffect(() => {
+    if (initialStoredUser && developmentDemoAuthEnabled) {
+      setDevelopmentPrincipal({
+        id: initialStoredUser.id,
+        name: initialStoredUser.name,
+        role: initialStoredUser.role,
+        department: initialStoredUser.department,
+      });
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -171,7 +214,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return (await response.json()) as AuthApiUser;
       })
       .then((user) => {
-        if (!cancelled && user) setCurrentUser(fromApiUser(user));
+        if (!cancelled && user) {
+          const mapped = fromApiUser(user);
+          setCurrentUser(mapped);
+          saveStoredDemoUser(mapped);
+        }
       })
       .catch(() => undefined)
       .finally(() => {
@@ -197,9 +244,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const response = await apiFetch('/api/roles/login-redirects/me');
           if (!response.ok) throw new Error('Unable to load role landing page.');
           const settings = await response.json();
-          setCurrentUser({ ...demoUser, landingPage: settings.landingPage });
+          const userWithLanding = { ...demoUser, landingPage: settings.landingPage };
+          setCurrentUser(userWithLanding);
+          saveStoredDemoUser(userWithLanding);
         } catch {
           setDevelopmentPrincipal(null);
+          saveStoredDemoUser(null);
           return { success: false, error: 'Unable to load role landing page. Please retry.' };
         }
         return { success: true };
@@ -216,6 +266,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!response.ok) return { success: false, error: result.error ?? 'Unable to sign in.' };
       const user = fromApiUser(result.user as AuthApiUser);
       setCurrentUser(user);
+      saveStoredDemoUser(user);
       return { success: true };
     } catch {
       return { success: false, error: 'Unable to reach the sign-in service.' };
@@ -308,6 +359,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (currentUser && !USER_PASSWORDS[currentUser.email.toLowerCase()]) {
       void apiFetch('/api/auth/local/logout', { method: 'POST' });
     }
+    saveStoredDemoUser(null);
     setDevelopmentPrincipal(null);
     msalInstance.setActiveAccount(null);
     setCurrentUser(null);
