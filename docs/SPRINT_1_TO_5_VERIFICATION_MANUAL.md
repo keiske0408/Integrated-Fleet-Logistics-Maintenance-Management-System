@@ -57,15 +57,20 @@ _Objective:_ Verify that vehicle mileage updates save to PostgreSQL and update P
 
 1. Log in as **Fleet Manager** (`marco.reyes@hulma.com`).
 2. Navigate to **Vehicles** (`/fleet`) on the sidebar.
-3. Locate any active vehicle in the table (e.g., `ABC-1234`).
-4. Note the **Current KM** and **PMS Status** (e.g., `Active`).
-5. Click the **"Log KM"** button on the row.
-6. Enter an ending mileage value that exceeds the current mileage by 500 KM.
-7. Click **"Save Mileage"**:
+3. **Search & Filter Controls:**
+   - Type in the **Search Bar** to instantly find vehicles by plate, model, or driver.
+   - Filter by **Status** (`Active Units`, `PMS Overdue`, `Approaching PMS`, `In Maintenance`).
+   - Filter by **Vehicle Type** or sort by Plate, Highest Odometer, or PMS Urgency.
+   - Test **Pagination:** change rows per page (`5, 10, 25, 50`) and navigate pages.
+4. Locate any active vehicle in the table or card view (e.g., `TEST-7533` or `ABC-1234`).
+5. Note the **Current KM** and **PMS Status** (e.g., `Active`).
+6. Click the **"Log KM"** / **"KM"** button on the row/card to open the inline odometer editor.
+7. Enter an ending mileage value that exceeds the current mileage by 500 KM.
+8. Click **"Save Reading"** / **"Save"**:
    - Verify a green success toast appears: _"Mileage updated successfully"_.
-   - Verify the row immediately updates with the new KM.
-   - If the new KM crossed the 5,000 KM PMS interval, verify the status badge changes to a red **"PMS Due"** badge.
-8. **Persistence Check:** Press `F5` / reload the browser.
+   - Verify the row immediately updates with the new KM and PMS interval bar recalculates.
+   - If the new KM crossed the 5,000 KM PMS interval, verify the status badge changes to a red **"PMS Due"** / **"Overdue"** badge.
+9. **Persistence Check:** Press `F5` / reload the browser.
    - Verify the new mileage and PMS status remain permanently stored.
 
 #### Test Case 1.2: PR Gating & Work Order Unlocking (`TICKET-102`)
@@ -73,17 +78,24 @@ _Objective:_ Verify that vehicle mileage updates save to PostgreSQL and update P
 _Objective:_ Verify Domain Rule 4 — maintenance repair work orders remain locked until the linked Purchase Requisition is approved by Finance.
 
 1. Navigate to **Procurement & PRs** (`/procurement`).
-2. View the **Purchase Requisitions** table (top) and **Maintenance Work Orders** table (bottom).
-3. Find a work order linked to a `pending` PR:
+2. **Search, Filter & Pagination in Section 1 (Purchase Requisitions):**
+   - Search by PR number, purpose, department, or approver.
+   - Filter by PR State (`Pending Finance`, `Approved`, `Draft`, `Rejected`) or Department.
+   - Paginate through requisitions using page navigation buttons (`5, 10, 20` per page).
+3. **Search, Filter & Pagination in Section 2 (Maintenance Work Orders):**
+   - Search by work order #, vehicle plate, or repair description.
+   - Filter by Gatekeeper State (`Locked`, `Unlocked`, `In Maintenance`, `Completed`).
+   - Paginate through work orders using page navigation buttons.
+4. Find a work order linked to a `pending` PR:
    - Notice the work order action is gated with an amber warning: _"PR Approval Required"_.
-4. Switch to or log in as **Finance Manager** (`sandra.cruz@hulma.com`).
-5. Click **"Approve Spend"** on that specific PR.
+5. Switch to or log in as **Finance Manager** (`sandra.cruz@hulma.com`).
+6. Click **"Approve Spend"** on that specific PR.
    - Verify the PR status changes from `pending` to `approved`.
-6. Look at the linked Work Order in the lower table:
+7. Look at the linked Work Order in the lower table:
    - Notice the gate is released: the button now shows **"Assert PR Gate"** or **"Send to Shop"**.
-7. Click **"Send to Shop"**:
+8. Click **"Send to Shop"**:
    - Verify the work order transitions to `in_progress`.
-8. Reload the browser page to verify the approved spend and unlocked state persist in PostgreSQL.
+9. Reload the browser page to verify the approved spend and unlocked state persist in PostgreSQL.
 
 #### Test Case 1.3: Clean TypeScript Compilation (`TICKET-103`)
 
