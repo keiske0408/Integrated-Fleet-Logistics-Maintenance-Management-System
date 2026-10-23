@@ -61,7 +61,7 @@ export interface FieldPaletteSidebarProps {
   selectFieldAndScroll: (fieldId: string) => void;
 }
 
-export const FieldPaletteSidebar: React.FC<FieldPaletteSidebarProps> = ({
+export const FieldPaletteSidebar: React.FC<FieldPaletteSidebarProps> = React.memo(({
   mobileStudioView,
   sidebarTab,
   setSidebarTab,
@@ -208,4 +208,6 @@ export const FieldPaletteSidebar: React.FC<FieldPaletteSidebarProps> = ({
       </div>
     </div>
   );
-};
+});
+
+FieldPaletteSidebar.displayName = 'FieldPaletteSidebar';

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { RefreshCw, Save } from 'lucide-react';
+import { Loader2, RefreshCw, Save } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import type { FormDefinition, FormField, FormWorkflow } from './types';
 
 type ReadGrants = Record<string, { department_requester: string[] }>;
@@ -117,7 +118,7 @@ export function VersionReadAccess({
           onClick={() => setReload((value) => value + 1)}
           className="gap-2"
         >
-          <RefreshCw className="h-4 w-4" /> Reload Policy
+          <RefreshCw className={cn('h-4 w-4', busy && 'animate-spin')} /> Reload Policy
         </Button>
       </div>
       {error && (
@@ -126,7 +127,35 @@ export function VersionReadAccess({
         </p>
       )}
       {!policy ? (
-        <p className="text-sm text-muted-foreground">Loading read policy...</p>
+        <div className="space-y-4 pt-1 animate-fade-in">
+          <div className="flex items-center justify-center gap-2.5 py-4 text-xs text-muted-foreground bg-muted/30 rounded-lg border border-border/50">
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            <span className="font-medium text-foreground">
+              Loading historical read access policy and audit history for v{definition.version}...
+            </span>
+          </div>
+          <div className="space-y-1.5">
+            <div className="h-3.5 w-28 rounded bg-muted/70 animate-pulse" />
+            <div className="h-9 w-full rounded-md bg-muted/40 animate-pulse" />
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 pt-1">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className="flex items-center gap-2.5 border-b border-border/50 py-2.5"
+              >
+                <div className="h-4 w-4 rounded bg-muted/60 shrink-0 animate-pulse" />
+                <div className="flex-1 space-y-1">
+                  <div
+                    className="h-3.5 rounded bg-muted/70 animate-pulse"
+                    style={{ width: `${Math.floor(40 + (i % 3) * 20)}%` }}
+                  />
+                  <div className="h-2.5 w-24 rounded bg-muted/40 animate-pulse" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       ) : (
         <>
           <label className="block text-sm">

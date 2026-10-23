@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Copy,
   Download,
@@ -29,13 +29,23 @@ import {
   CheckCircle2,
   Tag,
   GitCompare,
+  Check,
+  Loader2,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
+import { Dialog, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { useToast } from '@/components/ui/toast';
+import {
+  bulkSetFieldPermissions,
+  bulkUpdateSingleFieldPermission,
+  copyStagePermissions,
+  getAggregatedFieldPermission,
+} from './workflowPermissions';
 import { FormRenderer } from './FormRenderer';
 import { TSRF_V1, TSRF_WORKFLOW } from './seed';
 import { useLov } from '@/features/lov';
@@ -63,6 +73,7 @@ import { formatFieldOptions, parseFieldOptions } from './fieldConfiguration';
 import { FieldPaletteSidebar, PALETTE, PALETTE_META } from './components/FieldPaletteSidebar';
 import { FormBuilderModals } from './components/FormBuilderModals';
 import { WorkflowStageMatrix, WORKFLOW_ROLES } from './components/WorkflowStageMatrix';
+import { StageFieldAccessMatrix, StageFieldAccessSkeleton } from './components/StageFieldAccessMatrix';
 
 function flattenPermissionFields(
   fields: FormField[],
@@ -105,24 +116,154 @@ function cloneDefinition(): FormDefinition {
   return structuredClone(TSRF_V1);
 }
 
+export function parseFormBuilderPath(pathname: string): {
+  formKey?: string;
+  version?: string;
+  role?: string;
+  stage?: string;
+  isPreview: boolean;
+} {
+  const clean = pathname.replace(/^\/+|\/+$/g, '');
+  const segments = clean.split('/').map(decodeURIComponent);
+  if (segments[0] !== 'form-builder') {
+    return { isPreview: false };
+  }
+  const rest = segments.slice(1);
+  let formKey: string | undefined;
+  let remaining = rest;
+
+  if (remaining[0] === 'forms' && remaining[1]) {
+    formKey = remaining[1];
+    remaining = remaining.slice(2);
+  }
+
+  let role: string | undefined;
+  let stage: string | undefined;
+  let version: string | undefined;
+  let isPreview = false;
+
+  if (remaining[0] === 'preview') {
+    isPreview = true;
+    role = remaining[1] || undefined;
+    stage = remaining[2] || undefined;
+    version = remaining[3] || undefined;
+  } else if (remaining[0] === 'versions') {
+    version = remaining[1] || undefined;
+  }
+
+  return { formKey, version, role, stage, isPreview };
+}
+
+export function FormBuilderLoadingSkeleton({ formKey }: { formKey: string }) {
+  return (
+    <div className="space-y-4 animate-fade-in">
+      {/* Top Header Skeleton */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-border/60">
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-24 rounded-md bg-muted/60 animate-pulse" />
+          <span className="text-muted-foreground/30">/</span>
+          <div className="h-6 w-48 rounded-md bg-muted/70 animate-pulse" />
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-20 rounded-md bg-muted/50 animate-pulse" />
+          <div className="h-8 w-20 rounded-md bg-muted/50 animate-pulse" />
+        </div>
+      </div>
+
+      {/* Main Studio Banner & Centered Status */}
+      <div className="relative overflow-hidden rounded-xl border border-border/80 bg-gradient-to-b from-card/80 to-muted/20 p-8 backdrop-blur-sm shadow-sm min-h-[460px] flex flex-col items-center justify-center">
+        <div className="relative z-10 flex flex-col items-center text-center max-w-sm space-y-3.5">
+          <div className="relative flex items-center justify-center">
+            <div className="absolute -inset-2 rounded-full bg-primary/20 blur-md animate-pulse" />
+            <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-card border border-primary/30 shadow-lg shadow-primary/10">
+              <Loader2 className="h-7 w-7 text-primary animate-spin" />
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <h3 className="text-base font-semibold text-foreground tracking-tight">
+              Loading Form Canvas
+            </h3>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Retrieving schema definition, workflow stages, and access permissions for{' '}
+              <span className="font-mono text-foreground font-medium">{formKey}</span>...
+            </p>
+          </div>
+
+          {/* Indeterminate Gradient Loading Bar */}
+          <div className="w-52 h-1.5 rounded-full bg-muted overflow-hidden relative mt-2">
+            <div className="absolute inset-y-0 w-2/3 bg-gradient-to-r from-primary/40 via-primary to-primary/40 rounded-full animate-pulse" />
+          </div>
+        </div>
+
+        {/* Shimmering wireframe background */}
+        <div className="w-full max-w-3xl mt-10 grid grid-cols-1 md:grid-cols-3 gap-3 opacity-30 pointer-events-none">
+          <div className="space-y-2 p-3 rounded-lg border border-border/60 bg-muted/40">
+            <div className="h-4 w-3/4 rounded bg-muted animate-pulse" />
+            <div className="h-8 w-full rounded bg-muted animate-pulse" />
+            <div className="h-8 w-full rounded bg-muted animate-pulse" />
+          </div>
+          <div className="space-y-2 p-3 rounded-lg border border-border/60 bg-muted/40 md:col-span-2">
+            <div className="h-4 w-1/2 rounded bg-muted animate-pulse" />
+            <div className="h-10 w-full rounded bg-muted animate-pulse" />
+            <div className="h-10 w-full rounded bg-muted animate-pulse" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function FormBuilderTransitionOverlay({
+  target,
+}: {
+  target: 'design' | 'preview';
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-md animate-fade-in transition-all duration-200">
+      <div className="relative mx-4 flex max-w-sm flex-col items-center rounded-2xl border border-primary/25 bg-card/95 p-6 text-center shadow-2xl shadow-primary/10">
+        <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 border border-primary/30 mb-3.5">
+          <Loader2 className="h-7 w-7 text-primary animate-spin" />
+          <div className="absolute -inset-1 rounded-2xl bg-primary/20 blur-sm -z-10 animate-pulse" />
+        </div>
+
+        <h4 className="text-sm font-semibold text-foreground tracking-tight">
+          {target === 'design' ? 'Switching to Form Studio' : 'Launching Preview Mode'}
+        </h4>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {target === 'design'
+            ? 'Restoring design canvas, component palette, and property controls...'
+            : 'Rendering form preview with role and stage permissions...'}
+        </p>
+
+        <div className="mt-4 w-40 h-1.5 rounded-full bg-muted overflow-hidden relative">
+          <div className="absolute inset-y-0 w-2/3 bg-gradient-to-r from-primary/50 via-primary to-primary/50 rounded-full animate-pulse" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function FormBuilderPage() {
-  const {
-    formKey: routeFormKey,
-    version: routeVersion,
-    role: routeRole,
-    stage: routeStage,
-  } = useParams<{
+  const location = useLocation();
+  const rawParams = useParams<{
     formKey?: string;
     version?: string;
     role?: string;
     stage?: string;
   }>();
+  const parsedPath = useMemo(() => parseFormBuilderPath(location.pathname), [location.pathname]);
+  const routeFormKey = rawParams.formKey ?? parsedPath.formKey;
+  const routeVersion = rawParams.version ?? parsedPath.version;
+  const routeRole = rawParams.role ?? parsedPath.role;
+  const routeStage = rawParams.stage ?? parsedPath.stage;
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { success: toastSuccess, error: toastError, warning: toastWarning } = useToast();
   const activeFormKey = routeFormKey ?? searchParams.get('form') ?? 'tsrf';
-  const basePath =
-    activeFormKey !== 'tsrf'
+  const basePath = routeFormKey
+    ? `/form-builder/forms/${encodeURIComponent(routeFormKey)}`
+    : activeFormKey !== 'tsrf'
       ? `/form-builder/forms/${encodeURIComponent(activeFormKey)}`
       : '/form-builder';
 
@@ -589,10 +730,25 @@ export function FormBuilderPage() {
   };
   const [selectedId, setSelectedId] = useState(definition.sections[1]?.fields[0]?.id ?? '');
   const [activeTab, setActiveTab] = useState<'canvas' | 'workflow' | 'permissions'>('canvas');
+  const [isPermissionsTabLoading, setIsPermissionsTabLoading] = useState(false);
+  const handleTabChange = useCallback(
+    (nextTab: 'canvas' | 'workflow' | 'permissions') => {
+      if (nextTab === activeTab) return;
+      if (nextTab === 'permissions') {
+        setIsPermissionsTabLoading(true);
+        setActiveTab('permissions');
+        window.setTimeout(() => {
+          setIsPermissionsTabLoading(false);
+        }, 260);
+      } else {
+        setActiveTab(nextTab);
+      }
+    },
+    [activeTab],
+  );
   const [sidebarTab, setSidebarTab] = useState<'palette' | 'outline'>('palette');
   const [paletteSearch, setPaletteSearch] = useState('');
   const [inspectorTab, setInspectorTab] = useState<'settings' | 'logic' | 'governance'>('settings');
-  const [permissionFieldSearch, setPermissionFieldSearch] = useState('');
   const [mobileStudioView, setMobileStudioView] = useState<'canvas' | 'palette' | 'properties'>(
     'canvas',
   );
@@ -620,7 +776,9 @@ export function FormBuilderPage() {
     }
     propertiesPanelRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   };
-  const [preview, setPreview] = useState(false);
+  const [preview, setPreview] = useState(() => Boolean(routeRole && routeStage));
+  const [isTransitioningView, setIsTransitioningView] = useState(false);
+  const [transitionTarget, setTransitionTarget] = useState<'design' | 'preview'>('design');
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [definitionId, setDefinitionId] = useState<string | null>(null);
   const [draftVersionId, setDraftVersionId] = useState<string | null>(null);
@@ -648,34 +806,70 @@ export function FormBuilderPage() {
   const [saving, setSaving] = useState(false);
   const saveInFlightRef = useRef(false);
   const importInputRef = useRef<HTMLInputElement>(null);
-  const [permissionRole, setPermissionRole] = useState('department_requester');
-  const [permissionStageId, setPermissionStageId] = useState('dispatch_assignment');
+  const [permissionRole, setPermissionRole] = useState(() => routeRole || 'department_requester');
+  const [permissionStageId, setPermissionStageId] = useState(
+    () => routeStage || workflow.initialStage || workflow.stages[0]?.id || 'dispatch_assignment',
+  );
+  const [isBulkStageMode, setIsBulkStageMode] = useState(false);
+  const [bulkSelectedStageIds, setBulkSelectedStageIds] = useState<string[]>([]);
   const { lists } = useLov();
   const { currentUser } = useAuth();
-  const fields = definition.sections.flatMap((section) => section.fields);
-  const selectedField = fields.find((field) => field.id === selectedId);
-  const permissionFields = flattenPermissionFields(fields);
-  const selectedPermissionStage =
-    workflow.stages.find((stage) => stage.id === permissionStageId) ?? workflow.stages[0];
-  const previewProjection = selectedPermissionStage
-    ? projectFormForRoleStage(definition, selectedPermissionStage, permissionRole)
-    : { definition, fieldAccess: {} };
-  const versionChanges =
-    definition.status === 'draft' && publishedBaseline
-      ? [
-          ...diffFormDefinitions(publishedBaseline, definition),
-          ...diffFormWorkflows(publishedWorkflowBaseline, workflow),
-        ]
-      : [];
-  const previewUrl = (role: string, stageId: string) =>
-    `${basePath}/preview/${encodeURIComponent(role)}/${encodeURIComponent(stageId)}${routeVersion ? `/${encodeURIComponent(routeVersion)}` : ''}`;
+  const fields = useMemo(
+    () => definition.sections.flatMap((section) => section.fields),
+    [definition.sections],
+  );
+  const selectedField = useMemo(
+    () => fields.find((field) => field.id === selectedId),
+    [fields, selectedId],
+  );
+  const permissionFields = useMemo(() => flattenPermissionFields(fields), [fields]);
+  const validBulkStageIds = useMemo(
+    () => bulkSelectedStageIds.filter((id) => workflow.stages.some((stage) => stage.id === id)),
+    [bulkSelectedStageIds, workflow.stages],
+  );
+  const selectedPermissionStage = useMemo(
+    () => workflow.stages.find((stage) => stage.id === permissionStageId) ?? workflow.stages[0],
+    [workflow.stages, permissionStageId],
+  );
+  const previewProjection = useMemo(() => {
+    if (!preview || !selectedPermissionStage) {
+      return { definition, fieldAccess: {} };
+    }
+    return projectFormForRoleStage(definition, selectedPermissionStage, permissionRole);
+  }, [preview, definition, selectedPermissionStage, permissionRole]);
+  const versionChanges = useMemo(() => {
+    if (definition.status !== 'draft' || !publishedBaseline) return [];
+    return [
+      ...diffFormDefinitions(publishedBaseline, definition),
+      ...diffFormWorkflows(publishedWorkflowBaseline, workflow),
+    ];
+  }, [definition.status, publishedBaseline, definition, publishedWorkflowBaseline, workflow]);
+  const previewUrl = (role: string, stageId?: string) => {
+    const targetStageId =
+      stageId || selectedPermissionStage?.id || workflow.initialStage || workflow.stages[0]?.id || '';
+    return `${basePath}/preview/${encodeURIComponent(role)}/${encodeURIComponent(targetStageId)}${routeVersion ? `/${encodeURIComponent(routeVersion)}` : ''}`;
+  };
   const openPreview = () => {
-    const stageId = selectedPermissionStage?.id ?? workflow.initialStage;
+    if (editRevision > savedRevisionRef.current) {
+      void saveDraftRef.current(true, editRevision);
+    }
+    const stageId = selectedPermissionStage?.id ?? workflow.initialStage ?? workflow.stages[0]?.id ?? '';
+    setTransitionTarget('preview');
+    setIsTransitioningView(true);
     navigate(previewUrl(permissionRole, stageId));
+    window.setTimeout(() => {
+      setPreview(true);
+      setIsTransitioningView(false);
+    }, 280);
   };
   const leavePreview = () => {
-    setPreview(false);
+    setTransitionTarget('design');
+    setIsTransitioningView(true);
     navigate(routeVersion ? `${basePath}/versions/${routeVersion}` : basePath);
+    window.setTimeout(() => {
+      setPreview(false);
+      setIsTransitioningView(false);
+    }, 280);
   };
   const selectVersion = (version: string) => {
     if (saving || editRevision > savedRevisionRef.current) {
@@ -691,19 +885,25 @@ export function FormBuilderPage() {
       setPreview(false);
       return;
     }
-    if (
-      !routeRole ||
-      !routeStage ||
-      !WORKFLOW_ROLES.includes(routeRole) ||
-      !workflow.stages.some((stage) => stage.id === routeStage)
-    ) {
+    const validRole = WORKFLOW_ROLES.includes(routeRole ?? '') ? routeRole! : WORKFLOW_ROLES[0];
+    const validStage = workflow.stages.some((stage) => stage.id === routeStage)
+      ? routeStage!
+      : (workflow.initialStage || workflow.stages[0]?.id);
+
+    if (!validStage) {
       navigate(basePath, { replace: true });
       return;
     }
-    setPermissionRole(routeRole);
-    setPermissionStageId(routeStage);
+
+    if (validRole !== routeRole || validStage !== routeStage) {
+      navigate(previewUrl(validRole, validStage), { replace: true });
+      return;
+    }
+
+    setPermissionRole(validRole);
+    setPermissionStageId(validStage);
     setPreview(true);
-  }, [basePath, isDefinitionLoaded, navigate, routeRole, routeStage, workflow.stages]);
+  }, [basePath, isDefinitionLoaded, navigate, routeRole, routeStage, workflow.stages, workflow.initialStage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -791,6 +991,14 @@ export function FormBuilderPage() {
               selected.schema.sections[0]?.fields[0]?.id ??
               '',
           );
+          const loadedStages = selected.workflow?.stages ?? TSRF_WORKFLOW.stages;
+          const loadedInitialStage = selected.workflow?.initialStage ?? loadedStages[0]?.id;
+          if (
+            loadedInitialStage &&
+            !loadedStages.some((s: { id: string }) => s.id === permissionStageId)
+          ) {
+            setPermissionStageId(loadedInitialStage);
+          }
         }
         setIsDefinitionLoaded(true);
       })
@@ -1289,21 +1497,6 @@ export function FormBuilderPage() {
         transitionIndex === index ? { ...transition, ...updates } : transition,
       ),
     });
-  const updateFieldPermission = (fieldKey: string, permission: '' | 'edit' | 'read' | 'hidden') => {
-    if (!selectedPermissionStage) return;
-    const stageIndex = workflow.stages.findIndex(
-      (stage) => stage.id === selectedPermissionStage.id,
-    );
-    const currentFieldPermissions = selectedPermissionStage.fieldPermissions ?? {};
-    const currentRoles = currentFieldPermissions[fieldKey] ?? {};
-    const nextRoles = { ...currentRoles };
-    if (permission) nextRoles[permissionRole] = permission;
-    else delete nextRoles[permissionRole];
-    const nextFieldPermissions = { ...currentFieldPermissions };
-    if (Object.keys(nextRoles).length) nextFieldPermissions[fieldKey] = nextRoles;
-    else delete nextFieldPermissions[fieldKey];
-    updateStage(stageIndex, { fieldPermissions: nextFieldPermissions });
-  };
   const addField = (type: FieldType, targetSectionId?: string) => {
     let sectionId = targetSectionId;
     if (!sectionId) {
@@ -1535,26 +1728,6 @@ export function FormBuilderPage() {
     }
   };
 
-  const setAllFieldPermissions = (access: '' | 'edit' | 'read' | 'hidden') => {
-    if (!selectedPermissionStage) return;
-    const nextPermissions: Record<string, Record<string, StageFieldPermission>> = {};
-    const current = selectedPermissionStage.fieldPermissions ?? {};
-    permissionFields.forEach((field) => {
-      const fieldRoles = { ...(current[field.key] ?? {}) };
-      if (access) {
-        fieldRoles[permissionRole] = access;
-      } else {
-        delete fieldRoles[permissionRole];
-      }
-      if (Object.keys(fieldRoles).length > 0) {
-        nextPermissions[field.key] = fieldRoles;
-      }
-    });
-    const stageIndex = workflow.stages.findIndex((s) => s.id === selectedPermissionStage.id);
-    if (stageIndex >= 0) {
-      updateStage(stageIndex, { fieldPermissions: nextPermissions });
-    }
-  };
   const exportJson = () => {
     const url = URL.createObjectURL(
       new Blob([JSON.stringify(definition, null, 2)], { type: 'application/json' }),
@@ -1599,9 +1772,16 @@ export function FormBuilderPage() {
     }
   };
 
+  if (!isDefinitionLoaded) {
+    return <FormBuilderLoadingSkeleton formKey={activeFormKey} />;
+  }
+
   if (preview)
     return (
-      <div className="space-y-4">
+      <div className="space-y-4 animate-fade-in relative">
+        {isTransitioningView && (
+          <FormBuilderTransitionOverlay target={transitionTarget} />
+        )}
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">Preview: {definition.name}</h1>
           <Button variant="outline" onClick={leavePreview}>
@@ -1616,11 +1796,11 @@ export function FormBuilderPage() {
             </label>
             <Select
               id="preview-stage"
-              value={selectedPermissionStage?.id ?? ''}
+              value={selectedPermissionStage?.id ?? permissionStageId}
               onChange={(event) => {
                 const stageId = event.target.value;
                 setPermissionStageId(stageId);
-                navigate(previewUrl(permissionRole, stageId));
+                navigate(previewUrl(permissionRole, stageId), { replace: true });
               }}
             >
               {workflow.stages.map((stage) => (
@@ -1640,7 +1820,10 @@ export function FormBuilderPage() {
               onChange={(event) => {
                 const role = event.target.value;
                 setPermissionRole(role);
-                navigate(previewUrl(role, selectedPermissionStage?.id ?? workflow.initialStage));
+                navigate(
+                  previewUrl(role, selectedPermissionStage?.id ?? permissionStageId),
+                  { replace: true },
+                );
               }}
             >
               {WORKFLOW_ROLES.map((role) => (
@@ -1661,7 +1844,10 @@ export function FormBuilderPage() {
     );
 
   return (
-    <div className="space-y-4 animate-fade-in">
+    <div className="space-y-4 animate-fade-in relative">
+      {isTransitioningView && (
+        <FormBuilderTransitionOverlay target={transitionTarget} />
+      )}
       {/* Forms Directory & Switcher Navigation Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-border/60">
         <div className="flex flex-wrap items-center gap-2">
@@ -2127,7 +2313,7 @@ export function FormBuilderPage() {
       <div className="flex items-center gap-1.5 border-b border-border/80 pb-2 overflow-x-auto no-scrollbar">
         <button
           type="button"
-          onClick={() => setActiveTab('canvas')}
+          onClick={() => handleTabChange('canvas')}
           className={`flex items-center gap-2 px-3.5 py-2 text-sm font-medium rounded-lg transition-all shrink-0 ${
             activeTab === 'canvas'
               ? 'bg-primary text-primary-foreground shadow-sm'
@@ -2148,7 +2334,7 @@ export function FormBuilderPage() {
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab('workflow')}
+          onClick={() => handleTabChange('workflow')}
           className={`flex items-center gap-2 px-3.5 py-2 text-sm font-medium rounded-lg transition-all shrink-0 ${
             activeTab === 'workflow'
               ? 'bg-primary text-primary-foreground shadow-sm'
@@ -2169,7 +2355,7 @@ export function FormBuilderPage() {
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab('permissions')}
+          onClick={() => handleTabChange('permissions')}
           className={`flex items-center gap-2 px-3.5 py-2 text-sm font-medium rounded-lg transition-all shrink-0 ${
             activeTab === 'permissions'
               ? 'bg-primary text-primary-foreground shadow-sm'
@@ -2178,6 +2364,9 @@ export function FormBuilderPage() {
         >
           <ShieldCheck className="h-4 w-4" />
           <span>Stage Field Access</span>
+          {isPermissionsTabLoading && (
+            <Loader2 className="ml-1 h-3.5 w-3.5 animate-spin" />
+          )}
         </button>
       </div>
 
@@ -3267,154 +3456,23 @@ export function FormBuilderPage() {
 
       {/* Stage Field Access Tab */}
       {activeTab === 'permissions' && (
-        <div className="space-y-4">
-          {definition.status !== 'draft' &&
-            selectedVersionId &&
-            currentUser?.role === 'system_admin' && (
-              <VersionReadAccess
-                versionId={selectedVersionId}
-                definition={definition}
-                workflow={workflow}
-              />
-            )}
-          <Card className="animate-fade-in">
-            <CardHeader className="pb-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <CardTitle className="text-base">Stage Field Access Control</CardTitle>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Configure field-level visibility and editability per workflow stage and role
-                  </p>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="text-xs h-8"
-                    onClick={() => setAllFieldPermissions('edit')}
-                  >
-                    All Editable
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="text-xs h-8"
-                    onClick={() => setAllFieldPermissions('read')}
-                  >
-                    All Read-Only
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="text-xs h-8"
-                    onClick={() => setAllFieldPermissions('')}
-                  >
-                    Reset Overrides
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border p-3.5 bg-muted/20">
-                <div className="min-w-56">
-                  <label htmlFor="permission-stage" className="mb-1 block text-xs font-semibold">
-                    Workflow Stage
-                  </label>
-                  <Select
-                    id="permission-stage"
-                    value={selectedPermissionStage?.id ?? ''}
-                    onChange={(event) => setPermissionStageId(event.target.value)}
-                  >
-                    {workflow.stages.map((stage) => (
-                      <option key={stage.id} value={stage.id}>
-                        {stage.label}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-                <div className="min-w-56">
-                  <label htmlFor="permission-role" className="mb-1 block text-xs font-semibold">
-                    Actor Role
-                  </label>
-                  <Select
-                    id="permission-role"
-                    value={permissionRole}
-                    onChange={(event) => setPermissionRole(event.target.value)}
-                  >
-                    {WORKFLOW_ROLES.map((role) => (
-                      <option key={role} value={role}>
-                        {role.replaceAll('_', ' ')}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-                <div className="flex-1 min-w-48">
-                  <label
-                    htmlFor="permission-field-search"
-                    className="mb-1 block text-xs font-semibold"
-                  >
-                    Filter Fields
-                  </label>
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                    <Input
-                      id="permission-field-search"
-                      value={permissionFieldSearch}
-                      onChange={(e) => setPermissionFieldSearch(e.target.value)}
-                      placeholder="Search by field name or key..."
-                      className="h-9 pl-8 text-xs bg-background"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
-                {permissionFields
-                  .filter(
-                    (field) =>
-                      field.label.toLowerCase().includes(permissionFieldSearch.toLowerCase()) ||
-                      field.key.toLowerCase().includes(permissionFieldSearch.toLowerCase()),
-                  )
-                  .map((field) => (
-                    <div
-                      key={field.key}
-                      className="flex items-center justify-between gap-3 border-b border-border/60 py-2.5"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{field.label}</p>
-                        <p className="truncate text-xs font-mono text-muted-foreground">
-                          {field.key}
-                        </p>
-                      </div>
-                      <Select
-                        aria-label={`${field.label} access for ${permissionRole}`}
-                        className="w-36 h-8 text-xs shrink-0"
-                        value={
-                          selectedPermissionStage?.fieldPermissions?.[field.key]?.[
-                            permissionRole
-                          ] ?? ''
-                        }
-                        onChange={(event) =>
-                          updateFieldPermission(
-                            field.key,
-                            event.target.value as '' | 'edit' | 'read' | 'hidden',
-                          )
-                        }
-                      >
-                        <option value="">Default (Inherited)</option>
-                        <option value="edit">Editable</option>
-                        <option value="read">Read Only</option>
-                        <option value="hidden">Hidden</option>
-                      </Select>
-                    </div>
-                  ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <StageFieldAccessMatrix
+          workflow={workflow}
+          fields={permissionFields}
+          permissionRole={permissionRole}
+          setPermissionRole={setPermissionRole}
+          permissionStageId={permissionStageId}
+          setPermissionStageId={setPermissionStageId}
+          isBulkStageMode={isBulkStageMode}
+          setIsBulkStageMode={setIsBulkStageMode}
+          bulkSelectedStageIds={bulkSelectedStageIds}
+          setBulkSelectedStageIds={setBulkSelectedStageIds}
+          updateWorkflow={updateWorkflow}
+          definition={definition}
+          selectedVersionId={selectedVersionId}
+          currentUser={currentUser}
+          isLoading={isPermissionsTabLoading}
+        />
       )}
     </div>
   );

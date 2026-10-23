@@ -232,6 +232,11 @@ function Field({
   );
 }
 
+let cachedVehicleOptions: Array<{ value: string; label: string }> | null = null;
+let vehicleFetchPromise: Promise<Array<{ value: string; label: string }>> | null = null;
+let cachedDriverOptions: Array<{ value: string; label: string }> | null = null;
+let driverFetchPromise: Promise<Array<{ value: string; label: string }>> | null = null;
+
 export function FormRenderer({
   submitDisabled = false,
   onValuesChange,
@@ -245,8 +250,12 @@ export function FormRenderer({
   const { getActiveItems } = useLov();
   const { currentUser } = useAuth();
   const { error: toastError, warning: toastWarning } = useToast();
-  const [vehicleOptions, setVehicleOptions] = useState<Array<{ value: string; label: string }>>([]);
-  const [driverOptions, setDriverOptions] = useState<Array<{ value: string; label: string }>>([]);
+  const [vehicleOptions, setVehicleOptions] = useState<Array<{ value: string; label: string }>>(
+    () => cachedVehicleOptions ?? [],
+  );
+  const [driverOptions, setDriverOptions] = useState<Array<{ value: string; label: string }>>(
+    () => cachedDriverOptions ?? [],
+  );
   const [initialValuesSnapshot] = useState(() => getInitialValues(definition, initialValues));
   const [values, setValues] = useState<FormValues>(initialValuesSnapshot);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
@@ -267,49 +276,69 @@ export function FormRenderer({
     if (!hasVehicleLookup && !hasDriverLookup) return;
     let cancelled = false;
     if (hasVehicleLookup) {
-      apiFetch('/api/vehicles')
-        .then(async (response) => {
-          if (!response.ok) throw new Error('Unable to load fleet vehicles.');
-          return response.json();
-        })
-        .then(
-          (vehicles: Array<{ id: string; plateNumber: string; model: string; status: string }>) => {
-            if (cancelled) return;
-            setVehicleOptions(
-              vehicles
-                .filter((vehicle) => vehicle.status === 'active')
-                .map((vehicle) => ({
-                  value: vehicle.id,
-                  label: `${vehicle.plateNumber} · ${vehicle.model}`,
-                })),
-            );
-          },
-        )
-        .catch((error: unknown) => {
-          if (!cancelled) {
-            const message =
-              error instanceof Error ? error.message : 'Unable to load fleet vehicles.';
-            toastWarning(message);
-          }
-        });
+      if (cachedVehicleOptions) {
+        setVehicleOptions(cachedVehicleOptions);
+      } else {
+        if (!vehicleFetchPromise) {
+          vehicleFetchPromise = apiFetch('/api/vehicles')
+            .then(async (response) => {
+              if (!response.ok) throw new Error('Unable to load fleet vehicles.');
+              return response.json();
+            })
+            .then(
+              (vehicles: Array<{ id: string; plateNumber: string; model: string; status: string }>) => {
+                const options = vehicles
+                  .filter((vehicle) => vehicle.status === 'active')
+                  .map((vehicle) => ({
+                    value: vehicle.id,
+                    label: `${vehicle.plateNumber} · ${vehicle.model}`,
+                  }));
+                cachedVehicleOptions = options;
+                return options;
+              },
+            )
+            .finally(() => {
+              vehicleFetchPromise = null;
+            });
+        }
+        vehicleFetchPromise
+          .then((opts) => {
+            if (!cancelled) setVehicleOptions(opts);
+          })
+          .catch((error: unknown) => {
+            if (!cancelled) {
+              const message =
+                error instanceof Error ? error.message : 'Unable to load fleet vehicles.';
+              toastWarning(message);
+            }
+          });
+      }
     }
     if (hasDriverLookup) {
-      apiFetch('/api/users/drivers')
-        .then(async (response) => {
-          if (!response.ok) throw new Error('Unable to load active drivers.');
-          return response.json();
-        })
-        .then((drivers: Array<{ id: string; name: string }>) => {
-          if (!cancelled)
-            setDriverOptions(drivers.map((driver) => ({ value: driver.id, label: driver.name })));
-        })
-        .catch((error: unknown) => {
-          if (!cancelled) {
-            const message =
-              error instanceof Error ? error.message : 'Unable to load active drivers.';
-            toastWarning(message);
-          }
-        });
+      if (cachedDriverOptions) {
+        setDriverOptions(cachedDriverOptions);
+      } else {
+        if (!driverFetchPromise) {
+          driverFetchPromise = apiFetch('/api/users/drivers')
+            .then(async (response) => {
+              if (!response.ok) throw new Error('Unable to load active drivers.');
+              return response.json();
+            })
+            .then((drivers: Array<{ id: string; name: string }>) => {
+              const options = drivers.map((driver) => ({ value: driver.id, label: driver.name }));
+              cachedDriverOptions = options;
+              return options;
+            })
+            .finally(() => {
+              driverFetchPromise = null;
+            });
+        }
+        driverFetchPromise
+          .then((opts) => {
+            if (!cancelled) setDriverOptions(opts);
+          })
+          .catch(() => undefined);
+      }
     }
     return () => {
       cancelled = true;

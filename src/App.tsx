@@ -11,6 +11,7 @@ import type { PurchaseRequisitionItem, RepairWorkOrderItem } from '@/features/pr
 import type { TSRFFormData } from '@/features/logistics';
 import { ToastProvider, useToast } from '@/components/ui/toast';
 import { apiFetch } from '@/lib/api';
+// Live Docker hot reload active
 
 // ─── Lazy-loaded Route Components (code-splitting) ────────────────────────────
 
@@ -987,47 +988,7 @@ function InnerApp() {
 
           {/* Form Builder */}
           <Route
-            path={PAGE_ROUTES.form_builder}
-            element={
-              <ProtectedRoute permission="manage:reference_data">
-                <FormBuilderPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path={`${PAGE_ROUTES.form_builder}/forms/:formKey`}
-            element={
-              <ProtectedRoute permission="manage:reference_data">
-                <FormBuilderPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path={`${PAGE_ROUTES.form_builder}/forms/:formKey/versions/:version`}
-            element={
-              <ProtectedRoute permission="manage:reference_data">
-                <FormBuilderPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path={`${PAGE_ROUTES.form_builder}/forms/:formKey/preview/:role/:stage/:version?`}
-            element={
-              <ProtectedRoute permission="manage:reference_data">
-                <FormBuilderPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path={`${PAGE_ROUTES.form_builder}/versions/:version`}
-            element={
-              <ProtectedRoute permission="manage:reference_data">
-                <FormBuilderPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path={`${PAGE_ROUTES.form_builder}/preview/:role/:stage/:version?`}
+            path={`${PAGE_ROUTES.form_builder}/*`}
             element={
               <ProtectedRoute permission="manage:reference_data">
                 <FormBuilderPage />

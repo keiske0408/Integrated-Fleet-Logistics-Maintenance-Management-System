@@ -35,7 +35,7 @@ export interface WorkflowStageMatrixProps {
   updateTransition: (index: number, next: Partial<FormWorkflow['transitions'][number]>) => void;
 }
 
-export const WorkflowStageMatrix: React.FC<WorkflowStageMatrixProps> = ({
+export const WorkflowStageMatrix: React.FC<WorkflowStageMatrixProps> = React.memo(({
   workflow,
   fields,
   updateWorkflow,
@@ -453,4 +453,6 @@ export const WorkflowStageMatrix: React.FC<WorkflowStageMatrixProps> = ({
       </div>
     </div>
   );
-};
+});
+
+WorkflowStageMatrix.displayName = 'WorkflowStageMatrix';

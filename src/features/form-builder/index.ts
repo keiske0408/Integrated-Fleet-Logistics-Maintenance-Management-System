@@ -8,3 +8,5 @@ export * from './validation';
 export * from './PublishedTsrfForm';
 export * from './FormPrintView';
 export * from './WorkflowDiagramPreview';
+export * from './workflowPermissions';
+export * from './components/StageFieldAccessMatrix';

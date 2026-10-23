@@ -5,6 +5,13 @@ import {
   serializeTsrfValues,
   TSRF_V1,
   TSRF_WORKFLOW,
+  bulkSetFieldPermissions,
+  bulkUpdateSingleFieldPermission,
+  copyStagePermissions,
+  getAggregatedFieldPermission,
+  parseFormBuilderPath,
+  StageFieldAccessSkeleton,
+  StageFieldAccessMatrix,
 } from '@/features/form-builder';
 import { evaluateCondition, getFieldState } from '@/features/form-builder';
 import {
@@ -653,4 +660,306 @@ describe('TSRF form definition', () => {
     expect(result.workflow.stages[0].fieldPermissions?.department).toBeDefined();
     expect(result.workflow.transitions[0].requiredFields).toEqual(['department']);
   });
+
+  describe('bulk workflow stage permissions', () => {
+    const testStages = [
+      { id: 'stage_1', label: 'Draft', statusCategory: 'draft' as const },
+      { id: 'stage_2', label: 'Review', statusCategory: 'in_review' as const },
+      { id: 'stage_3', label: 'Approved', statusCategory: 'approved' as const },
+    ];
+    const testFields = [{ key: 'project_name' }, { key: 'destination' }, { key: 'contact' }];
+
+    it('bulk sets all fields to editable across multiple selected stages', () => {
+      const updated = bulkSetFieldPermissions({
+        stages: testStages,
+        stageIds: ['stage_1', 'stage_2'],
+        role: 'department_requester',
+        access: 'edit',
+        fields: testFields,
+      });
+
+      expect(updated[0].fieldPermissions?.project_name?.department_requester).toBe('edit');
+      expect(updated[0].fieldPermissions?.destination?.department_requester).toBe('edit');
+      expect(updated[1].fieldPermissions?.project_name?.department_requester).toBe('edit');
+      expect(updated[1].fieldPermissions?.destination?.department_requester).toBe('edit');
+      // Unselected stage remains untouched
+      expect(updated[2].fieldPermissions).toBeUndefined();
+    });
+
+    it('bulk sets all fields to read-only or resets them to default', () => {
+      const withEdits = bulkSetFieldPermissions({
+        stages: testStages,
+        stageIds: ['stage_1', 'stage_2', 'stage_3'],
+        role: 'approver',
+        access: 'read',
+        fields: testFields,
+      });
+
+      expect(withEdits.every((s) => s.fieldPermissions?.project_name?.approver === 'read')).toBe(
+        true,
+      );
+
+      const reset = bulkSetFieldPermissions({
+        stages: withEdits,
+        stageIds: ['stage_1', 'stage_2'],
+        role: 'approver',
+        access: '',
+        fields: testFields,
+      });
+
+      expect(reset[0].fieldPermissions).toEqual({});
+      expect(reset[1].fieldPermissions).toEqual({});
+      expect(reset[2].fieldPermissions?.project_name?.approver).toBe('read');
+    });
+
+    it('bulk updates a single field permission across selected stages', () => {
+      const updated = bulkUpdateSingleFieldPermission({
+        stages: testStages,
+        stageIds: ['stage_2', 'stage_3'],
+        role: 'finance',
+        fieldKey: 'destination',
+        access: 'hidden',
+      });
+
+      expect(updated[0].fieldPermissions?.destination?.finance).toBeUndefined();
+      expect(updated[1].fieldPermissions?.destination?.finance).toBe('hidden');
+      expect(updated[2].fieldPermissions?.destination?.finance).toBe('hidden');
+    });
+
+    it('copies permissions from a source stage to target stages', () => {
+      const sourceStages = [
+        {
+          id: 'source',
+          label: 'Source',
+          statusCategory: 'draft' as const,
+          fieldPermissions: {
+            project_name: { department_requester: 'edit' as const, approver: 'read' as const },
+            destination: { department_requester: 'edit' as const },
+          },
+        },
+        { id: 'target_1', label: 'Target 1', statusCategory: 'in_review' as const },
+        { id: 'target_2', label: 'Target 2', statusCategory: 'approved' as const },
+      ];
+
+      // Copy for specific role
+      const copiedRole = copyStagePermissions({
+        stages: sourceStages,
+        sourceStageId: 'source',
+        targetStageIds: ['target_1'],
+        role: 'department_requester',
+      });
+
+      expect(copiedRole[1].fieldPermissions?.project_name?.department_requester).toBe('edit');
+      expect(copiedRole[1].fieldPermissions?.project_name?.approver).toBeUndefined();
+      expect(copiedRole[2].fieldPermissions).toBeUndefined();
+
+      // Copy for all roles
+      const copiedAll = copyStagePermissions({
+        stages: sourceStages,
+        sourceStageId: 'source',
+        targetStageIds: ['target_1', 'target_2'],
+      });
+
+      expect(copiedAll[1].fieldPermissions).toEqual(sourceStages[0].fieldPermissions);
+      expect(copiedAll[2].fieldPermissions).toEqual(sourceStages[0].fieldPermissions);
+    });
+
+    it('accurately reports aggregate field permission status as uniform or mixed', () => {
+      const stages = [
+        {
+          id: 's1',
+          label: 'S1',
+          statusCategory: 'draft' as const,
+          fieldPermissions: { project_name: { approver: 'read' as const } },
+        },
+        {
+          id: 's2',
+          label: 'S2',
+          statusCategory: 'in_review' as const,
+          fieldPermissions: { project_name: { approver: 'read' as const } },
+        },
+        {
+          id: 's3',
+          label: 'S3',
+          statusCategory: 'approved' as const,
+          fieldPermissions: { project_name: { approver: 'hidden' as const } },
+        },
+      ];
+
+      expect(
+        getAggregatedFieldPermission({
+          stages,
+          stageIds: ['s1', 's2'],
+          role: 'approver',
+          fieldKey: 'project_name',
+        }),
+      ).toBe('read');
+
+      expect(
+        getAggregatedFieldPermission({
+          stages,
+          stageIds: ['s1', 's2', 's3'],
+          role: 'approver',
+          fieldKey: 'project_name',
+        }),
+      ).toBe('mixed');
+    });
+  });
+
+  describe('Unified FormBuilder Routing Path Parser', () => {
+    it('correctly parses base form builder URL', () => {
+      expect(parseFormBuilderPath('/form-builder')).toEqual({
+        formKey: undefined,
+        version: undefined,
+        role: undefined,
+        stage: undefined,
+        isPreview: false,
+      });
+    });
+
+    it('correctly parses preview URL with role and stage for core TSRF', () => {
+      expect(parseFormBuilderPath('/form-builder/preview/approver/dispatch_assignment')).toEqual({
+        formKey: undefined,
+        version: undefined,
+        role: 'approver',
+        stage: 'dispatch_assignment',
+        isPreview: true,
+      });
+    });
+
+    it('correctly parses preview URL with version', () => {
+      expect(parseFormBuilderPath('/form-builder/preview/finance/submitted/2')).toEqual({
+        formKey: undefined,
+        version: '2',
+        role: 'finance',
+        stage: 'submitted',
+        isPreview: true,
+      });
+    });
+
+    it('correctly parses custom form paths', () => {
+      expect(parseFormBuilderPath('/form-builder/forms/trip_inspection')).toEqual({
+        formKey: 'trip_inspection',
+        version: undefined,
+        role: undefined,
+        stage: undefined,
+        isPreview: false,
+      });
+
+      expect(
+        parseFormBuilderPath('/form-builder/forms/trip_inspection/preview/driver/draft'),
+      ).toEqual({
+        formKey: 'trip_inspection',
+        version: undefined,
+        role: 'driver',
+        stage: 'draft',
+        isPreview: true,
+      });
+
+      expect(parseFormBuilderPath('/form-builder/forms/trip_inspection/versions/5')).toEqual({
+        formKey: 'trip_inspection',
+        version: '5',
+        role: undefined,
+        stage: undefined,
+        isPreview: false,
+      });
+    });
+  });
+
+  describe('StageFieldAccessMatrix and Loading States', () => {
+    it('exports StageFieldAccessSkeleton and StageFieldAccessMatrix components', () => {
+      expect(StageFieldAccessSkeleton).toBeDefined();
+      expect(StageFieldAccessMatrix).toBeDefined();
+    });
+
+    it('correctly aggregates field permissions across multiple stages in bulk mode', () => {
+      const stages = [
+        {
+          id: 'stage_1',
+          label: 'Stage 1',
+          fieldPermissions: {
+            fieldA: { department_requester: 'edit' as const },
+            fieldB: { department_requester: 'read' as const },
+          },
+        },
+        {
+          id: 'stage_2',
+          label: 'Stage 2',
+          fieldPermissions: {
+            fieldA: { department_requester: 'edit' as const },
+            fieldB: { department_requester: 'hidden' as const },
+          },
+        },
+      ];
+
+      // fieldA is 'edit' in both stages -> aggregated is 'edit'
+      const aggFieldA = getAggregatedFieldPermission({
+        stages,
+        stageIds: ['stage_1', 'stage_2'],
+        role: 'department_requester',
+        fieldKey: 'fieldA',
+      });
+      expect(aggFieldA).toBe('edit');
+
+      // fieldB differs ('read' vs 'hidden') -> aggregated is 'mixed'
+      const aggFieldB = getAggregatedFieldPermission({
+        stages,
+        stageIds: ['stage_1', 'stage_2'],
+        role: 'department_requester',
+        fieldKey: 'fieldB',
+      });
+      expect(aggFieldB).toBe('mixed');
+
+      // non-existent field returns ''
+      const aggUnknown = getAggregatedFieldPermission({
+        stages,
+        stageIds: ['stage_1', 'stage_2'],
+        role: 'department_requester',
+        fieldKey: 'fieldC',
+      });
+      expect(aggUnknown).toBe('');
+    });
+
+    it('bulk updates single field permission across stages cleanly', () => {
+      const stages = [
+        { id: 'stage_1', label: 'Stage 1', fieldPermissions: {} },
+        { id: 'stage_2', label: 'Stage 2', fieldPermissions: {} },
+      ];
+
+      const updated = bulkUpdateSingleFieldPermission({
+        stages,
+        stageIds: ['stage_1', 'stage_2'],
+        role: 'approver',
+        fieldKey: 'approver_notes',
+        access: 'edit',
+      });
+
+      expect(updated[0].fieldPermissions?.approver_notes?.approver).toBe('edit');
+      expect(updated[1].fieldPermissions?.approver_notes?.approver).toBe('edit');
+    });
+
+    it('copies stage permissions selectively by role', () => {
+      const stages = [
+        {
+          id: 'stage_source',
+          label: 'Source',
+          fieldPermissions: {
+            fieldA: { requester: 'read' as const, admin: 'edit' as const },
+          },
+        },
+        { id: 'stage_dest', label: 'Dest', fieldPermissions: {} },
+      ];
+
+      const copiedRoleOnly = copyStagePermissions({
+        stages,
+        sourceStageId: 'stage_source',
+        targetStageIds: ['stage_dest'],
+        role: 'requester',
+      });
+
+      expect(copiedRoleOnly[1].fieldPermissions?.fieldA?.requester).toBe('read');
+      expect(copiedRoleOnly[1].fieldPermissions?.fieldA?.admin).toBeUndefined();
+    });
+  });
 });
+

@@ -121,7 +121,7 @@ export interface FormBuilderModalsProps {
   onPerformRemoveSection: (sectionId: string) => void;
 }
 
-export const FormBuilderModals: React.FC<FormBuilderModalsProps> = ({
+export const FormBuilderModals: React.FC<FormBuilderModalsProps> = React.memo(({
   showRestrictedConfirm,
   setShowRestrictedConfirm,
   restrictedStagesToConfirm,
@@ -1072,4 +1072,6 @@ export const FormBuilderModals: React.FC<FormBuilderModalsProps> = ({
       )}
     </>
   );
-};
+});
+
+FormBuilderModals.displayName = 'FormBuilderModals';
