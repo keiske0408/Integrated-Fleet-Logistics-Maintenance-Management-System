@@ -18,6 +18,22 @@ COPY . .
 RUN npm run build
 
 # ==============================================================================
+# Development stage with Vite hot-module replacement
+# ==============================================================================
+FROM node:20-alpine AS dev
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --ignore-scripts
+
+COPY . .
+
+EXPOSE 80
+
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "80"]
+
+# ==============================================================================
 # Stage 2: Serve statically via lightweight Nginx Alpine
 # ==============================================================================
 FROM nginx:alpine
@@ -34,6 +50,6 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 EXPOSE 80
 
 HEALTHCHECK --interval=15s --timeout=3s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://localhost/ || exit 1
+  CMD wget -q -O /dev/null http://127.0.0.1/ || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]

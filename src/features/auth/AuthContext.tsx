@@ -1,7 +1,12 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { type AccountInfo } from '@azure/msal-browser';
 import { type Permission, type RoleDefinition, DEFAULT_ROLES } from '@/features/roles/RolesContext';
-import { apiFetch, setDevelopmentPrincipal } from '@/lib/api';
+import {
+  apiFetch,
+  bumpAuthEpoch,
+  registerUnauthorizedHandler,
+  setDevelopmentPrincipal,
+} from '@/lib/api';
 import { entraApiScope, entraEnabled, msalInstance } from '@/lib/authClient';
 
 export type { Permission };
@@ -28,6 +33,8 @@ export interface User {
   isActive: boolean;
   landingPage?: string;
   hasLocalPassword?: boolean;
+  /** 'session' = revocable server session (cookie/Entra); 'demo' = offline dev identity. */
+  authMethod?: 'session' | 'demo';
 }
 
 const DEFAULT_USERS: User[] = developmentDemoAuthEnabled
@@ -134,6 +141,8 @@ interface AuthContextValue {
   allUsers: User[];
   isAuthenticated: boolean;
   isLoading: boolean;
+  sessionNotice: string | null;
+  clearSessionNotice: () => void;
   roleDefinitions: RoleDefinition[];
   setRoleDefinitions: (roles: RoleDefinition[]) => void;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
@@ -158,20 +167,46 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 const DEMO_USER_STORAGE_KEY = 'hulma_demo_user_v1';
+const AUTH_SYNC_CHANNEL = 'hulma_fleet_auth_sync';
+const AUTH_SYNC_STORAGE_KEY = 'hulma_fleet_auth_event';
+/** Background re-validation interval while the tab is visible. */
+const SESSION_CHECK_INTERVAL_MS = 15_000;
+/** Minimum gap between re-validations triggered by focus/visibility events. */
+const SESSION_CHECK_THROTTLE_MS = 2_500;
+const SESSION_ENDED_NOTICE =
+  'Your session has ended. You were signed out here because you logged out in another browser or your session expired.';
+const OTHER_TAB_NOTICE = 'You signed out in another tab.';
 
-function loadStoredDemoUser(): User | null {
+const CURRENT_TAB_ID =
+  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2);
+
+type AuthSyncMessage =
+  | { type: 'signed_out'; senderId: string }
+  | { type: 'signed_in'; senderId: string };
+
+function isDemoUser(user: User | null): boolean {
+  return user?.authMethod === 'demo';
+}
+
+function loadStoredUser(): User | null {
   if (typeof window === 'undefined') return null;
   try {
     const raw =
       window.sessionStorage?.getItem(DEMO_USER_STORAGE_KEY) ||
       window.localStorage?.getItem(DEMO_USER_STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as User) : null;
+    if (!raw) return null;
+    const user = JSON.parse(raw) as User;
+    const authMethod = user.authMethod ?? 'session';
+    if (authMethod === 'demo' && !developmentDemoAuthEnabled) return null;
+    return { ...user, authMethod };
   } catch {
     return null;
   }
 }
 
-function saveStoredDemoUser(user: User | null): void {
+function saveStoredUser(user: User | null): void {
   if (typeof window === 'undefined') return;
   try {
     if (user) {
@@ -187,39 +222,118 @@ function saveStoredDemoUser(user: User | null): void {
   }
 }
 
+function principalFor(user: User) {
+  return { id: user.id, name: user.name, role: user.role, department: user.department };
+}
+
+/** Notify other tabs of this browser. BroadcastChannel with a storage-event fallback. */
+function postAuthSync(type: 'signed_out' | 'signed_in'): void {
+  if (typeof window === 'undefined') return;
+  const message: AuthSyncMessage = { type, senderId: CURRENT_TAB_ID };
+  if (typeof BroadcastChannel !== 'undefined') {
+    try {
+      const channel = new BroadcastChannel(AUTH_SYNC_CHANNEL);
+      channel.postMessage(message);
+      channel.close();
+      return;
+    } catch {
+      // fall through to storage fallback
+    }
+  }
+  try {
+    window.localStorage?.setItem(
+      AUTH_SYNC_STORAGE_KEY,
+      JSON.stringify({ ...message, at: Date.now() }),
+    );
+  } catch {
+    // ignore
+  }
+}
+
+function sameUser(a: User | null, b: User | null): boolean {
+  if (!a || !b) return a === b;
+  return (
+    a.id === b.id &&
+    a.name === b.name &&
+    a.email === b.email &&
+    a.role === b.role &&
+    a.department === b.department &&
+    a.landingPage === b.landingPage &&
+    a.authMethod === b.authMethod
+  );
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const initialStoredUser = loadStoredDemoUser();
+  const [initialStoredUser] = useState<User | null>(() => {
+    const stored = loadStoredUser();
+    // Dev identity headers are only ever valid for offline demo users. Clearing them
+    // synchronously (before any child effect fires a request) prevents a real user from
+    // silently staying authenticated through headers after their server session ends.
+    setDevelopmentPrincipal(stored && isDemoUser(stored) ? principalFor(stored) : null);
+    return stored;
+  });
   const [currentUser, setCurrentUser] = useState<User | null>(initialStoredUser);
   const [allUsers, setAllUsers] = useState<User[]>(DEFAULT_USERS);
   const [roleDefinitions, setRoleDefinitions] = useState<RoleDefinition[]>(DEFAULT_ROLES);
-  const [isLoading, setIsLoading] = useState(!initialStoredUser);
+  // Stored sessions are verified with the server before protected routes render.
+  const [isLoading, setIsLoading] = useState(Boolean(initialStoredUser));
+  const [sessionNotice, setSessionNotice] = useState<string | null>(null);
 
-  // Sync developmentPrincipal if stored demo user exists
+  const currentUserRef = useRef<User | null>(initialStoredUser);
+  const lastCheckRef = useRef(0);
+
   useEffect(() => {
-    if (initialStoredUser && developmentDemoAuthEnabled) {
-      setDevelopmentPrincipal({
-        id: initialStoredUser.id,
-        name: initialStoredUser.name,
-        role: initialStoredUser.role,
-        department: initialStoredUser.department,
-      });
-    }
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
+
+  const clearSessionNotice = useCallback(() => setSessionNotice(null), []);
+
+  /** Single place that establishes a signed-in user. */
+  const applyUser = useCallback((user: User) => {
+    currentUserRef.current = user;
+    setCurrentUser((previous) => (sameUser(previous, user) ? previous : user));
+    saveStoredUser(user);
   }, []);
 
+  /** Single place that tears down local auth state. Idempotent. */
+  const endSession = useCallback((reason: 'user' | 'revoked' | 'other_tab') => {
+    currentUserRef.current = null;
+    bumpAuthEpoch();
+    saveStoredUser(null);
+    setDevelopmentPrincipal(null);
+    msalInstance.setActiveAccount(null);
+    setCurrentUser(null);
+    setSessionNotice(
+      reason === 'revoked' ? SESSION_ENDED_NOTICE : reason === 'other_tab' ? OTHER_TAB_NOTICE : null,
+    );
+    if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+      window.history.replaceState(null, '', '/');
+    }
+    if (reason !== 'other_tab') postAuthSync('signed_out');
+  }, []);
+
+  /** Ask the server who we are. 401s are handled by the apiFetch interceptor. */
+  const refreshFromServer = useCallback(async () => {
+    const response = await apiFetch('/api/auth/me', { cache: 'no-store' });
+    if (!response.ok) return;
+    const user = fromApiUser((await response.json()) as AuthApiUser);
+    applyUser({ ...user, authMethod: 'session' });
+  }, [applyUser]);
+
+  // Any authenticated request returning 401 means the server session is gone.
   useEffect(() => {
+    registerUnauthorizedHandler(() => {
+      endSession('revoked');
+    });
+    return () => registerUnauthorizedHandler(null);
+  }, [endSession]);
+
+  // Initial verification of a server session on mount.
+  useEffect(() => {
+    if (!initialStoredUser) return;
     let cancelled = false;
-    void apiFetch('/api/auth/me')
-      .then(async (response) => {
-        if (!response.ok) return null;
-        return (await response.json()) as AuthApiUser;
-      })
-      .then((user) => {
-        if (!cancelled && user) {
-          const mapped = fromApiUser(user);
-          setCurrentUser(mapped);
-          saveStoredDemoUser(mapped);
-        }
-      })
+    lastCheckRef.current = Date.now();
+    refreshFromServer()
       .catch(() => undefined)
       .finally(() => {
         if (!cancelled) setIsLoading(false);
@@ -227,48 +341,115 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [initialStoredUser, refreshFromServer]);
 
-  const login = async (email: string, password: string) => {
-    if (developmentDemoAuthEnabled && USER_PASSWORDS[email.toLowerCase()] === password) {
-      const demoUser = allUsers.find((user) => user.email.toLowerCase() === email.toLowerCase());
-      if (demoUser) {
-        msalInstance.setActiveAccount(null);
-        setDevelopmentPrincipal({
-          id: demoUser.id,
-          name: demoUser.name,
-          role: demoUser.role,
-          department: demoUser.department,
-        });
-        try {
-          const response = await apiFetch('/api/roles/login-redirects/me');
-          if (!response.ok) throw new Error('Unable to load role landing page.');
-          const settings = await response.json();
-          const userWithLanding = { ...demoUser, landingPage: settings.landingPage };
-          setCurrentUser(userWithLanding);
-          saveStoredDemoUser(userWithLanding);
-        } catch {
-          setDevelopmentPrincipal(null);
-          saveStoredDemoUser(null);
-          return { success: false, error: 'Unable to load role landing page. Please retry.' };
-        }
-        return { success: true };
+  // Same-browser, cross-tab synchronisation.
+  useEffect(() => {
+    const onMessage = (message: AuthSyncMessage | undefined) => {
+      if (!message || message.senderId === CURRENT_TAB_ID) return;
+      if (message.type === 'signed_out') endSession('other_tab');
+      if (message.type === 'signed_in' && !currentUserRef.current) {
+        setSessionNotice(null);
+        void refreshFromServer().catch(() => undefined);
+      }
+    };
+
+    let channel: BroadcastChannel | null = null;
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        channel = new BroadcastChannel(AUTH_SYNC_CHANNEL);
+        channel.onmessage = (event: MessageEvent<AuthSyncMessage>) => onMessage(event.data);
+      } catch {
+        channel = null;
       }
     }
+
+    const onStorage = (event: StorageEvent) => {
+      if (channel || event.key !== AUTH_SYNC_STORAGE_KEY || !event.newValue) return;
+      try {
+        onMessage(JSON.parse(event.newValue) as AuthSyncMessage);
+      } catch {
+        // ignore malformed payloads
+      }
+    };
+    window.addEventListener('storage', onStorage);
+
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      channel?.close();
+    };
+  }, [endSession, refreshFromServer]);
+
+  // Cross-browser detection: re-validate when the user returns to the tab, when the
+  // network comes back, and periodically while the tab is visible.
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const revalidate = (force = false) => {
+      if (document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (!force && now - lastCheckRef.current < SESSION_CHECK_THROTTLE_MS) return;
+      lastCheckRef.current = now;
+      void refreshFromServer().catch(() => undefined);
+    };
+
+    const onActivity = () => revalidate();
+    window.addEventListener('focus', onActivity);
+    window.addEventListener('online', onActivity);
+    document.addEventListener('visibilitychange', onActivity);
+    const interval = window.setInterval(() => revalidate(true), SESSION_CHECK_INTERVAL_MS);
+
+    return () => {
+      window.removeEventListener('focus', onActivity);
+      window.removeEventListener('online', onActivity);
+      document.removeEventListener('visibilitychange', onActivity);
+      window.clearInterval(interval);
+    };
+  }, [currentUser, refreshFromServer]);
+
+  const loginDemo = async (email: string) => {
+    const demoUser = allUsers.find((user) => user.email.toLowerCase() === email.toLowerCase());
+    if (!demoUser) return { success: false, error: 'Invalid email or password.' };
+    setDevelopmentPrincipal(principalFor(demoUser));
+    let landingPage = demoUser.role === 'auditor' ? '/reports' : '/dashboard';
     try {
-      msalInstance.setActiveAccount(null);
+      const response = await apiFetch('/api/roles/login-redirects/me');
+      if (response.ok) {
+        const settings = await response.json();
+        if (settings.landingPage) landingPage = settings.landingPage;
+      }
+    } catch {
+      // offline dev fallback
+    }
+    bumpAuthEpoch();
+    applyUser({ ...demoUser, landingPage, authMethod: 'demo' });
+    setSessionNotice(null);
+    return { success: true };
+  };
+
+  const login = async (email: string, password: string) => {
+    msalInstance.setActiveAccount(null);
+    setDevelopmentPrincipal(null);
+    const matchesDemoAccount =
+      developmentDemoAuthEnabled && USER_PASSWORDS[email.toLowerCase()] === password;
+    try {
+      // Real server sessions always win: they can be revoked, demo identities cannot.
       const response = await apiFetch('/api/auth/local/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
-      const result = await response.json();
-      if (!response.ok) return { success: false, error: result.error ?? 'Unable to sign in.' };
-      const user = fromApiUser(result.user as AuthApiUser);
-      setCurrentUser(user);
-      saveStoredDemoUser(user);
-      return { success: true };
+      const result = await response.json().catch(() => ({}));
+      if (response.ok) {
+        bumpAuthEpoch();
+        applyUser({ ...fromApiUser(result.user as AuthApiUser), authMethod: 'session' });
+        setSessionNotice(null);
+        postAuthSync('signed_in');
+        return { success: true };
+      }
+      return { success: false, error: result.error ?? 'Unable to sign in.' };
     } catch {
+      if (matchesDemoAccount) return loginDemo(email);
       return { success: false, error: 'Unable to reach the sign-in service.' };
     }
   };
@@ -326,7 +507,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           error: 'This Microsoft identity is not linked to a Fleet account.',
         };
       }
-      setCurrentUser(fromApiUser((await response.json()) as AuthApiUser));
+      bumpAuthEpoch();
+      applyUser({ ...fromApiUser((await response.json()) as AuthApiUser), authMethod: 'session' });
+      setSessionNotice(null);
+      postAuthSync('signed_in');
       return { success: true };
     } catch {
       msalInstance.setActiveAccount(null);
@@ -356,13 +540,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = () => {
-    if (currentUser && !USER_PASSWORDS[currentUser.email.toLowerCase()]) {
-      void apiFetch('/api/auth/local/logout', { method: 'POST' });
-    }
-    saveStoredDemoUser(null);
-    setDevelopmentPrincipal(null);
-    msalInstance.setActiveAccount(null);
-    setCurrentUser(null);
+    // Revoke on the server first, then tear down local state.
+    // keepalive lets the request finish during page navigation.
+    void apiFetch('/api/auth/local/logout', { method: 'POST', keepalive: true }).catch(
+      () => undefined,
+    );
+    endSession('user');
   };
 
   const hasPermission = (permission: Permission): boolean => {
@@ -407,6 +590,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         allUsers,
         isAuthenticated: !!currentUser,
         isLoading,
+        sessionNotice,
+        clearSessionNotice,
         roleDefinitions,
         setRoleDefinitions,
         login,

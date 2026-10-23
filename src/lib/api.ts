@@ -60,6 +60,42 @@ function backendRole(role: string): string {
   return mapping[role] ?? role;
 }
 
+// ─── Session-ended signalling ────────────────────────────────────────────────
+// The server session is the single source of truth. Any authenticated request
+// that comes back 401 means the session is gone (expired, revoked by a logout
+// in another browser, password change, ...). The auth layer registers a handler
+// to react to that exactly once.
+//
+// `authEpoch` is bumped on every login/logout so a 401 from a request that was
+// started under a previous session can never sign out a freshly created one.
+
+export type UnauthorizedHandler = () => void;
+let unauthorizedHandler: UnauthorizedHandler | null = null;
+let authEpoch = 0;
+
+export function registerUnauthorizedHandler(handler: UnauthorizedHandler | null) {
+  unauthorizedHandler = handler;
+}
+
+export function bumpAuthEpoch(): void {
+  authEpoch += 1;
+}
+
+/** Endpoints where 401 means "bad credentials/token", not "session ended". */
+const SESSION_AGNOSTIC_PATHS = [
+  '/api/auth/local/login',
+  '/api/auth/local/signup',
+  '/api/auth/local/password-reset',
+  '/api/auth/local/logout',
+  '/api/auth/signup/options',
+];
+
+function requestUrl(input: RequestInfo | URL): string {
+  if (typeof input === 'string') return input;
+  if (input instanceof URL) return input.toString();
+  return input.url;
+}
+
 export async function apiFetch(
   input: RequestInfo | URL,
   init: RequestInit = {},
@@ -86,5 +122,18 @@ export async function apiFetch(
     const csrfToken = readCookie('fleet_csrf');
     if (csrfToken) headers.set('X-CSRF-Token', csrfToken);
   }
-  return fetch(input, { ...init, headers, credentials: 'include' });
+  const epochAtRequest = authEpoch;
+  const response = await fetch(input, { ...init, headers, credentials: 'include' });
+
+  if (
+    response.status === 401 &&
+    epochAtRequest === authEpoch &&
+    unauthorizedHandler &&
+    !SESSION_AGNOSTIC_PATHS.some((path) => requestUrl(input).includes(path))
+  ) {
+    unauthorizedHandler();
+  }
+
+  return response;
 }
+

@@ -27,8 +27,16 @@ interface SignupOptions {
 
 export function LoginPage() {
   const navigate = useNavigate();
-  const { login, signup, verifySignupEmail, loginWithEntra, requestPasswordReset, resetPassword } =
-    useAuth();
+  const {
+    login,
+    signup,
+    verifySignupEmail,
+    loginWithEntra,
+    requestPasswordReset,
+    resetPassword,
+    sessionNotice,
+    clearSessionNotice,
+  } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -77,6 +85,7 @@ export function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    clearSessionNotice();
     setError('');
     setNotice('');
     setVerificationUrl('');
@@ -255,6 +264,13 @@ export function LoginPage() {
                   ? 'An administrator will assign your Fleet role after email verification.'
                   : 'Access the fleet management portal'}
           </p>
+
+          {sessionNotice && !error && !notice && (
+            <div className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{sessionNotice}</span>
+            </div>
+          )}
 
           {error && (
             <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/30 flex items-center gap-2 text-sm text-destructive">
