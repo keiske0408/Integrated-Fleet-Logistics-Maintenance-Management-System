@@ -133,6 +133,7 @@ export function LoginPage() {
   };
 
   const handleEntraLogin = async () => {
+    clearSessionNotice();
     setError('');
     setLoading(true);
     const result = await loginWithEntra();
@@ -142,6 +143,7 @@ export function LoginPage() {
   };
 
   const handlePasswordResetRequest = async () => {
+    clearSessionNotice();
     setError('');
     setNotice('');
     setLoading(true);
@@ -265,12 +267,20 @@ export function LoginPage() {
                   : 'Access the fleet management portal'}
           </p>
 
-          {sessionNotice && !error && !notice && (
-            <div className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>{sessionNotice}</span>
-            </div>
-          )}
+          {sessionNotice &&
+            !isSignup &&
+            !resetToken &&
+            !signupVerificationToken &&
+            !error &&
+            !notice && (
+              <div
+                role="status"
+                className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400"
+              >
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{sessionNotice}</span>
+              </div>
+            )}
 
           {error && (
             <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/30 flex items-center gap-2 text-sm text-destructive">
@@ -486,6 +496,7 @@ export function LoginPage() {
               type="button"
               className="mt-3 w-full text-center text-sm text-muted-foreground hover:text-foreground"
               onClick={() => {
+                clearSessionNotice();
                 setError('');
                 setNotice('');
                 setVerificationUrl('');

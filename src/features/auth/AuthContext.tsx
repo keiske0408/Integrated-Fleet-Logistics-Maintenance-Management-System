@@ -183,8 +183,7 @@ const CURRENT_TAB_ID =
     : Math.random().toString(36).slice(2);
 
 type AuthSyncMessage =
-  | { type: 'signed_out'; senderId: string }
-  | { type: 'signed_in'; senderId: string };
+  { type: 'signed_out'; senderId: string } | { type: 'signed_in'; senderId: string };
 
 function isDemoUser(user: User | null): boolean {
   return user?.authMethod === 'demo';
@@ -280,6 +279,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [sessionNotice, setSessionNotice] = useState<string | null>(null);
 
   const currentUserRef = useRef<User | null>(initialStoredUser);
+  const sessionRevisionRef = useRef(0);
   const lastCheckRef = useRef(0);
 
   useEffect(() => {
@@ -290,6 +290,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   /** Single place that establishes a signed-in user. */
   const applyUser = useCallback((user: User) => {
+    sessionRevisionRef.current += 1;
     currentUserRef.current = user;
     setCurrentUser((previous) => (sameUser(previous, user) ? previous : user));
     saveStoredUser(user);
@@ -297,6 +298,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   /** Single place that tears down local auth state. Idempotent. */
   const endSession = useCallback((reason: 'user' | 'revoked' | 'other_tab') => {
+    sessionRevisionRef.current += 1;
+    // Anonymous/public requests and duplicate cross-tab events cannot end a
+    // session that this tab does not have.
+    if (!currentUserRef.current) return;
     currentUserRef.current = null;
     bumpAuthEpoch();
     saveStoredUser(null);
@@ -304,7 +309,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     msalInstance.setActiveAccount(null);
     setCurrentUser(null);
     setSessionNotice(
-      reason === 'revoked' ? SESSION_ENDED_NOTICE : reason === 'other_tab' ? OTHER_TAB_NOTICE : null,
+      reason === 'revoked'
+        ? SESSION_ENDED_NOTICE
+        : reason === 'other_tab'
+          ? OTHER_TAB_NOTICE
+          : null,
     );
     if (typeof window !== 'undefined' && window.location.pathname !== '/') {
       window.history.replaceState(null, '', '/');
@@ -314,17 +323,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   /** Ask the server who we are. 401s are handled by the apiFetch interceptor. */
   const refreshFromServer = useCallback(async () => {
+    const revisionAtRequest = sessionRevisionRef.current;
     const response = await apiFetch('/api/auth/me', { cache: 'no-store' });
     if (!response.ok) return;
     const user = fromApiUser((await response.json()) as AuthApiUser);
+    // A successful check started before logout/login must not resurrect or
+    // replace the session that was established in the meantime.
+    if (sessionRevisionRef.current !== revisionAtRequest) return;
     applyUser({ ...user, authMethod: 'session' });
   }, [applyUser]);
 
   // Any authenticated request returning 401 means the server session is gone.
   useEffect(() => {
-    registerUnauthorizedHandler(() => {
-      endSession('revoked');
-    });
+    registerUnauthorizedHandler(
+      () => endSession('revoked'),
+      () => !!currentUserRef.current && !isDemoUser(currentUserRef.current),
+    );
     return () => registerUnauthorizedHandler(null);
   }, [endSession]);
 

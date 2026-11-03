@@ -71,10 +71,15 @@ function backendRole(role: string): string {
 
 export type UnauthorizedHandler = () => void;
 let unauthorizedHandler: UnauthorizedHandler | null = null;
+let hasAuthenticatedSession: (() => boolean) | null = null;
 let authEpoch = 0;
 
-export function registerUnauthorizedHandler(handler: UnauthorizedHandler | null) {
+export function registerUnauthorizedHandler(
+  handler: UnauthorizedHandler | null,
+  isAuthenticated: (() => boolean) | null = null,
+) {
   unauthorizedHandler = handler;
+  hasAuthenticatedSession = isAuthenticated;
 }
 
 export function bumpAuthEpoch(): void {
@@ -96,10 +101,26 @@ function requestUrl(input: RequestInfo | URL): string {
   return input.url;
 }
 
+function isSessionAgnosticRequest(input: RequestInfo | URL, method: string): boolean {
+  const path = new URL(requestUrl(input), window.location.origin).pathname;
+  if (SESSION_AGNOSTIC_PATHS.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))) {
+    return true;
+  }
+  return (
+    path === '/api/health' ||
+    path.startsWith('/api/forms/published/') ||
+    (path === '/api/theme' && method === 'GET')
+  );
+}
+
 export async function apiFetch(
   input: RequestInfo | URL,
   init: RequestInit = {},
 ): Promise<Response> {
+  // Capture before token acquisition: a delayed request must never inherit a
+  // session established while it was waiting for Microsoft authentication.
+  const epochAtRequest = authEpoch;
+  const sessionAtRequest = hasAuthenticatedSession?.() === true;
   const headers = new Headers(init.headers);
   const account = msalInstance.getActiveAccount();
   if (account && entraApiScope) {
@@ -117,19 +138,20 @@ export async function apiFetch(
       headers.set('x-user-department', developmentPrincipal.department);
   }
 
-  const method = (init.method ?? 'GET').toUpperCase();
+  const method = (init.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
   if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
     const csrfToken = readCookie('fleet_csrf');
     if (csrfToken) headers.set('X-CSRF-Token', csrfToken);
   }
-  const epochAtRequest = authEpoch;
   const response = await fetch(input, { ...init, headers, credentials: 'include' });
 
   if (
     response.status === 401 &&
+    sessionAtRequest &&
+    hasAuthenticatedSession?.() === true &&
     epochAtRequest === authEpoch &&
     unauthorizedHandler &&
-    !SESSION_AGNOSTIC_PATHS.some((path) => requestUrl(input).includes(path))
+    !isSessionAgnosticRequest(input, method)
   ) {
     unauthorizedHandler();
   }
@@ -137,3 +159,39 @@ export async function apiFetch(
   return response;
 }
 
+export async function apiFetchAllPages<T>(path: string, pageSize = 500): Promise<T[]> {
+  if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 500) {
+    throw new RangeError('Page size must be an integer between 1 and 500.');
+  }
+  const rows: T[] = [];
+  let offset: number | null = 0;
+
+  while (offset !== null) {
+    const separator = path.includes('?') ? '&' : '?';
+    const response = await apiFetch(`${path}${separator}limit=${pageSize}&offset=${offset}`);
+    if (!response.ok) {
+      throw new Error(`Unable to load paginated resource (${response.status}).`);
+    }
+
+    const page: unknown = await response.json();
+    if (!Array.isArray(page)) {
+      throw new Error('Paginated API response must be an array.');
+    }
+    rows.push(...(page as T[]));
+
+    if (response.headers.get('X-Has-More') !== 'true') {
+      offset = null;
+      continue;
+    }
+    const nextOffset = response.headers.get('X-Next-Offset');
+    if (!nextOffset || !/^\d+$/.test(nextOffset)) {
+      throw new Error('Paginated API response is missing a valid next offset.');
+    }
+    const next = Number(nextOffset);
+    if (!Number.isSafeInteger(next) || next <= offset) {
+      throw new Error('Paginated API returned an unsafe next offset.');
+    }
+    offset = next;
+  }
+  return rows;
+}

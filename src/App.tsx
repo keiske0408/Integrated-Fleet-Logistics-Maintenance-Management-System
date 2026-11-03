@@ -10,7 +10,7 @@ import type { VehicleItem } from '@/features/fleet';
 import type { PurchaseRequisitionItem, RepairWorkOrderItem } from '@/features/procurement';
 import type { TSRFFormData } from '@/features/logistics';
 import { ToastProvider, useToast } from '@/components/ui/toast';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, apiFetchAllPages } from '@/lib/api';
 // Live Docker hot reload active
 
 // ─── Lazy-loaded Route Components (code-splitting) ────────────────────────────
@@ -325,10 +325,10 @@ function InnerApp() {
   // ── Database Data Synchronization (TICKET-101 & TICKET-102) ───────────────
   const loadFleetData = useCallback(async () => {
     try {
-      const [vRes, prRes, woRes] = await Promise.all([
+      const [vRes, prData, woData] = await Promise.all([
         apiFetch('/api/vehicles'),
-        apiFetch('/api/procurement/pr'),
-        apiFetch('/api/procurement/orders'),
+        apiFetchAllPages<PurchaseRequisitionItem>('/api/procurement/pr'),
+        apiFetchAllPages<RepairWorkOrderItem>('/api/procurement/orders'),
       ]);
       if (vRes.ok) {
         const vData: VehicleItem[] = await vRes.json();
@@ -336,17 +336,11 @@ function InnerApp() {
           setVehicles(vData);
         }
       }
-      if (prRes.ok) {
-        const prData: PurchaseRequisitionItem[] = await prRes.json();
-        if (Array.isArray(prData) && prData.length > 0) {
-          setPrs(prData);
-        }
+      if (prData.length > 0) {
+        setPrs(prData);
       }
-      if (woRes.ok) {
-        const woData: RepairWorkOrderItem[] = await woRes.json();
-        if (Array.isArray(woData) && woData.length > 0) {
-          setWorkOrders(woData);
-        }
+      if (woData.length > 0) {
+        setWorkOrders(woData);
       }
     } catch {
       // Gracefully retain initial state on network failure

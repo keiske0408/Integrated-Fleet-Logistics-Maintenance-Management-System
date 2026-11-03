@@ -43,6 +43,7 @@ RUN rm /etc/nginx/conf.d/default.conf
 
 # Copy production nginx configuration with API reverse proxy & SPA routing
 COPY nginx.conf /etc/nginx/conf.d/
+COPY security-headers.conf /etc/nginx/snippets/security-headers.conf
 
 # Copy compiled web assets from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
