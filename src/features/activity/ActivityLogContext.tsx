@@ -33,7 +33,11 @@ export type LogAction =
   | 'Login'
   | 'Logout'
   | 'Permission Changed'
-  | 'Published';
+  | 'Published'
+  | 'Exported'
+  | 'Cancelled'
+  | 'Returned'
+  | 'Resubmitted';
 
 export type LogSeverity = 'info' | 'success' | 'warning' | 'error';
 
@@ -93,6 +97,10 @@ function fromBackendLog(log: BackendActivityLog): ActivityLogEntry {
     'Logout',
     'Permission Changed',
     'Published',
+    'Exported',
+    'Cancelled',
+    'Returned',
+    'Resubmitted',
   ];
   const actionAliases: Record<string, LogAction> = {
     local_login_succeeded: 'Login',
@@ -102,6 +110,11 @@ function fromBackendLog(log: BackendActivityLog): ActivityLogEntry {
     signup_approved: 'Approved',
     signup_rejected: 'Rejected',
     signup_verification_requested: 'Submitted',
+    resubmitted: 'Resubmitted',
+    cancelled: 'Cancelled',
+    returned: 'Returned',
+    data_updated: 'Updated',
+    Exported: 'Exported',
   };
   const action =
     actionAliases[log.action] ??
@@ -150,8 +163,10 @@ function fromBackendLog(log: BackendActivityLog): ActivityLogEntry {
 
 interface ActivityLogContextValue {
   logs: ActivityLogEntry[];
+  isLoading: boolean;
   refreshLogs: () => Promise<void>;
   addLog: (entry: Omit<ActivityLogEntry, 'id' | 'timestamp'>) => void;
+  deleteLogs: (ids: string[]) => Promise<{ success: boolean; count: number; error?: string }>;
 }
 
 const ActivityLogContext = createContext<ActivityLogContextValue | null>(null);
@@ -159,12 +174,14 @@ const ActivityLogContext = createContext<ActivityLogContextValue | null>(null);
 export function ActivityLogProvider({ children }: { children: React.ReactNode }) {
   const { currentUser } = useAuth();
   const [logs, setLogs] = useState<ActivityLogEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   const refreshLogs = useCallback(async () => {
-    if (!currentUser || !['system_admin', 'auditor'].includes(currentUser.role)) {
+    if (!currentUser || !['system_admin', 'auditor', 'admin'].includes(currentUser.role)) {
       setLogs((previous) => previous.filter((log) => log.id.startsWith('local-')));
       return;
     }
+    setIsLoading(true);
     try {
       const response = await apiFetch('/api/activity-logs');
       if (!response.ok) return;
@@ -176,6 +193,8 @@ export function ActivityLogProvider({ children }: { children: React.ReactNode })
       ]);
     } catch {
       return;
+    } finally {
+      setIsLoading(false);
     }
   }, [currentUser?.id, currentUser?.role]);
 
@@ -193,8 +212,49 @@ export function ActivityLogProvider({ children }: { children: React.ReactNode })
     setLogs((prev) => [newEntry, ...prev]);
   }, []);
 
+  const deleteLogs = useCallback(
+    async (ids: string[]): Promise<{ success: boolean; count: number; error?: string }> => {
+      if (!ids.length) return { success: true, count: 0 };
+      const idsSet = new Set(ids);
+      const backendIds = ids.filter((id) => !id.startsWith('local-'));
+
+      if (backendIds.length > 0) {
+        try {
+          const res = await apiFetch('/api/activity-logs', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids: backendIds }),
+          });
+
+          if (!res.ok) {
+            // Also attempt POST /api/activity-logs/bulk-delete in case HTTP DELETE body was dropped
+            const postRes = await apiFetch('/api/activity-logs/bulk-delete', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ids: backendIds }),
+            });
+            if (!postRes.ok) {
+              const errData = await postRes.json().catch(() => null);
+              const errMsg =
+                typeof errData?.error === 'string'
+                  ? errData.error
+                  : 'Failed to delete activity logs from server.';
+              return { success: false, count: 0, error: errMsg };
+            }
+          }
+        } catch {
+          // Backend unreachable or offline demo mode; proceed with local state removal
+        }
+      }
+
+      setLogs((prev) => prev.filter((item) => !idsSet.has(item.id)));
+      return { success: true, count: ids.length };
+    },
+    [],
+  );
+
   return (
-    <ActivityLogContext.Provider value={{ logs, refreshLogs, addLog }}>
+    <ActivityLogContext.Provider value={{ logs, isLoading, refreshLogs, addLog, deleteLogs }}>
       {children}
     </ActivityLogContext.Provider>
   );
@@ -246,4 +306,8 @@ export const ACTION_ICONS: Partial<Record<LogAction, string>> = {
   Logout: '⬡',
   'Permission Changed': '⚙',
   Published: '✓',
+  Exported: '⬇',
+  Cancelled: '⊘',
+  Returned: '↩',
+  Resubmitted: '↻',
 };

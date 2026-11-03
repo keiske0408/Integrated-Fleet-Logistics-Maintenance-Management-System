@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   useActivityLog,
   MODULE_COLORS,
@@ -11,6 +11,9 @@ import {
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { Pagination } from '@/components/ui/pagination';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { useToast } from '@/components/ui/toast';
 import {
   Search,
   Download,
@@ -22,11 +25,16 @@ import {
   Info,
   XCircle,
   Clock,
+  Trash2,
+  CheckSquare,
+  Square,
+  MinusSquare,
+  Calendar,
 } from 'lucide-react';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const ALL_MODULES: LogModule[] = [
+const BASE_MODULES: LogModule[] = [
   'Fleet',
   'PMS',
   'Work Order',
@@ -67,8 +75,12 @@ function formatTimestamp(iso: string): { date: string; time: string; relative: s
   else relative = `${diffDay} days ago`;
 
   return {
-    date: d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }),
-    time: d.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' }),
+    date: isNaN(d.getTime())
+      ? iso
+      : d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }),
+    time: isNaN(d.getTime())
+      ? ''
+      : d.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' }),
     relative,
   };
 }
@@ -83,35 +95,58 @@ function SeverityIcon({ severity }: { severity: LogSeverity }) {
 
 // ─── Stats Bar ────────────────────────────────────────────────────────────────
 
-function StatsBar({ logs }: { logs: ActivityLogEntry[] }) {
+interface StatsBarProps {
+  logs: ActivityLogEntry[];
+  activeSeverity: string;
+  onSelectSeverity: (severity: string) => void;
+}
+
+function StatsBar({ logs, activeSeverity, onSelectSeverity }: StatsBarProps) {
   const counts = useMemo(() => {
     const c: Record<LogSeverity, number> = { info: 0, success: 0, warning: 0, error: 0 };
-    logs.forEach((l) => c[l.severity]++);
+    logs.forEach((l) => {
+      if (c[l.severity] !== undefined) {
+        c[l.severity]++;
+      } else {
+        c.info++;
+      }
+    });
     return c;
   }, [logs]);
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      {ALL_SEVERITIES.map((s) => (
-        <div
-          key={s}
-          className={`flex items-center gap-3 p-3 rounded-xl border ${
-            s === 'success'
-              ? 'bg-emerald-500/8 border-emerald-500/20'
-              : s === 'warning'
-                ? 'bg-amber-500/8 border-amber-500/20'
-                : s === 'error'
-                  ? 'bg-rose-500/8 border-rose-500/20'
-                  : 'bg-blue-500/8 border-blue-500/20'
-          }`}
-        >
-          <SeverityIcon severity={s} />
-          <div>
-            <p className="text-lg font-bold text-foreground leading-none">{counts[s]}</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">{SEVERITY_LABELS[s]}</p>
-          </div>
-        </div>
-      ))}
+      {ALL_SEVERITIES.map((s) => {
+        const isActive = activeSeverity === s;
+        return (
+          <button
+            key={s}
+            type="button"
+            onClick={() => onSelectSeverity(isActive ? 'all' : s)}
+            className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer select-none ${
+              s === 'success'
+                ? 'bg-emerald-500/8 border-emerald-500/20 hover:bg-emerald-500/15'
+                : s === 'warning'
+                  ? 'bg-amber-500/8 border-amber-500/20 hover:bg-amber-500/15'
+                  : s === 'error'
+                    ? 'bg-rose-500/8 border-rose-500/20 hover:bg-rose-500/15'
+                    : 'bg-blue-500/8 border-blue-500/20 hover:bg-blue-500/15'
+            } ${isActive ? 'ring-2 ring-primary ring-offset-2 ring-offset-background font-semibold' : ''}`}
+            title={`Filter by ${SEVERITY_LABELS[s]} (Click to toggle)`}
+          >
+            <SeverityIcon severity={s} />
+            <div>
+              <p className="text-lg font-bold text-foreground leading-none">{counts[s]}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                {SEVERITY_LABELS[s]}
+                {isActive && (
+                  <span className="ml-1 text-primary text-[9px] font-bold">(Active)</span>
+                )}
+              </p>
+            </div>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -119,83 +154,253 @@ function StatsBar({ logs }: { logs: ActivityLogEntry[] }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export function ActivityLogPage() {
-  const { logs, refreshLogs } = useActivityLog();
+  const { logs, isLoading, refreshLogs, deleteLogs } = useActivityLog();
+  const toast = useToast();
 
+  // Filters
   const [search, setSearch] = useState('');
   const [filterModule, setFilterModule] = useState<string>('all');
   const [filterSeverity, setFilterSeverity] = useState<string>('all');
   const [filterAction, setFilterAction] = useState<string>('all');
+  const [fromDate, setFromDate] = useState<string>('');
+  const [toDate, setToDate] = useState<string>('');
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(25);
+
+  // Selection & Bulk Actions
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Deletion confirmation modal
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [targetDeleteIds, setTargetDeleteIds] = useState<string[]>([]);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     void refreshLogs();
   }, [refreshLogs]);
 
+  // Dynamic modules list (standard modules + any present in logs)
+  const availableModules = useMemo(() => {
+    const set = new Set<string>(BASE_MODULES);
+    logs.forEach((l) => {
+      if (l.module) set.add(l.module);
+    });
+    return Array.from(set).sort();
+  }, [logs]);
+
   // Unique actions from current logs
   const uniqueActions = useMemo(
-    () => Array.from(new Set(logs.map((l) => l.action))).sort(),
+    () => Array.from(new Set(logs.map((l) => l.action).filter(Boolean))).sort(),
     [logs],
   );
 
   // Filtered logs
   const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
     return logs.filter((l) => {
       if (filterModule !== 'all' && l.module !== filterModule) return false;
       if (filterSeverity !== 'all' && l.severity !== filterSeverity) return false;
       if (filterAction !== 'all' && l.action !== filterAction) return false;
-      if (search) {
-        const q = search.toLowerCase();
+
+      // Date range filtering (compare YYYY-MM-DD from ISO timestamp)
+      const logDate = (l.timestamp || '').slice(0, 10);
+      if (fromDate && logDate && logDate < fromDate) return false;
+      if (toDate && logDate && logDate > toDate) return false;
+
+      // Search keyword filter across subject, description, user, module, action
+      if (q) {
+        const subject = (l.subject || '').toLowerCase();
+        const description = (l.description || '').toLowerCase();
+        const user = (l.user || '').toLowerCase();
+        const module = (l.module || '').toLowerCase();
+        const action = (l.action || '').toLowerCase();
+
         return (
-          l.subject.toLowerCase().includes(q) ||
-          l.description.toLowerCase().includes(q) ||
-          l.user.toLowerCase().includes(q) ||
-          l.module.toLowerCase().includes(q) ||
-          l.action.toLowerCase().includes(q)
+          subject.includes(q) ||
+          description.includes(q) ||
+          user.includes(q) ||
+          module.includes(q) ||
+          action.includes(q)
         );
       }
       return true;
     });
-  }, [logs, search, filterModule, filterSeverity, filterAction]);
+  }, [logs, search, filterModule, filterSeverity, filterAction, fromDate, toDate]);
 
-  // Export CSV
-  const exportCSV = () => {
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, filterModule, filterSeverity, filterAction, fromDate, toDate, itemsPerPage]);
+
+  // Calculate pagination window
+  const totalPages = Math.max(1, Math.ceil(filtered.length / itemsPerPage));
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIndex = (safeCurrentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, filtered.length);
+
+  // Slice logs for the current page
+  const pagedLogs = useMemo(() => {
+    return filtered.slice(startIndex, endIndex);
+  }, [filtered, startIndex, endIndex]);
+
+  // Group current page logs by date for clean timeline rendering
+  const groupedPagedLogs = useMemo(() => {
+    const map = new Map<string, ActivityLogEntry[]>();
+    pagedLogs.forEach((l) => {
+      const { date } = formatTimestamp(l.timestamp);
+      if (!map.has(date)) map.set(date, []);
+      map.get(date)!.push(l);
+    });
+    return map;
+  }, [pagedLogs]);
+
+  // Selection calculations for the current page
+  const currentPageIds = useMemo(() => pagedLogs.map((l) => l.id), [pagedLogs]);
+  const isAllCurrentPageSelected =
+    currentPageIds.length > 0 && currentPageIds.every((id) => selectedIds.has(id));
+  const isSomeCurrentPageSelected =
+    currentPageIds.some((id) => selectedIds.has(id)) && !isAllCurrentPageSelected;
+
+  // Toggle selection for single entry
+  const toggleSelectOne = useCallback((id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  // Toggle select all on current page
+  const toggleSelectCurrentPage = useCallback(() => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (isAllCurrentPageSelected) {
+        currentPageIds.forEach((id) => next.delete(id));
+      } else {
+        currentPageIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  }, [currentPageIds, isAllCurrentPageSelected]);
+
+  // Select all filtered logs across all pages
+  const selectAllFiltered = useCallback(() => {
+    setSelectedIds(new Set(filtered.map((l) => l.id)));
+  }, [filtered]);
+
+  // Clear all selections
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  // Open confirmation modal for bulk delete
+  const promptBulkDelete = () => {
+    if (selectedIds.size === 0) return;
+    setTargetDeleteIds(Array.from(selectedIds));
+    setDeleteModalOpen(true);
+  };
+
+  // Open confirmation modal for single entry delete
+  const promptSingleDelete = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setTargetDeleteIds([id]);
+    setDeleteModalOpen(true);
+  };
+
+  // Execute deletion
+  const handleConfirmDelete = async () => {
+    if (targetDeleteIds.length === 0) return;
+    setIsDeleting(true);
+    try {
+      const result = await deleteLogs(targetDeleteIds);
+      if (result.success) {
+        toast.success(
+          targetDeleteIds.length === 1
+            ? 'Activity log entry deleted successfully.'
+            : `${targetDeleteIds.length} activity log entries deleted successfully.`,
+        );
+        // Clear deleted ids from selection
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          targetDeleteIds.forEach((id) => next.delete(id));
+          return next;
+        });
+        setDeleteModalOpen(false);
+        setTargetDeleteIds([]);
+      } else {
+        toast.error(result.error || 'Failed to delete activity logs.');
+      }
+    } catch {
+      toast.error('An unexpected error occurred while deleting activity logs.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Export CSV (Selected or Filtered)
+  const exportCSV = (exportSelectedOnly = false) => {
+    const listToExport = exportSelectedOnly
+      ? filtered.filter((l) => selectedIds.has(l.id))
+      : filtered;
+
+    if (listToExport.length === 0) {
+      toast.warning('No activity logs to export.');
+      return;
+    }
+
     const header = 'Timestamp,Module,Action,Subject,User,Severity,Description';
-    const rows = filtered.map(
+    const rows = listToExport.map(
       (l) =>
-        `"${l.timestamp}","${l.module}","${l.action}","${l.subject}","${l.user}","${l.severity}","${l.description.replace(/"/g, '""')}"`,
+        `"${l.timestamp}","${l.module}","${l.action}","${(l.subject || '').replace(/"/g, '""')}","${(l.user || '').replace(/"/g, '""')}","${l.severity}","${(l.description || '').replace(/"/g, '""')}"`,
     );
-    const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' });
+    const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `activity-log-${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `activity-log-${exportSelectedOnly ? 'selected-' : ''}${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+    toast.success(`Exported ${listToExport.length} activity log entries.`);
   };
 
+  // Filter checks
   const hasFilters =
-    search || filterModule !== 'all' || filterSeverity !== 'all' || filterAction !== 'all';
+    Boolean(search) ||
+    filterModule !== 'all' ||
+    filterSeverity !== 'all' ||
+    filterAction !== 'all' ||
+    Boolean(fromDate) ||
+    Boolean(toDate);
+
+  const activeFilterCount =
+    (search ? 1 : 0) +
+    (filterModule !== 'all' ? 1 : 0) +
+    (filterSeverity !== 'all' ? 1 : 0) +
+    (filterAction !== 'all' ? 1 : 0) +
+    (fromDate ? 1 : 0) +
+    (toDate ? 1 : 0);
 
   const resetFilters = () => {
     setSearch('');
     setFilterModule('all');
     setFilterSeverity('all');
     setFilterAction('all');
+    setFromDate('');
+    setToDate('');
+    setCurrentPage(1);
+    setSelectedIds(new Set());
   };
 
-  // Group by date
-  const grouped = useMemo(() => {
-    const map = new Map<string, ActivityLogEntry[]>();
-    filtered.forEach((l) => {
-      const { date } = formatTimestamp(l.timestamp);
-      if (!map.has(date)) map.set(date, []);
-      map.get(date)!.push(l);
-    });
-    return map;
-  }, [filtered]);
-
   return (
-    <div className="space-y-5 animate-fade-in">
+    <div className="space-y-5 animate-fade-in pb-10">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
@@ -204,74 +409,120 @@ export function ActivityLogPage() {
             Chronological audit trail of all actions across fleet, procurement, users, and system.
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Button variant="outline" onClick={exportCSV} className="gap-2">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          {selectedIds.size > 0 && (
+            <Button
+              variant="destructive"
+              onClick={promptBulkDelete}
+              className="gap-2 shadow-sm"
+              size="sm"
+            >
+              <Trash2 className="h-4 w-4" />
+              <span>Delete Selected ({selectedIds.size})</span>
+            </Button>
+          )}
+
+          <Button
+            variant="outline"
+            onClick={() => exportCSV(selectedIds.size > 0)}
+            className="gap-2"
+            size="sm"
+          >
             <Download className="h-4 w-4" />
-            <span className="hidden sm:inline">Export CSV</span>
+            <span>
+              {selectedIds.size > 0 ? `Export Selected (${selectedIds.size})` : 'Export CSV'}
+            </span>
           </Button>
-          <Button variant="outline" onClick={() => void refreshLogs()} className="gap-2">
-            <RefreshCw className="h-4 w-4" />
+
+          <Button
+            variant="outline"
+            onClick={() => void refreshLogs()}
+            disabled={isLoading}
+            className="gap-2"
+            size="sm"
+          >
+            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline">Refresh</span>
           </Button>
         </div>
       </div>
 
-      {/* Stats */}
-      <StatsBar logs={logs} />
+      {/* Stats Bar */}
+      <StatsBar
+        logs={logs}
+        activeSeverity={filterSeverity}
+        onSelectSeverity={(s) => setFilterSeverity(s)}
+      />
 
-      {/* Filters */}
-      <div className="bg-card border border-border rounded-xl p-4 space-y-3">
-        <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-          <Filter className="h-4 w-4 text-muted-foreground" />
-          Filters
+      {/* Filters Section */}
+      <div className="bg-card border border-border rounded-xl p-4 space-y-3 shadow-sm">
+        <div className="flex items-center justify-between text-sm font-medium text-foreground">
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <span>Filters</span>
+            {activeFilterCount > 0 && (
+              <span className="px-2 py-0.5 text-[11px] font-semibold bg-primary/10 text-primary rounded-full">
+                {activeFilterCount} active
+              </span>
+            )}
+          </div>
           {hasFilters && (
             <button
               onClick={resetFilters}
-              className="ml-auto text-xs text-primary hover:underline flex items-center gap-1"
+              className="text-xs text-primary hover:underline flex items-center gap-1 font-medium cursor-pointer"
             >
-              <RefreshCw className="h-3 w-3" /> Reset
+              <X className="h-3 w-3" /> Reset Filters
             </button>
           )}
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          {/* Search Input */}
+          <div className="relative sm:col-span-2">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
             <Input
               id="log-search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search logs..."
-              className="pl-8 h-8 text-sm"
+              placeholder="Search by keyword, user, subject..."
+              className="pl-8 pr-7 h-8 text-sm"
+              aria-label="Search logs"
             />
             {search && (
               <button
+                type="button"
                 onClick={() => setSearch('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                aria-label="Clear search"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
             )}
           </div>
 
+          {/* Module Filter */}
           <Select
             id="log-filter-module"
             value={filterModule}
             onChange={(e) => setFilterModule(e.target.value)}
             className="h-8 text-sm"
+            aria-label="Filter by module"
           >
             <option value="all">All Modules</option>
-            {ALL_MODULES.map((m) => (
+            {availableModules.map((m) => (
               <option key={m} value={m}>
                 {m}
               </option>
             ))}
           </Select>
 
+          {/* Severity Filter */}
           <Select
             id="log-filter-severity"
             value={filterSeverity}
             onChange={(e) => setFilterSeverity(e.target.value)}
             className="h-8 text-sm"
+            aria-label="Filter by severity"
           >
             <option value="all">All Severities</option>
             {ALL_SEVERITIES.map((s) => (
@@ -281,11 +532,13 @@ export function ActivityLogPage() {
             ))}
           </Select>
 
+          {/* Action Filter */}
           <Select
             id="log-filter-action"
             value={filterAction}
             onChange={(e) => setFilterAction(e.target.value)}
             className="h-8 text-sm"
+            aria-label="Filter by action"
           >
             <option value="all">All Actions</option>
             {uniqueActions.map((a) => (
@@ -294,31 +547,160 @@ export function ActivityLogPage() {
               </option>
             ))}
           </Select>
+
+          {/* From Date Filter */}
+          <div className="relative">
+            <Input
+              id="log-filter-from-date"
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="h-8 text-xs"
+              aria-label="From date"
+              title="From date"
+            />
+          </div>
+
+          {/* To Date Filter */}
+          <div className="relative">
+            <Input
+              id="log-filter-to-date"
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="h-8 text-xs"
+              aria-label="To date"
+              title="To date"
+            />
+          </div>
         </div>
       </div>
 
-      {/* Results count */}
-      <p className="text-xs text-muted-foreground">
-        Showing <span className="font-semibold text-foreground">{filtered.length}</span> of{' '}
-        <span className="font-semibold text-foreground">{logs.length}</span> log entries
-        {hasFilters && <span className="text-primary"> (filtered)</span>}
-      </p>
+      {/* Floating / Sticky Bulk Action Toolbar */}
+      {selectedIds.size > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 bg-primary/10 border border-primary/20 rounded-xl text-sm animate-fade-in shadow-sm">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={toggleSelectCurrentPage}
+              className="text-primary hover:text-primary/80 transition-colors"
+              title={isAllCurrentPageSelected ? 'Deselect current page' : 'Select current page'}
+            >
+              {isAllCurrentPageSelected ? (
+                <CheckSquare className="h-4 w-4" />
+              ) : isSomeCurrentPageSelected ? (
+                <MinusSquare className="h-4 w-4" />
+              ) : (
+                <Square className="h-4 w-4" />
+              )}
+            </button>
+            <span className="font-semibold text-foreground">
+              {selectedIds.size} of {filtered.length} log{' '}
+              {selectedIds.size === 1 ? 'entry' : 'entries'} selected
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {selectedIds.size < filtered.length && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={selectAllFiltered}
+                className="text-xs h-7 bg-background"
+              >
+                Select all {filtered.length} matching
+              </Button>
+            )}
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearSelection}
+              className="text-xs h-7 text-muted-foreground hover:text-foreground"
+            >
+              Clear selection
+            </Button>
+
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={promptBulkDelete}
+              className="text-xs h-7 gap-1.5"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete Selected ({selectedIds.size})
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Results Header with Select All Page Checkbox */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-muted-foreground px-1">
+        <div className="flex items-center gap-2">
+          {pagedLogs.length > 0 && (
+            <button
+              type="button"
+              onClick={toggleSelectCurrentPage}
+              className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors font-medium cursor-pointer"
+              title={
+                isAllCurrentPageSelected ? 'Deselect all on this page' : 'Select all on this page'
+              }
+            >
+              {isAllCurrentPageSelected ? (
+                <CheckSquare className="h-4 w-4 text-primary" />
+              ) : isSomeCurrentPageSelected ? (
+                <MinusSquare className="h-4 w-4 text-primary" />
+              ) : (
+                <Square className="h-4 w-4" />
+              )}
+              <span>Select page ({pagedLogs.length})</span>
+            </button>
+          )}
+
+          <span>
+            Showing{' '}
+            <span className="font-semibold text-foreground">
+              {filtered.length === 0 ? 0 : startIndex + 1}
+            </span>
+            –<span className="font-semibold text-foreground">{endIndex}</span> of{' '}
+            <span className="font-semibold text-foreground">{filtered.length}</span> log entries
+            {hasFilters && (
+              <span className="text-primary font-medium"> (filtered from {logs.length})</span>
+            )}
+          </span>
+        </div>
+
+        {totalPages > 1 && (
+          <div>
+            Page <span className="font-semibold text-foreground">{safeCurrentPage}</span> of{' '}
+            <span className="font-semibold text-foreground">{totalPages}</span>
+          </div>
+        )}
+      </div>
 
       {/* Log entries grouped by date */}
       {filtered.length === 0 ? (
-        <div className="bg-card border border-border rounded-xl p-16 text-center">
+        <div className="bg-card border border-border rounded-xl p-16 text-center shadow-sm">
           <p className="text-3xl mb-3">📋</p>
           <p className="text-foreground font-semibold">No log entries found</p>
-          <p className="text-muted-foreground text-sm mt-1">Try adjusting your filters</p>
+          <p className="text-muted-foreground text-sm mt-1">
+            {hasFilters ? 'Try adjusting or clearing your filters' : 'No activity logged yet.'}
+          </p>
+          {hasFilters && (
+            <Button variant="outline" size="sm" onClick={resetFilters} className="mt-4">
+              Clear All Filters
+            </Button>
+          )}
         </div>
       ) : (
         <div className="space-y-6">
-          {Array.from(grouped.entries()).map(([date, entries]) => (
+          {Array.from(groupedPagedLogs.entries()).map(([date, entries]) => (
             <div key={date} className="space-y-1">
               {/* Date separator */}
               <div className="flex items-center gap-3 py-1">
                 <div className="h-px flex-1 bg-border" />
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 py-0.5 bg-muted/50 rounded-full">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2.5 py-0.5 bg-muted/60 rounded-full flex items-center gap-1.5">
+                  <Calendar className="h-3 w-3" />
                   {date}
                 </span>
                 <div className="h-px flex-1 bg-border" />
@@ -327,19 +709,40 @@ export function ActivityLogPage() {
               {/* Timeline */}
               <div className="relative">
                 {/* Timeline line */}
-                <div className="absolute left-[19px] top-4 bottom-4 w-px bg-border" />
+                <div className="absolute left-[35px] top-4 bottom-4 w-px bg-border" />
 
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   {entries.map((entry) => {
                     const ts = formatTimestamp(entry.timestamp);
-                    const sev = SEVERITY_STYLES[entry.severity];
+                    const sev = SEVERITY_STYLES[entry.severity] || SEVERITY_STYLES.info;
                     const isExpanded = expandedId === entry.id;
+                    const isSelected = selectedIds.has(entry.id);
 
                     return (
                       <div
                         key={entry.id}
-                        className={`relative flex gap-3 group ${sev.row} rounded-xl transition-colors`}
+                        className={`relative flex items-start gap-3 group rounded-xl border transition-all ${
+                          isSelected
+                            ? 'border-primary/50 bg-primary/5 shadow-sm'
+                            : 'border-transparent hover:border-border hover:bg-card/70'
+                        } ${sev.row}`}
                       >
+                        {/* Checkbox */}
+                        <div className="relative z-10 flex items-center shrink-0 pl-3 pt-3">
+                          <button
+                            type="button"
+                            onClick={(e) => toggleSelectOne(entry.id, e)}
+                            className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer p-0.5"
+                            aria-label={`Select entry ${entry.subject}`}
+                          >
+                            {isSelected ? (
+                              <CheckSquare className="h-4 w-4 text-primary" />
+                            ) : (
+                              <Square className="h-4 w-4 text-muted-foreground/60 group-hover:text-muted-foreground" />
+                            )}
+                          </button>
+                        </div>
+
                         {/* Timeline dot */}
                         <div className="relative z-10 flex flex-col items-center shrink-0 pt-3.5">
                           <div
@@ -356,18 +759,21 @@ export function ActivityLogPage() {
                             <div className="flex items-center gap-2 flex-wrap">
                               {/* Module badge */}
                               <span
-                                className={`inline-flex text-[10px] font-bold px-1.5 py-0.5 rounded-md border ${MODULE_COLORS[entry.module]}`}
+                                className={`inline-flex text-[10px] font-bold px-1.5 py-0.5 rounded-md border ${MODULE_COLORS[entry.module] || MODULE_COLORS.System}`}
                               >
                                 {entry.module}
                               </span>
+
                               {/* Action */}
                               <span className="text-[11px] font-semibold text-muted-foreground">
                                 {ACTION_ICONS[entry.action] || '•'} {entry.action}
                               </span>
+
                               {/* Subject */}
                               <span className="text-sm font-semibold text-foreground">
                                 {entry.subject}
                               </span>
+
                               {entry.source === 'local' && (
                                 <span className="inline-flex rounded-md border border-border px-1.5 py-0.5 text-[9px] font-semibold uppercase text-muted-foreground">
                                   Local UI
@@ -375,10 +781,22 @@ export function ActivityLogPage() {
                               )}
                             </div>
 
-                            {/* Timestamp */}
-                            <div className="text-right shrink-0">
-                              <p className="text-[11px] text-muted-foreground">{ts.relative}</p>
-                              <p className="text-[10px] text-muted-foreground/60">{ts.time}</p>
+                            {/* Timestamp & Quick Delete */}
+                            <div className="flex items-center gap-2 shrink-0">
+                              <div className="text-right">
+                                <p className="text-[11px] text-muted-foreground">{ts.relative}</p>
+                                <p className="text-[10px] text-muted-foreground/60">{ts.time}</p>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={(e) => promptSingleDelete(entry.id, e)}
+                                title="Delete this entry"
+                                className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all cursor-pointer"
+                                aria-label="Delete log entry"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
                             </div>
                           </div>
 
@@ -390,10 +808,12 @@ export function ActivityLogPage() {
                           {/* Expanded details */}
                           {isExpanded && (
                             <div className="mt-2.5 pt-2.5 border-t border-border/50 animate-fade-in">
-                              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
                                 <div>
                                   <span className="text-muted-foreground">Performed by: </span>
-                                  <span className="font-medium text-foreground">{entry.user}</span>
+                                  <span className="font-medium text-foreground">
+                                    {entry.user || 'Unknown'}
+                                  </span>
                                 </div>
                                 <div>
                                   <span className="text-muted-foreground">Severity: </span>
@@ -413,7 +833,7 @@ export function ActivityLogPage() {
                                 </div>
                                 <div className="col-span-2">
                                   <span className="text-muted-foreground">Timestamp: </span>
-                                  <span className="font-medium text-foreground font-mono">
+                                  <span className="font-medium text-foreground font-mono text-[11px]">
                                     {entry.timestamp}
                                   </span>
                                 </div>
@@ -423,7 +843,9 @@ export function ActivityLogPage() {
                                       <span className="text-muted-foreground capitalize">
                                         {k.replace(/_/g, ' ')}:{' '}
                                       </span>
-                                      <span className="font-medium text-foreground">{v}</span>
+                                      <span className="font-medium text-foreground font-mono text-[11px]">
+                                        {String(v)}
+                                      </span>
                                     </div>
                                   ))}
                               </div>
@@ -445,6 +867,44 @@ export function ActivityLogPage() {
           ))}
         </div>
       )}
+
+      {/* Pagination Controls */}
+      {filtered.length > 0 && (
+        <div className="pt-2 border-t border-border">
+          <Pagination
+            currentPage={safeCurrentPage}
+            totalItems={filtered.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={(p) => setCurrentPage(p)}
+            onItemsPerPageChange={(size) => {
+              setItemsPerPage(size);
+              setCurrentPage(1);
+            }}
+            itemsPerPageOptions={[10, 25, 50, 100]}
+          />
+        </div>
+      )}
+
+      {/* Deletion Confirmation Dialog */}
+      <ConfirmDialog
+        open={deleteModalOpen}
+        onOpenChange={setDeleteModalOpen}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => {
+          setDeleteModalOpen(false);
+          setTargetDeleteIds([]);
+        }}
+        title={targetDeleteIds.length === 1 ? 'Delete Activity Log' : 'Bulk Delete Activity Logs'}
+        description={
+          targetDeleteIds.length === 1
+            ? 'Are you sure you want to permanently delete this activity log entry? This action cannot be undone.'
+            : `Are you sure you want to permanently delete these ${targetDeleteIds.length} activity log entries? This action cannot be undone.`
+        }
+        confirmText={isDeleting ? 'Deleting...' : 'Delete'}
+        cancelText="Cancel"
+        variant="destructive"
+        isLoading={isDeleting}
+      />
     </div>
   );
 }
