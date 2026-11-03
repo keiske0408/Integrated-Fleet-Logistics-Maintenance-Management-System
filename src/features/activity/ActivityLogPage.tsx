@@ -8,6 +8,7 @@ import {
   type LogSeverity,
   type ActivityLogEntry,
 } from './ActivityLogContext';
+import { useAuth } from '@/features/auth/AuthContext';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -139,9 +140,7 @@ function StatsBar({ logs, activeSeverity, onSelectSeverity }: StatsBarProps) {
               <p className="text-lg font-bold text-foreground leading-none">{counts[s]}</p>
               <p className="text-[10px] text-muted-foreground mt-0.5">
                 {SEVERITY_LABELS[s]}
-                {isActive && (
-                  <span className="ml-1 text-primary text-[9px] font-bold">(Active)</span>
-                )}
+                {isActive && <span className="ml-1 text-primary text-[9px] font-bold">(Active)</span>}
               </p>
             </div>
           </button>
@@ -155,7 +154,13 @@ function StatsBar({ logs, activeSeverity, onSelectSeverity }: StatsBarProps) {
 
 export function ActivityLogPage() {
   const { logs, isLoading, refreshLogs, deleteLogs } = useActivityLog();
+  const { currentUser, hasPermission } = useAuth();
   const toast = useToast();
+
+  // Super Admin / Administrator Permission check
+  const isSuperAdmin =
+    currentUser?.role === 'system_admin' || currentUser?.role === 'admin';
+  const canDelete = isSuperAdmin || hasPermission('delete:audit');
 
   // Filters
   const [search, setSearch] = useState('');
@@ -163,7 +168,9 @@ export function ActivityLogPage() {
   const [filterSeverity, setFilterSeverity] = useState<string>('all');
   const [filterAction, setFilterAction] = useState<string>('all');
   const [fromDate, setFromDate] = useState<string>('');
+  const [fromTime, setFromTime] = useState<string>('00:00'); // Initialized to 12:00 AM
   const [toDate, setToDate] = useState<string>('');
+  const [toTime, setToTime] = useState<string>('23:59'); // Initialized to 11:59 PM
 
   // Pagination
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -200,15 +207,28 @@ export function ActivityLogPage() {
   // Filtered logs
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
+
     return logs.filter((l) => {
       if (filterModule !== 'all' && l.module !== filterModule) return false;
       if (filterSeverity !== 'all' && l.severity !== filterSeverity) return false;
       if (filterAction !== 'all' && l.action !== filterAction) return false;
 
-      // Date range filtering (compare YYYY-MM-DD from ISO timestamp)
-      const logDate = (l.timestamp || '').slice(0, 10);
-      if (fromDate && logDate && logDate < fromDate) return false;
-      if (toDate && logDate && logDate > toDate) return false;
+      // Exact Date & Time range filtering
+      if (fromDate || toDate) {
+        const entryTime = new Date(l.timestamp).getTime();
+        if (!isNaN(entryTime)) {
+          if (fromDate) {
+            const startStr = `${fromDate}T${fromTime || '00:00'}:00`;
+            const startBoundary = new Date(startStr).getTime();
+            if (!isNaN(startBoundary) && entryTime < startBoundary) return false;
+          }
+          if (toDate) {
+            const endStr = `${toDate}T${toTime || '23:59'}:59.999`;
+            const endBoundary = new Date(endStr).getTime();
+            if (!isNaN(endBoundary) && entryTime > endBoundary) return false;
+          }
+        }
+      }
 
       // Search keyword filter across subject, description, user, module, action
       if (q) {
@@ -228,12 +248,12 @@ export function ActivityLogPage() {
       }
       return true;
     });
-  }, [logs, search, filterModule, filterSeverity, filterAction, fromDate, toDate]);
+  }, [logs, search, filterModule, filterSeverity, filterAction, fromDate, fromTime, toDate, toTime]);
 
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, filterModule, filterSeverity, filterAction, fromDate, toDate, itemsPerPage]);
+  }, [search, filterModule, filterSeverity, filterAction, fromDate, fromTime, toDate, toTime, itemsPerPage]);
 
   // Calculate pagination window
   const totalPages = Math.max(1, Math.ceil(filtered.length / itemsPerPage));
@@ -301,23 +321,24 @@ export function ActivityLogPage() {
     setSelectedIds(new Set());
   }, []);
 
-  // Open confirmation modal for bulk delete
+  // Open confirmation modal for bulk delete (Admin only)
   const promptBulkDelete = () => {
-    if (selectedIds.size === 0) return;
+    if (!canDelete || selectedIds.size === 0) return;
     setTargetDeleteIds(Array.from(selectedIds));
     setDeleteModalOpen(true);
   };
 
-  // Open confirmation modal for single entry delete
+  // Open confirmation modal for single entry delete (Admin only)
   const promptSingleDelete = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
+    if (!canDelete) return;
     setTargetDeleteIds([id]);
     setDeleteModalOpen(true);
   };
 
   // Execute deletion
   const handleConfirmDelete = async () => {
-    if (targetDeleteIds.length === 0) return;
+    if (!canDelete || targetDeleteIds.length === 0) return;
     setIsDeleting(true);
     try {
       const result = await deleteLogs(targetDeleteIds);
@@ -343,6 +364,43 @@ export function ActivityLogPage() {
     } finally {
       setIsDeleting(false);
     }
+  };
+
+  // Date Presets
+  const setTodayRange = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    setFromDate(today);
+    setToDate(today);
+    setFromTime('00:00');
+    setToTime('23:59');
+  };
+
+  const setYesterdayRange = () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    const yesterday = d.toISOString().slice(0, 10);
+    setFromDate(yesterday);
+    setToDate(yesterday);
+    setFromTime('00:00');
+    setToTime('23:59');
+  };
+
+  const setLast7DaysRange = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    const weekAgo = d.toISOString().slice(0, 10);
+    setFromDate(weekAgo);
+    setToDate(today);
+    setFromTime('00:00');
+    setToTime('23:59');
+  };
+
+  const clearDateRange = () => {
+    setFromDate('');
+    setToDate('');
+    setFromTime('00:00');
+    setToTime('23:59');
   };
 
   // Export CSV (Selected or Filtered)
@@ -395,6 +453,8 @@ export function ActivityLogPage() {
     setFilterAction('all');
     setFromDate('');
     setToDate('');
+    setFromTime('00:00');
+    setToTime('23:59');
     setCurrentPage(1);
     setSelectedIds(new Set());
   };
@@ -404,13 +464,21 @@ export function ActivityLogPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Activity History Log</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-foreground">Activity History Log</h1>
+            {canDelete && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-primary/10 text-primary border border-primary/20">
+                Admin Controls
+              </span>
+            )}
+          </div>
           <p className="text-muted-foreground text-sm mt-0.5">
             Chronological audit trail of all actions across fleet, procurement, users, and system.
           </p>
         </div>
+
         <div className="flex items-center gap-2 shrink-0 flex-wrap">
-          {selectedIds.size > 0 && (
+          {canDelete && selectedIds.size > 0 && (
             <Button
               variant="destructive"
               onClick={promptBulkDelete}
@@ -429,9 +497,7 @@ export function ActivityLogPage() {
             size="sm"
           >
             <Download className="h-4 w-4" />
-            <span>
-              {selectedIds.size > 0 ? `Export Selected (${selectedIds.size})` : 'Export CSV'}
-            </span>
+            <span>{selectedIds.size > 0 ? `Export Selected (${selectedIds.size})` : 'Export CSV'}</span>
           </Button>
 
           <Button
@@ -454,12 +520,13 @@ export function ActivityLogPage() {
         onSelectSeverity={(s) => setFilterSeverity(s)}
       />
 
-      {/* Filters Section */}
-      <div className="bg-card border border-border rounded-xl p-4 space-y-3 shadow-sm">
-        <div className="flex items-center justify-between text-sm font-medium text-foreground">
+      {/* Unified Filters Card */}
+      <div className="bg-card border border-border rounded-xl p-4 space-y-4 shadow-sm">
+        {/* Top Header of Filters */}
+        <div className="flex items-center justify-between text-sm font-medium text-foreground pb-2 border-b border-border/50">
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-muted-foreground" />
-            <span>Filters</span>
+            <span className="font-semibold">Filter Activity History</span>
             {activeFilterCount > 0 && (
               <span className="px-2 py-0.5 text-[11px] font-semibold bg-primary/10 text-primary rounded-full">
                 {activeFilterCount} active
@@ -471,21 +538,22 @@ export function ActivityLogPage() {
               onClick={resetFilters}
               className="text-xs text-primary hover:underline flex items-center gap-1 font-medium cursor-pointer"
             >
-              <X className="h-3 w-3" /> Reset Filters
+              <X className="h-3.5 w-3.5" /> Reset All Filters
             </button>
           )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        {/* Row 1: Search, Module, Severity, Action in a balanced 4-column grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {/* Search Input */}
-          <div className="relative sm:col-span-2">
+          <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
             <Input
               id="log-search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by keyword, user, subject..."
-              className="pl-8 pr-7 h-8 text-sm"
+              placeholder="Search keyword, user, subject..."
+              className="pl-8 pr-7 h-9 text-sm"
               aria-label="Search logs"
             />
             {search && (
@@ -505,7 +573,7 @@ export function ActivityLogPage() {
             id="log-filter-module"
             value={filterModule}
             onChange={(e) => setFilterModule(e.target.value)}
-            className="h-8 text-sm"
+            className="h-9 text-sm"
             aria-label="Filter by module"
           >
             <option value="all">All Modules</option>
@@ -521,7 +589,7 @@ export function ActivityLogPage() {
             id="log-filter-severity"
             value={filterSeverity}
             onChange={(e) => setFilterSeverity(e.target.value)}
-            className="h-8 text-sm"
+            className="h-9 text-sm"
             aria-label="Filter by severity"
           >
             <option value="all">All Severities</option>
@@ -537,7 +605,7 @@ export function ActivityLogPage() {
             id="log-filter-action"
             value={filterAction}
             onChange={(e) => setFilterAction(e.target.value)}
-            className="h-8 text-sm"
+            className="h-9 text-sm"
             aria-label="Filter by action"
           >
             <option value="all">All Actions</option>
@@ -547,43 +615,111 @@ export function ActivityLogPage() {
               </option>
             ))}
           </Select>
+        </div>
 
-          {/* From Date Filter */}
-          <div className="relative">
-            <Input
-              id="log-filter-from-date"
-              type="date"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-              className="h-8 text-xs"
-              aria-label="From date"
-              title="From date"
-            />
+        {/* Row 2: Date & Time Range Section with clean layout and initial 12:00 AM - 11:59 PM */}
+        <div className="pt-2 border-t border-border/50 flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground shrink-0">
+              <Calendar className="h-3.5 w-3.5 text-primary" />
+              <span>Date & Time Range:</span>
+            </div>
+
+            {/* From Date & Time */}
+            <div className="flex items-center gap-1 bg-muted/40 border border-border rounded-lg px-2 py-1">
+              <span className="text-[11px] font-semibold text-muted-foreground shrink-0">From</span>
+              <Input
+                id="log-filter-from-date"
+                type="date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="h-7 text-xs w-32 border-border/70 bg-background"
+                aria-label="From date"
+                title="From date"
+              />
+              <Input
+                id="log-filter-from-time"
+                type="time"
+                value={fromTime}
+                onChange={(e) => setFromTime(e.target.value)}
+                className="h-7 text-xs w-24 border-border/70 bg-background"
+                aria-label="From time"
+                title="From time (starts at 12:00 AM)"
+              />
+            </div>
+
+            <span className="text-muted-foreground/60 text-xs hidden sm:inline font-bold">→</span>
+
+            {/* To Date & Time */}
+            <div className="flex items-center gap-1 bg-muted/40 border border-border rounded-lg px-2 py-1">
+              <span className="text-[11px] font-semibold text-muted-foreground shrink-0">To</span>
+              <Input
+                id="log-filter-to-date"
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className="h-7 text-xs w-32 border-border/70 bg-background"
+                aria-label="To date"
+                title="To date"
+              />
+              <Input
+                id="log-filter-to-time"
+                type="time"
+                value={toTime}
+                onChange={(e) => setToTime(e.target.value)}
+                className="h-7 text-xs w-24 border-border/70 bg-background"
+                aria-label="To time"
+                title="To time (ends at 11:59 PM)"
+              />
+            </div>
           </div>
 
-          {/* To Date Filter */}
-          <div className="relative">
-            <Input
-              id="log-filter-to-date"
-              type="date"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-              className="h-8 text-xs"
-              aria-label="To date"
-              title="To date"
-            />
+          {/* Quick Date Presets */}
+          <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+            <span className="text-[11px] text-muted-foreground mr-1 hidden sm:inline">Presets:</span>
+            <button
+              type="button"
+              onClick={setTodayRange}
+              className="px-2 py-1 text-xs rounded-md border border-border bg-card hover:bg-muted text-foreground transition-colors font-medium cursor-pointer"
+            >
+              Today
+            </button>
+            <button
+              type="button"
+              onClick={setYesterdayRange}
+              className="px-2 py-1 text-xs rounded-md border border-border bg-card hover:bg-muted text-foreground transition-colors font-medium cursor-pointer"
+            >
+              Yesterday
+            </button>
+            <button
+              type="button"
+              onClick={setLast7DaysRange}
+              className="px-2 py-1 text-xs rounded-md border border-border bg-card hover:bg-muted text-foreground transition-colors font-medium cursor-pointer"
+            >
+              Last 7 Days
+            </button>
+            {(fromDate || toDate) && (
+              <button
+                type="button"
+                onClick={clearDateRange}
+                className="px-2 py-1 text-xs rounded-md text-destructive hover:bg-destructive/10 transition-colors flex items-center gap-1 font-medium cursor-pointer"
+                title="Clear date & time range"
+              >
+                <X className="h-3 w-3" /> Clear Date
+              </button>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Floating / Sticky Bulk Action Toolbar */}
-      {selectedIds.size > 0 && (
+      {/* Floating / Sticky Bulk Action Toolbar (Admin Only) */}
+      {canDelete && selectedIds.size > 0 && (
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 bg-primary/10 border border-primary/20 rounded-xl text-sm animate-fade-in shadow-sm">
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={toggleSelectCurrentPage}
-              className="text-primary hover:text-primary/80 transition-colors"
+              className="text-primary hover:text-primary/80 transition-colors cursor-pointer"
               title={isAllCurrentPageSelected ? 'Deselect current page' : 'Select current page'}
             >
               {isAllCurrentPageSelected ? (
@@ -595,8 +731,7 @@ export function ActivityLogPage() {
               )}
             </button>
             <span className="font-semibold text-foreground">
-              {selectedIds.size} of {filtered.length} log{' '}
-              {selectedIds.size === 1 ? 'entry' : 'entries'} selected
+              {selectedIds.size} of {filtered.length} log {selectedIds.size === 1 ? 'entry' : 'entries'} selected
             </span>
           </div>
 
@@ -637,14 +772,12 @@ export function ActivityLogPage() {
       {/* Results Header with Select All Page Checkbox */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-muted-foreground px-1">
         <div className="flex items-center gap-2">
-          {pagedLogs.length > 0 && (
+          {canDelete && pagedLogs.length > 0 && (
             <button
               type="button"
               onClick={toggleSelectCurrentPage}
               className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors font-medium cursor-pointer"
-              title={
-                isAllCurrentPageSelected ? 'Deselect all on this page' : 'Select all on this page'
-              }
+              title={isAllCurrentPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
             >
               {isAllCurrentPageSelected ? (
                 <CheckSquare className="h-4 w-4 text-primary" />
@@ -658,15 +791,10 @@ export function ActivityLogPage() {
           )}
 
           <span>
-            Showing{' '}
-            <span className="font-semibold text-foreground">
-              {filtered.length === 0 ? 0 : startIndex + 1}
-            </span>
+            Showing <span className="font-semibold text-foreground">{filtered.length === 0 ? 0 : startIndex + 1}</span>
             –<span className="font-semibold text-foreground">{endIndex}</span> of{' '}
             <span className="font-semibold text-foreground">{filtered.length}</span> log entries
-            {hasFilters && (
-              <span className="text-primary font-medium"> (filtered from {logs.length})</span>
-            )}
+            {hasFilters && <span className="text-primary font-medium"> (filtered from {logs.length})</span>}
           </span>
         </div>
 
@@ -709,7 +837,9 @@ export function ActivityLogPage() {
               {/* Timeline */}
               <div className="relative">
                 {/* Timeline line */}
-                <div className="absolute left-[35px] top-4 bottom-4 w-px bg-border" />
+                <div
+                  className={`absolute ${canDelete ? 'left-[35px]' : 'left-[19px]'} top-4 bottom-4 w-px bg-border`}
+                />
 
                 <div className="space-y-1.5">
                   {entries.map((entry) => {
@@ -727,24 +857,30 @@ export function ActivityLogPage() {
                             : 'border-transparent hover:border-border hover:bg-card/70'
                         } ${sev.row}`}
                       >
-                        {/* Checkbox */}
-                        <div className="relative z-10 flex items-center shrink-0 pl-3 pt-3">
-                          <button
-                            type="button"
-                            onClick={(e) => toggleSelectOne(entry.id, e)}
-                            className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer p-0.5"
-                            aria-label={`Select entry ${entry.subject}`}
-                          >
-                            {isSelected ? (
-                              <CheckSquare className="h-4 w-4 text-primary" />
-                            ) : (
-                              <Square className="h-4 w-4 text-muted-foreground/60 group-hover:text-muted-foreground" />
-                            )}
-                          </button>
-                        </div>
+                        {/* Checkbox (Admin Only) */}
+                        {canDelete && (
+                          <div className="relative z-10 flex items-center shrink-0 pl-3 pt-3">
+                            <button
+                              type="button"
+                              onClick={(e) => toggleSelectOne(entry.id, e)}
+                              className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer p-0.5"
+                              aria-label={`Select entry ${entry.subject}`}
+                            >
+                              {isSelected ? (
+                                <CheckSquare className="h-4 w-4 text-primary" />
+                              ) : (
+                                <Square className="h-4 w-4 text-muted-foreground/60 group-hover:text-muted-foreground" />
+                              )}
+                            </button>
+                          </div>
+                        )}
 
                         {/* Timeline dot */}
-                        <div className="relative z-10 flex flex-col items-center shrink-0 pt-3.5">
+                        <div
+                          className={`relative z-10 flex flex-col items-center shrink-0 pt-3.5 ${
+                            canDelete ? '' : 'pl-3'
+                          }`}
+                        >
                           <div
                             className={`h-2.5 w-2.5 rounded-full ring-2 ring-background ${sev.dot}`}
                           />
@@ -781,22 +917,24 @@ export function ActivityLogPage() {
                               )}
                             </div>
 
-                            {/* Timestamp & Quick Delete */}
+                            {/* Timestamp & Quick Delete (Admin Only) */}
                             <div className="flex items-center gap-2 shrink-0">
                               <div className="text-right">
                                 <p className="text-[11px] text-muted-foreground">{ts.relative}</p>
                                 <p className="text-[10px] text-muted-foreground/60">{ts.time}</p>
                               </div>
 
-                              <button
-                                type="button"
-                                onClick={(e) => promptSingleDelete(entry.id, e)}
-                                title="Delete this entry"
-                                className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all cursor-pointer"
-                                aria-label="Delete log entry"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
+                              {canDelete && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => promptSingleDelete(entry.id, e)}
+                                  title="Delete this entry"
+                                  className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all cursor-pointer"
+                                  aria-label="Delete log entry"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              )}
                             </div>
                           </div>
 
@@ -811,9 +949,7 @@ export function ActivityLogPage() {
                               <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
                                 <div>
                                   <span className="text-muted-foreground">Performed by: </span>
-                                  <span className="font-medium text-foreground">
-                                    {entry.user || 'Unknown'}
-                                  </span>
+                                  <span className="font-medium text-foreground">{entry.user || 'Unknown'}</span>
                                 </div>
                                 <div>
                                   <span className="text-muted-foreground">Severity: </span>
@@ -885,26 +1021,28 @@ export function ActivityLogPage() {
         </div>
       )}
 
-      {/* Deletion Confirmation Dialog */}
-      <ConfirmDialog
-        open={deleteModalOpen}
-        onOpenChange={setDeleteModalOpen}
-        onConfirm={handleConfirmDelete}
-        onCancel={() => {
-          setDeleteModalOpen(false);
-          setTargetDeleteIds([]);
-        }}
-        title={targetDeleteIds.length === 1 ? 'Delete Activity Log' : 'Bulk Delete Activity Logs'}
-        description={
-          targetDeleteIds.length === 1
-            ? 'Are you sure you want to permanently delete this activity log entry? This action cannot be undone.'
-            : `Are you sure you want to permanently delete these ${targetDeleteIds.length} activity log entries? This action cannot be undone.`
-        }
-        confirmText={isDeleting ? 'Deleting...' : 'Delete'}
-        cancelText="Cancel"
-        variant="destructive"
-        isLoading={isDeleting}
-      />
+      {/* Deletion Confirmation Dialog (Admin Only) */}
+      {canDelete && (
+        <ConfirmDialog
+          open={deleteModalOpen}
+          onOpenChange={setDeleteModalOpen}
+          onConfirm={handleConfirmDelete}
+          onCancel={() => {
+            setDeleteModalOpen(false);
+            setTargetDeleteIds([]);
+          }}
+          title={targetDeleteIds.length === 1 ? 'Delete Activity Log' : 'Bulk Delete Activity Logs'}
+          description={
+            targetDeleteIds.length === 1
+              ? 'Are you sure you want to permanently delete this activity log entry? This action cannot be undone.'
+              : `Are you sure you want to permanently delete these ${targetDeleteIds.length} activity log entries? This action cannot be undone.`
+          }
+          confirmText={isDeleting ? 'Deleting...' : 'Delete'}
+          cancelText="Cancel"
+          variant="destructive"
+          isLoading={isDeleting}
+        />
+      )}
     </div>
   );
 }

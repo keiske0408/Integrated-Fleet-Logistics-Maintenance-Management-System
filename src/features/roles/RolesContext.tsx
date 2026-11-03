@@ -30,6 +30,7 @@ const DEFAULT_ALL_PERMISSIONS: Permission[] = [
   'view:roles',
   'view:reports',
   'view:audit',
+  'delete:audit',
   'create:tsrf',
   'approve:tsrf',
   'create:vehicle',
@@ -77,7 +78,7 @@ const DEFAULT_PERMISSION_GROUPS = [
   },
   {
     label: 'Administration',
-    permissions: ['manage:users', 'manage:roles', 'manage:reference_data'],
+    permissions: ['manage:users', 'manage:roles', 'manage:reference_data', 'delete:audit'],
   },
 ];
 
@@ -103,6 +104,7 @@ const DEFAULT_PERMISSION_LABELS: Record<string, string> = {
   'manage:users': 'Manage Users',
   'manage:roles': 'Manage Roles',
   'manage:reference_data': 'Manage Reference Data',
+  'delete:audit': 'Delete Activity History / Audit Logs',
 };
 
 // ─── Default Roles ─────────────────────────────────────────────────────────────

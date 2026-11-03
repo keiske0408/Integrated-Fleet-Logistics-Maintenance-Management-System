@@ -13,6 +13,15 @@ const mockToast = {
   warning: vi.fn(),
 };
 
+const mockUser = { role: 'system_admin', name: 'Super Admin', id: 'usr-1' };
+
+vi.mock('@/features/auth/AuthContext', () => ({
+  useAuth: () => ({
+    currentUser: mockUser,
+    hasPermission: (_perm: string) => mockUser.role === 'system_admin',
+  }),
+}));
+
 vi.mock('../src/features/activity/ActivityLogContext', async () => {
   const actual = await vi.importActual('../src/features/activity/ActivityLogContext');
   return {
@@ -76,11 +85,12 @@ describe('ActivityLogPage', () => {
   ];
 
   beforeEach(() => {
+    mockUser.role = 'system_admin';
     currentMockLogs = [...sampleLogs];
     vi.clearAllMocks();
   });
 
-  it('renders page title, stats bar, and all filter controls', () => {
+  it('renders page title, stats bar, and all filter controls including time inputs', () => {
     const html = renderToStaticMarkup(<ActivityLogPage />);
 
     // Title and actions
@@ -100,7 +110,18 @@ describe('ActivityLogPage', () => {
     expect(html).toContain('id="log-filter-severity"');
     expect(html).toContain('id="log-filter-action"');
     expect(html).toContain('id="log-filter-from-date"');
+    expect(html).toContain('id="log-filter-from-time"');
     expect(html).toContain('id="log-filter-to-date"');
+    expect(html).toContain('id="log-filter-to-time"');
+
+    // Initial times: 00:00 (12:00 AM) and 23:59 (11:59 PM)
+    expect(html).toContain('value="00:00"');
+    expect(html).toContain('value="23:59"');
+
+    // Quick presets
+    expect(html).toContain('Today');
+    expect(html).toContain('Yesterday');
+    expect(html).toContain('Last 7 Days');
 
     // Log items rendered
     expect(html).toContain('Vehicle V-101');
@@ -126,10 +147,27 @@ describe('ActivityLogPage', () => {
     expect(html).toContain('No activity logged yet.');
   });
 
-  it('includes quick delete icon buttons for individual rows', () => {
+  it('shows delete buttons and checkboxes for super admin', () => {
+    mockUser.role = 'system_admin';
     const html = renderToStaticMarkup(<ActivityLogPage />);
 
+    expect(html).toContain('Admin Controls');
+    expect(html).toContain('Select page');
     expect(html).toContain('title="Delete this entry"');
+    expect(html).toContain('aria-label="Select entry Vehicle V-101"');
+  });
+
+  it('hides delete controls and selection checkboxes for non-admin auditors', () => {
+    mockUser.role = 'auditor';
+    const html = renderToStaticMarkup(<ActivityLogPage />);
+
+    expect(html).not.toContain('Admin Controls');
+    expect(html).not.toContain('Select page');
+    expect(html).not.toContain('title="Delete this entry"');
+    expect(html).not.toContain('aria-label="Select entry Vehicle V-101"');
+    // Auditor still sees the log content and export CSV
+    expect(html).toContain('Vehicle V-101');
+    expect(html).toContain('Export CSV');
   });
 
   it('populates filter options with unique modules and actions', () => {
